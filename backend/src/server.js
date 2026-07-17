@@ -11,6 +11,7 @@ app.use(express.json());
 app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/contacts', require('./routes/contacts'));
 app.use('/api/dashboard', require('./routes/dashboard'));
+app.use('/api', require('./routes/analytics'));
 
 app.post('/api/reports/monthly/send-now', async (req, res) => {
   const { generateAndSendMonthlyReport } = require('./cron/monthlyReport');
@@ -21,7 +22,7 @@ app.post('/api/reports/monthly/send-now', async (req, res) => {
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 8888;
-app.listen(PORT, () => console.log(`Express running → On PORT : ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`Express running → On PORT : ${PORT}`));
 
 const { startMonthlyReportCron } = require('./cron/monthlyReport');
 startMonthlyReportCron();

@@ -87,6 +87,24 @@ Administrators can set the opening balance for both cash and digital accounts. A
 Opening Balance → + Cash In → - Cash Out = Cash in Hand
 ```
 
+<br />
+
+> **Contact Management**
+
+Admins and Accountants can **create, edit, and manage contacts** — the people who receive notifications. Each contact has:
+
+- Name, email, phone, Telegram chat ID
+- Toggle for monthly report subscription
+- Enable/disable status
+
+Viewers can **see** the contact list but cannot add, edit, or delete contacts. This ensures that only authorized personnel can modify who receives financial alerts.
+
+```
+Admin:       Create ✅  Edit ✅  Delete ✅
+Accountant:  Create ✅  Edit ✅  Delete ❌
+Viewer:      View ✅    Edit ❌  Delete ❌
+```
+
 </td>
 <td width="50%" valign="top">
 
@@ -143,8 +161,10 @@ Trust CRM implements a strict **three-tier permission system** enforced at **bot
 | Action | Access |
 |--------|--------|
 | View Dashboard | ✅ |
+| View Transactions | ✅ |
 | Create/Edit Transactions | ✅ |
 | Delete Transactions | ✅ |
+| View Contacts | ✅ |
 | Create/Edit Contacts | ✅ |
 | Delete Contacts | ✅ |
 | Manage Users | ✅ |
@@ -164,8 +184,10 @@ Trust CRM implements a strict **three-tier permission system** enforced at **bot
 | Action | Access |
 |--------|--------|
 | View Dashboard | ✅ |
+| View Transactions | ✅ |
 | Create/Edit Transactions | ✅ |
 | Delete Transactions | ❌ |
+| View Contacts | ✅ |
 | Create/Edit Contacts | ✅ |
 | Delete Contacts | ❌ |
 | Manage Users | ❌ |
@@ -185,9 +207,11 @@ Trust CRM implements a strict **three-tier permission system** enforced at **bot
 | Action | Access |
 |--------|--------|
 | View Dashboard | ✅ |
+| View Transactions | ✅ |
 | Create/Edit Transactions | ❌ |
 | Delete Transactions | ❌ |
-| Create/Edit Contacts | ✅ |
+| View Contacts | ✅ |
+| Create/Edit Contacts | ❌ |
 | Delete Contacts | ❌ |
 | Manage Users | ❌ |
 | Manage Categories | ❌ |
@@ -618,6 +642,13 @@ Required environment variables (set in Render Dashboard):
 <td>❌ Single pipeline</td>
 <td>⚠️ Separate sheets</td>
 <td>⚠️ Usually one mode</td>
+</tr>
+<tr>
+<td><b>Contact management</b></td>
+<td>✅ Create/Edit per role</td>
+<td>⚠️ Complex setup</td>
+<td>❌ Manual list</td>
+<td>⚠️ Basic</td>
 </tr>
 <tr>
 <td><b>Instant notifications</b></td>

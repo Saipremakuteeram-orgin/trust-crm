@@ -63,9 +63,17 @@ router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
 
 // UPDATE
 router.patch('/:id', requireRole('admin', 'accountant'), async (req, res) => {
+  const allowed = ['type', 'mode', 'amount', 'category_id', 'description', 'txn_date', 'party_name', 'contact_id', 'notify_contact_ids'];
+  const updates = {};
+  for (const key of allowed) {
+    if (req.body[key] !== undefined) updates[key] = req.body[key];
+  }
+  if (Object.keys(updates).length === 0) {
+    return res.status(400).json({ success: false, message: 'No valid fields to update' });
+  }
   const { data, error } = await supabaseAdmin
     .from('transactions')
-    .update(req.body)
+    .update(updates)
     .eq('id', req.params.id)
     .select()
     .single();

@@ -31,6 +31,13 @@ function Protected({ children }) {
   return children;
 }
 
+function AdminProtected({ children }) {
+  const { profile } = useAuth();
+  if (!profile) return null;
+  if (profile.role !== "admin") return <Navigate to="/dashboard" replace />;
+  return children;
+}
+
 export default function App() {
   return (
     <Routes>
@@ -38,7 +45,7 @@ export default function App() {
       <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
       <Route path="/transactions" element={<Protected><Transactions /></Protected>} />
       <Route path="/contacts" element={<Protected><Contacts /></Protected>} />
-      <Route path="/users" element={<Protected><Users /></Protected>} />
+      <Route path="/users" element={<Protected><AdminProtected><Users /></AdminProtected></Protected>} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );

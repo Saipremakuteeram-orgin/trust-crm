@@ -16,7 +16,7 @@ app.use('/api/analytics', requireAuth, require('./routes/analytics'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/users', require('./routes/users'));
 
-app.post('/api/reports/monthly/send-now', requireAuth, requireRole('admin'), async (req, res) => {
+app.post('/api/reports/monthly/send-now', requireAuth, requireRole('admin', 'accountant'), async (req, res) => {
   const { generateAndSendMonthlyReport } = require('./cron/monthlyReport');
   await generateAndSendMonthlyReport();
   res.json({ success: true, message: 'Monthly report sent' });

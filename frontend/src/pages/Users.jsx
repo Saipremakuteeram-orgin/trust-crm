@@ -5,6 +5,7 @@ import AppLayout from "../components/AppLayout";
 import { Shield, Trash2, ChevronDown } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
+import { ShieldAlert } from "lucide-react";
 
 const roleColors = {
   admin: { bg: "bg-saffron-50", text: "text-saffron-700", ring: "ring-saffron-200" },
@@ -16,6 +17,18 @@ export default function Users() {
   const { profile } = useAuth();
   const { addToast } = useToast();
   const [users, setUsers] = useState([]);
+
+  if (profile && profile.role !== "admin") {
+    return (
+      <AppLayout>
+        <div className="flex flex-col items-center justify-center h-[60vh] text-center">
+          <ShieldAlert size={48} className="text-rose-400 mb-4" />
+          <h2 className="text-xl font-bold text-stone-800">Access Denied</h2>
+          <p className="text-sm text-stone-500 mt-2">You need admin privileges to view this page.</p>
+        </div>
+      </AppLayout>
+    );
+  }
 
   function load() {
     api.get("/users").then((res) => setUsers(res.data.result)).catch(() => {});

@@ -14,9 +14,15 @@
 
 <br />
 
-[Features](#-features) · [Architecture](#-architecture) · [Role System](#-role-based-access-control) · [Quick Start](#-quick-start) · [Why Trust CRM](#-why-trust-crm)
+[Features](#-features) · [Architecture](#-architecture) · [Role System](#-role-based-access-control) · [Quick Start](#-quick-start) · [Security](#-security) · [License](#-license)
 
 </div>
+
+---
+
+> **License & Ownership**
+>
+> This software is **private and proprietary**. All source code, design, architecture, and intellectual property are owned by the Trust. No part of this codebase may be copied, modified, distributed, or used without explicit written permission. The license and source code remain exclusively with the Trust.
 
 ---
 
@@ -451,29 +457,39 @@ alter table contacts enable row level security;
 alter table categories enable row level security;
 ```
 
-### 3. Configure the backend
+### 3. Configure environment variables
 
 ```bash
+# Backend
 cd backend
-cp .env.example .env   # or create .env manually
+cp .env.example .env
+
+# Frontend
+cd frontend
+cp .env.example .env
 ```
 
-Fill in your `.env`:
+Fill in your `.env` files with your own credentials:
 
-```env
-SUPABASE_URL=https://your-project.supabase.co
-SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+**Backend `.env`:**
 
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your@gmail.com
-SMTP_PASS=your-app-password
+| Variable | Where to get it |
+|----------|----------------|
+| `SUPABASE_URL` | Supabase Dashboard → Settings → API → Project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase Dashboard → Settings → API → service_role key |
+| `SMTP_USER` | Your Gmail address |
+| `SMTP_PASS` | Gmail → Security → App Passwords (16-char code) |
+| `TELEGRAM_BOT_TOKEN` | Telegram → @BotFather → /newbot |
 
-TELEGRAM_BOT_TOKEN=your-bot-token
+**Frontend `.env`:**
 
-CRON_SECRET=your-random-secret
-```
+| Variable | Where to get it |
+|----------|----------------|
+| `VITE_SUPABASE_URL` | Same as `SUPABASE_URL` above |
+| `VITE_SUPABASE_ANON_KEY` | Supabase Dashboard → Settings → API → anon/public key |
+| `VITE_API_URL` | `http://localhost:8888/api` (dev) or your Render URL (prod) |
+
+> **Warning:** Never commit `.env` files to git. They are excluded via `.gitignore`.
 
 ### 4. Install and run
 
@@ -577,12 +593,15 @@ trust-crm/
 │   ├── vercel.json                # SPA rewrite rules
 │   └── package.json
 ├── render.yaml                    # Render deployment config
+├── .gitignore                     # Excludes .env*, node_modules, dist
 └── README.md
 ```
 
 ---
 
 ## Security
+
+### What Is Protected
 
 | Layer | Mechanism |
 |-------|-----------|
@@ -592,6 +611,41 @@ trust-crm/
 | **Field Whitelisting** | Transaction PATCH only allows safe fields. No mass-assignment attacks. |
 | **Route Guards** | Frontend `AdminProtected` wrapper blocks non-admins from sensitive pages. |
 | **RLS** | Supabase Row Level Security as the final database-level safety net. |
+| **Secrets Management** | All credentials stored in `.env` files, excluded from git via `.gitignore`. |
+
+### What Is Excluded from Git
+
+```
+.env              # All environment files
+.env.*            # All variants (.env.local, .env.production, etc.)
+!.env.example     # Only templates are tracked
+node_modules/     # Dependencies
+dist/             # Build output
+*.log             # Log files
+```
+
+### Files That Are Tracked (Safe)
+
+| File | Contains |
+|------|----------|
+| `backend/.env.example` | Placeholder templates only — no real credentials |
+| `frontend/.env.example` | Placeholder templates only — no real credentials |
+| `render.yaml` | Env var declarations (names only, no values) |
+| All source code | Reads from `process.env` at runtime — no hardcoded secrets |
+
+### Security Checklist
+
+- [x] No API keys in source code
+- [x] No passwords in source code
+- [x] No tokens in source code
+- [x] `.gitignore` excludes all `.env*` variants
+- [x] Only `.env.example` templates are tracked
+- [x] Service-role key only exists in backend runtime
+- [x] Frontend only uses anon/public key
+- [x] Transaction PATCH uses field whitelist (no mass-assignment)
+- [x] Admin routes protected by `requireRole('admin')`
+- [x] Users cannot modify their own role
+- [x] Users cannot delete themselves
 
 ---
 
@@ -604,18 +658,22 @@ cd frontend
 vercel --prod
 ```
 
-Environment variable: `VITE_API_URL=https://your-backend.onrender.com/api`
+Set environment variable in Vercel Dashboard:
+- `VITE_API_URL` = `https://your-backend.onrender.com/api`
 
 ### Backend → Render
 
 Push to GitHub. Render auto-deploys from `main` branch.
 
-Required environment variables (set in Render Dashboard):
-- `SUPABASE_URL`
-- `SUPABASE_ANON_KEY`
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `SMTP_*` variables
-- `TELEGRAM_BOT_TOKEN`
+Set these environment variables in Render Dashboard (never in code):
+
+| Variable | Source |
+|----------|--------|
+| `SUPABASE_URL` | Supabase Dashboard → Settings → API |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase Dashboard → Settings → API |
+| `SMTP_USER` | Your Gmail address |
+| `SMTP_PASS` | Gmail App Password |
+| `TELEGRAM_BOT_TOKEN` | @BotFather |
 
 ---
 
@@ -693,6 +751,13 @@ Required environment variables (set in Render Dashboard):
 <td>⚠️ Basic</td>
 </tr>
 <tr>
+<td><b>Security posture</b></td>
+<td>✅ 6-layer enforced</td>
+<td>✅ Enterprise grade</td>
+<td>❌ None</td>
+<td>⚠️ Basic</td>
+</tr>
+<tr>
 <td><b>Learning curve</b></td>
 <td>✅ Minimal</td>
 <td>❌ Weeks to learn</td>
@@ -712,9 +777,15 @@ Required environment variables (set in Render Dashboard):
 
 ## License
 
-This project is private and proprietary. Built with care for the Trust.
-
 <div align="center">
+
+**All rights reserved.**
+
+This software, including all source code, design patterns, architecture, and documentation, is the exclusive property of the Trust. Unauthorized copying, modification, distribution, or use of this software, in whole or in part, is strictly prohibited.
+
+The license and source code remain exclusively with the Trust.
+
+<br />
 
 **Made with intention. Built for transparency.**
 

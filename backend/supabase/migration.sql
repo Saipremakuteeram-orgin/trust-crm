@@ -112,23 +112,26 @@ on conflict (key) do nothing;
 -- ============================================
 -- 3. VIEWS
 -- ============================================
-create or replace view v_cash_summary as
-select
-  coalesce((select value::numeric from settings where key = 'cash_opening_balance'), 0) as opening_balance,
-  coalesce((select sum(amount) from transactions where type = 'credit' and mode = 'cash'), 0) as cash_in,
-  coalesce((select sum(amount) from transactions where type = 'debit' and mode = 'cash'), 0) as cash_out,
-  coalesce((select value::numeric from settings where key = 'cash_opening_balance'), 0)
-    + coalesce((select sum(amount) from transactions where type = 'credit' and mode = 'cash'), 0)
-    - coalesce((select sum(amount) from transactions where type = 'debit' and mode = 'cash'), 0) as cash_in_hand;
+drop view if exists v_cash_summary;
+drop view if exists v_digital_summary;
 
-create or replace view v_digital_summary as
+create view v_cash_summary as
 select
-  coalesce((select value::numeric from settings where key = 'digital_opening_balance'), 0) as digital_opening_balance,
-  coalesce((select sum(amount) from transactions where type = 'credit' and mode = 'digital'), 0) as digital_in,
-  coalesce((select sum(amount) from transactions where type = 'debit' and mode = 'digital'), 0) as digital_out,
-  coalesce((select value::numeric from settings where key = 'digital_opening_balance'), 0)
-    + coalesce((select sum(amount) from transactions where type = 'credit' and mode = 'digital'), 0)
-    - coalesce((select sum(amount) from transactions where type = 'debit' and mode = 'digital'), 0) as digital_balance;
+  coalesce((select value::numeric(12,2) from settings where key = 'cash_opening_balance'), 0::numeric(12,2)) as opening_balance,
+  coalesce((select sum(amount) from transactions where type = 'credit' and mode = 'cash'), 0::numeric(12,2)) as cash_in,
+  coalesce((select sum(amount) from transactions where type = 'debit' and mode = 'cash'), 0::numeric(12,2)) as cash_out,
+  coalesce((select value::numeric(12,2) from settings where key = 'cash_opening_balance'), 0::numeric(12,2))
+    + coalesce((select sum(amount) from transactions where type = 'credit' and mode = 'cash'), 0::numeric(12,2))
+    - coalesce((select sum(amount) from transactions where type = 'debit' and mode = 'cash'), 0::numeric(12,2)) as cash_in_hand;
+
+create view v_digital_summary as
+select
+  coalesce((select value::numeric(12,2) from settings where key = 'digital_opening_balance'), 0::numeric(12,2)) as digital_opening_balance,
+  coalesce((select sum(amount) from transactions where type = 'credit' and mode = 'digital'), 0::numeric(12,2)) as digital_in,
+  coalesce((select sum(amount) from transactions where type = 'debit' and mode = 'digital'), 0::numeric(12,2)) as digital_out,
+  coalesce((select value::numeric(12,2) from settings where key = 'digital_opening_balance'), 0::numeric(12,2))
+    + coalesce((select sum(amount) from transactions where type = 'credit' and mode = 'digital'), 0::numeric(12,2))
+    - coalesce((select sum(amount) from transactions where type = 'debit' and mode = 'digital'), 0::numeric(12,2)) as digital_balance;
 
 -- ============================================
 -- 4. HELPER FUNCTION (used by all RLS policies)

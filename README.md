@@ -372,90 +372,19 @@ cd trust-crm
 
 ### 2. Set up the database
 
-Run the SQL in your Supabase SQL Editor:
+Open your **Supabase Dashboard → SQL Editor**, paste the entire contents of [`backend/supabase/migration.sql`](backend/supabase/migration.sql), and click **Run**.
 
-```sql
--- Profiles table (extends Supabase Auth)
-create table profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  full_name text,
-  email text,
-  role text check (role in ('admin', 'accountant', 'viewer')) default 'viewer',
-  created_at timestamptz default now()
-);
+This single migration file creates everything:
 
--- Contacts table
-create table contacts (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  email text,
-  telegram_chat_id text,
-  phone text,
-  subscribe_monthly_report boolean default false,
-  enabled boolean default true,
-  created_at timestamptz default now()
-);
+- **5 tables** — `profiles`, `contacts`, `categories`, `transactions`, `settings`
+- **2 views** — `v_cash_summary`, `v_digital_summary`
+- **14 RLS policies** — Role-based access control at the database level
+- **Helper function** — `current_role_is()` used by all RLS policies
+- **Auto-profile trigger** — Creates a profile row when a user signs up
 
--- Categories table
-create table categories (
-  id uuid primary key default gen_random_uuid(),
-  name text not null,
-  type text check (type in ('credit', 'debit', 'both')) default 'both'
-);
+> **Already have tables?** The migration uses `IF NOT EXISTS` and `ON CONFLICT` so it's safe to re-run. It won't duplicate data.
 
--- Transactions table
-create table transactions (
-  id uuid primary key default gen_random_uuid(),
-  type text check (type in ('credit', 'debit')) not null,
-  mode text check (mode in ('cash', 'digital')) not null,
-  digital_method text,
-  amount numeric not null check (amount > 0),
-  category_id uuid references categories(id),
-  party_name text,
-  contact_id uuid references contacts(id),
-  description text,
-  txn_date date default current_date,
-  created_by uuid references profiles(id),
-  notification_status text default 'pending',
-  notify_contact_ids uuid[] default '{}',
-  created_at timestamptz default now()
-);
-
--- Settings table (opening balances)
-create table settings (
-  key text primary key,
-  value text not null,
-  updated_at timestamptz default now()
-);
-
--- Cash summary view
-create or replace view v_cash_summary as
-select
-  coalesce((select value::numeric from settings where key = 'cash_opening_balance'), 0) as opening_balance,
-  coalesce(sum(case when type = 'credit' and mode = 'cash' then amount else 0 end), 0) as cash_in,
-  coalesce(sum(case when type = 'debit' and mode = 'cash' then amount else 0 end), 0) as cash_out,
-  coalesce((select value::numeric from settings where key = 'cash_opening_balance'), 0)
-    + coalesce(sum(case when type = 'credit' and mode = 'cash' then amount else 0 end), 0)
-    - coalesce(sum(case when type = 'debit' and mode = 'cash' then amount else 0 end), 0) as cash_in_hand
-from transactions;
-
--- Digital summary view
-create or replace view v_digital_summary as
-select
-  coalesce((select value::numeric from settings where key = 'digital_opening_balance'), 0) as opening_balance,
-  coalesce(sum(case when type = 'credit' and mode = 'digital' then amount else 0 end), 0) as digital_in,
-  coalesce(sum(case when type = 'debit' and mode = 'digital' then amount else 0 end), 0) as digital_out,
-  coalesce((select value::numeric from settings where key = 'digital_opening_balance'), 0)
-    + coalesce(sum(case when type = 'credit' and mode = 'digital' then amount else 0 end), 0)
-    - coalesce(sum(case when type = 'debit' and mode = 'digital' then amount else 0 end), 0) as digital_balance
-from transactions;
-
--- RLS policies (enable per table as needed)
-alter table profiles enable row level security;
-alter table transactions enable row level security;
-alter table contacts enable row level security;
-alter table categories enable row level security;
-```
+> **Need a fresh start?** Drop all tables first, then run the migration.
 
 ### 3. Configure environment variables
 
@@ -511,12 +440,15 @@ pip install -r requirements.txt
 
 ### 5. Create your admin user
 
-Go to **Supabase Dashboard → Authentication → Users → Add User**, then insert a profile:
+Go to **Supabase Dashboard → Authentication → Users → Add User**. The migration's trigger auto-creates a profile with `accountant` role. To make them admin:
 
 ```sql
-insert into profiles (id, full_name, email, role)
-values ('<auth-user-uuid>', 'Your Name', 'you@example.com', 'admin');
+update profiles
+set role = 'admin'
+where id = '<auth-user-uuid>';
 ```
+
+You can find the UUID from **Authentication → Users** after creating the user.
 
 > **Note:** There is no signup page. Users are created via Supabase Dashboard. This is intentional — trusts don't need open registration.
 
@@ -548,6 +480,9 @@ Analytics are powered by a **Python module** using Pandas for aggregation, calle
 ```
 trust-crm/
 ├── backend/
+│   ├── supabase/
+│   │   ├── schema.sql            # Full schema (reference)
+│   │   └── migration.sql         # Paste into Supabase SQL Editor
 │   ├── src/
 │   │   ├── server.js              # Express entry point
 │   │   ├── config/
@@ -630,6 +565,7 @@ dist/             # Build output
 |------|----------|
 | `backend/.env.example` | Placeholder templates only — no real credentials |
 | `frontend/.env.example` | Placeholder templates only — no real credentials |
+| `backend/supabase/migration.sql` | Database schema + RLS policies (no secrets) |
 | `render.yaml` | Env var declarations (names only, no values) |
 | All source code | Reads from `process.env` at runtime — no hardcoded secrets |
 
@@ -646,6 +582,7 @@ dist/             # Build output
 - [x] Admin routes protected by `requireRole('admin')`
 - [x] Users cannot modify their own role
 - [x] Users cannot delete themselves
+- [x] RLS policies enforced at database level (14 policies across 5 tables)
 
 ---
 

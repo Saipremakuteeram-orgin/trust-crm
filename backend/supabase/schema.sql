@@ -61,32 +61,49 @@ create table transactions (
 create index idx_transactions_date on transactions(txn_date);
 create index idx_transactions_type on transactions(type);
 
--- Opening cash balance
-create table cash_settings (
-  id int primary key default 1,
-  opening_cash_balance numeric(12,2) not null default 0,
-  constraint single_row check (id = 1)
+-- Settings: key-value store for opening balances
+create table settings (
+  key text primary key,
+  value text not null,
+  updated_at timestamptz default now()
 );
-insert into cash_settings (id) values (1);
+insert into settings (key, value) values
+  ('cash_opening_balance', '0'),
+  ('digital_opening_balance', '0');
 
 -- ============================================
 -- VIEWS
 -- ============================================
 create view v_cash_summary as
 select
-  (select opening_cash_balance from cash_settings) as opening_balance,
+  coalesce((select value::numeric from settings where key = 'cash_opening_balance'), 0) as opening_balance,
   coalesce((select sum(amount) from transactions where type='credit' and mode='cash'), 0) as cash_in,
   coalesce((select sum(amount) from transactions where type='debit' and mode='cash'), 0) as cash_out,
-  (select opening_cash_balance from cash_settings)
+  coalesce((select value::numeric from settings where key = 'cash_opening_balance'), 0)
     + coalesce((select sum(amount) from transactions where type='credit' and mode='cash'), 0)
     - coalesce((select sum(amount) from transactions where type='debit' and mode='cash'), 0) as cash_in_hand;
 
 create view v_digital_summary as
 select
+  coalesce((select value::numeric from settings where key = 'digital_opening_balance'), 0) as digital_opening_balance,
   coalesce((select sum(amount) from transactions where type='credit' and mode='digital'), 0) as digital_in,
   coalesce((select sum(amount) from transactions where type='debit' and mode='digital'), 0) as digital_out,
-  coalesce((select sum(amount) from transactions where type='credit' and mode='digital'), 0)
+  coalesce((select value::numeric from settings where key = 'digital_opening_balance'), 0)
+    + coalesce((select sum(amount) from transactions where type='credit' and mode='digital'), 0)
     - coalesce((select sum(amount) from transactions where type='debit' and mode='digital'), 0) as digital_balance;
+
+-- ============================================
+-- HELPER FUNCTION
+-- ============================================
+create or replace function current_role_is(roles text[])
+returns boolean language sql security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from profiles
+    where id = auth.uid() and role::text = any(roles)
+  );
+$$;
 
 -- ============================================
 -- RLS
@@ -95,35 +112,53 @@ alter table profiles enable row level security;
 alter table contacts enable row level security;
 alter table transactions enable row level security;
 alter table categories enable row level security;
-alter table cash_settings enable row level security;
+alter table settings enable row level security;
 
-create or replace function current_role_is(roles text[])
-returns boolean language sql security definer as $$
-  select exists (select 1 from profiles where id = auth.uid() and role::text = any(roles));
-$$;
+-- PROFILES
+create policy "read own profile" on profiles
+  for select using (auth.uid() = id or current_role_is(array['admin']));
+create policy "admin manage profiles" on profiles
+  for all using (current_role_is(array['admin']));
 
-create policy "read own profile" on profiles for select using (auth.uid() = id or current_role_is(array['admin']));
-create policy "admin manage profiles" on profiles for all using (current_role_is(array['admin']));
+-- CONTACTS
+create policy "read contacts" on contacts
+  for select using (current_role_is(array['admin','accountant','viewer']));
+create policy "insert contacts" on contacts
+  for insert with check (current_role_is(array['admin','accountant']));
+create policy "update contacts" on contacts
+  for update using (current_role_is(array['admin','accountant']));
+create policy "delete contacts" on contacts
+  for delete using (current_role_is(array['admin']));
 
-create policy "read contacts" on contacts for select using (current_role_is(array['admin','accountant','viewer']));
-create policy "write contacts" on contacts for insert with check (current_role_is(array['admin','accountant']));
-create policy "update contacts" on contacts for update using (current_role_is(array['admin','accountant']));
-create policy "delete contacts" on contacts for delete using (current_role_is(array['admin']));
+-- TRANSACTIONS
+create policy "read transactions" on transactions
+  for select using (current_role_is(array['admin','accountant','viewer']));
+create policy "insert transactions" on transactions
+  for insert with check (current_role_is(array['admin','accountant']));
+create policy "update transactions" on transactions
+  for update using (current_role_is(array['admin','accountant']));
+create policy "delete transactions" on transactions
+  for delete using (current_role_is(array['admin']));
 
-create policy "read transactions" on transactions for select using (current_role_is(array['admin','accountant','viewer']));
-create policy "write transactions" on transactions for insert with check (current_role_is(array['admin','accountant']));
-create policy "update transactions" on transactions for update using (current_role_is(array['admin','accountant']));
-create policy "delete transactions" on transactions for delete using (current_role_is(array['admin']));
+-- CATEGORIES
+create policy "read categories" on categories
+  for select using (true);
+create policy "admin manage categories" on categories
+  for all using (current_role_is(array['admin']));
 
-create policy "read categories" on categories for select using (true);
-create policy "admin manage categories" on categories for all using (current_role_is(array['admin']));
+-- SETTINGS
+create policy "read settings" on settings
+  for select using (current_role_is(array['admin','accountant','viewer']));
+create policy "admin update settings" on settings
+  for update using (current_role_is(array['admin']));
 
-create policy "read cash settings" on cash_settings for select using (current_role_is(array['admin','accountant','viewer']));
-create policy "admin update cash settings" on cash_settings for update using (current_role_is(array['admin']));
-
--- Auto-create profile row on signup
+-- ============================================
+-- AUTO-CREATE PROFILE ON SIGNUP
+-- ============================================
 create or replace function handle_new_user()
-returns trigger language plpgsql security definer as $$
+returns trigger language plpgsql security definer
+set search_path = public
+as $$
 begin
   insert into public.profiles (id, full_name, role)
   values (new.id, coalesce(new.raw_user_meta_data->>'full_name', new.email), 'accountant');

@@ -161,63 +161,77 @@ alter table settings    enable row level security;
 
 -- PROFILES
 -- Anyone logged in can read their own profile; admins see all
+drop policy if exists "read own profile" on profiles;
 create policy "read own profile"
   on profiles for select
   using (auth.uid() = id or current_role_is(array['admin']));
 
 -- Only admins can create/update/delete profiles
+drop policy if exists "admin manage profiles" on profiles;
 create policy "admin manage profiles"
   on profiles for all
   using (current_role_is(array['admin']));
 
 -- CONTACTS
+drop policy if exists "read contacts" on contacts;
 create policy "read contacts"
   on contacts for select
   using (current_role_is(array['admin', 'accountant', 'viewer']));
 
+drop policy if exists "insert contacts" on contacts;
 create policy "insert contacts"
   on contacts for insert
   with check (current_role_is(array['admin', 'accountant']));
 
+drop policy if exists "update contacts" on contacts;
 create policy "update contacts"
   on contacts for update
   using (current_role_is(array['admin', 'accountant']));
 
+drop policy if exists "delete contacts" on contacts;
 create policy "delete contacts"
   on contacts for delete
   using (current_role_is(array['admin']));
 
 -- TRANSACTIONS
+drop policy if exists "read transactions" on transactions;
 create policy "read transactions"
   on transactions for select
   using (current_role_is(array['admin', 'accountant', 'viewer']));
 
+drop policy if exists "insert transactions" on transactions;
 create policy "insert transactions"
   on transactions for insert
   with check (current_role_is(array['admin', 'accountant']));
 
+drop policy if exists "update transactions" on transactions;
 create policy "update transactions"
   on transactions for update
   using (current_role_is(array['admin', 'accountant']));
 
+drop policy if exists "delete transactions" on transactions;
 create policy "delete transactions"
   on transactions for delete
   using (current_role_is(array['admin']));
 
 -- CATEGORIES (public read, admin-only write)
+drop policy if exists "read categories" on categories;
 create policy "read categories"
   on categories for select
   using (true);
 
+drop policy if exists "admin manage categories" on categories;
 create policy "admin manage categories"
   on categories for all
   using (current_role_is(array['admin']));
 
 -- SETTINGS (opening balances)
+drop policy if exists "read settings" on settings;
 create policy "read settings"
   on settings for select
   using (current_role_is(array['admin', 'accountant', 'viewer']));
 
+drop policy if exists "admin update settings" on settings;
 create policy "admin update settings"
   on settings for update
   using (current_role_is(array['admin']));

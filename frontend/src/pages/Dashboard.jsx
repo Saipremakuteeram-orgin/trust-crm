@@ -2,7 +2,9 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
-import { Wallet, Landmark, TrendingUp, TrendingDown, Activity, Users } from "lucide-react";
+import { Wallet, Landmark, TrendingUp, TrendingDown, Activity, Users, Pencil, Check, X } from "lucide-react";
+import { useAuth } from "../lib/AuthContext";
+import { useToast } from "../components/Toast";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -64,11 +66,36 @@ function StatCard({ icon: Icon, label, value, sub, color, delay }) {
 export default function Dashboard() {
   const [summary, setSummary] = useState(null);
   const [analytics, setAnalytics] = useState(null);
+  const { profile } = useAuth();
+  const { addToast } = useToast();
+  const isAdmin = profile?.role === "admin";
+  const [editing, setEditing] = useState(null);
+  const [editVal, setEditVal] = useState("");
+
+  function loadSummary() {
+    api.get("/dashboard/summary").then((res) => setSummary(res.data.result));
+  }
 
   useEffect(() => {
-    api.get("/dashboard/summary").then((res) => setSummary(res.data.result));
+    loadSummary();
     api.get("/analytics").then((res) => setAnalytics(res.data.result)).catch(() => {});
   }, []);
+
+  async function saveBalance(type) {
+    const num = parseFloat(editVal);
+    if (isNaN(num) || num < 0) {
+      addToast("Enter a valid non-negative amount", "error");
+      return;
+    }
+    try {
+      await api.patch("/dashboard/opening-balance", { type, amount: num });
+      addToast(`${type === "cash" ? "Cash" : "Digital"} opening balance updated`, "success");
+      setEditing(null);
+      loadSummary();
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to update", "error");
+    }
+  }
 
   if (!summary) return (
     <AppLayout>
@@ -116,8 +143,32 @@ export default function Dashboard() {
             Cash Flow
           </h2>
           <div className="space-y-3">
+            <div className="flex justify-between items-center text-sm">
+              <span className="text-stone-500">Opening balance</span>
+              {editing === "cash" ? (
+                <div className="flex items-center gap-1.5">
+                  <input type="number" value={editVal} onChange={(e) => setEditVal(e.target.value)}
+                    className="w-28 text-right text-sm font-medium border border-stone-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-saffron-400" autoFocus />
+                  <button onClick={() => saveBalance("cash")} className="p-1 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors">
+                    <Check size={14} />
+                  </button>
+                  <button onClick={() => setEditing(null)} className="p-1 rounded-lg bg-stone-100 text-stone-500 hover:bg-stone-200 transition-colors">
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-stone-800">{fmt(cash?.opening_balance)}</span>
+                  {isAdmin && (
+                    <button onClick={() => { setEditing("cash"); setEditVal(cash?.opening_balance || 0); }}
+                      className="p-1 rounded-lg text-stone-400 hover:text-saffron-600 hover:bg-saffron-50 transition-colors">
+                      <Pencil size={12} />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
             {[
-              { label: "Opening balance", value: fmt(cash?.opening_balance) },
               { label: "Cash in", value: `+${fmt(cash?.cash_in)}`, colorClass: "text-emerald-600 font-medium" },
               { label: "Cash out", value: `-${fmt(cash?.cash_out)}`, colorClass: "text-rose-600 font-medium" },
               { label: "Cash in hand", value: fmt(cash?.cash_in_hand), bold: true },
@@ -139,13 +190,37 @@ export default function Dashboard() {
             {[
               { label: "Digital in", value: `+${fmt(digital?.digital_in)}`, colorClass: "text-emerald-600 font-medium" },
               { label: "Digital out", value: `-${fmt(digital?.digital_out)}`, colorClass: "text-rose-600 font-medium" },
-              { label: "Balance", value: fmt(digital?.digital_balance), bold: true },
             ].map((item, i) => (
-              <div key={i} className={`flex justify-between items-center text-sm ${item.bold ? 'font-semibold border-t border-stone-100 pt-3' : ''}`}>
+              <div key={i} className="flex justify-between items-center text-sm">
                 <span className="text-stone-500">{item.label}</span>
                 <span className={item.colorClass || "text-stone-800"}>{item.value}</span>
               </div>
             ))}
+            <div className="flex justify-between items-center text-sm font-semibold border-t border-stone-100 pt-3">
+              <span className="text-stone-500">Balance</span>
+              {editing === "digital" ? (
+                <div className="flex items-center gap-1.5">
+                  <input type="number" value={editVal} onChange={(e) => setEditVal(e.target.value)}
+                    className="w-28 text-right text-sm font-medium border border-stone-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-saffron-400" autoFocus />
+                  <button onClick={() => saveBalance("digital")} className="p-1 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 transition-colors">
+                    <Check size={14} />
+                  </button>
+                  <button onClick={() => setEditing(null)} className="p-1 rounded-lg bg-stone-100 text-stone-500 hover:bg-stone-200 transition-colors">
+                    <X size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-stone-800">{fmt(digital?.digital_balance)}</span>
+                  {isAdmin && (
+                    <button onClick={() => { setEditing("digital"); setEditVal(digital?.digital_balance || 0); }}
+                      className="p-1 rounded-lg text-stone-400 hover:text-saffron-600 hover:bg-saffron-50 transition-colors">
+                      <Pencil size={12} />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </motion.div>
       </div>

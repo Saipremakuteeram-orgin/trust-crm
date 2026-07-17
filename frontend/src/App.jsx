@@ -5,6 +5,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Transactions from "./pages/Transactions";
 import Contacts from "./pages/Contacts";
+import Users from "./pages/Users";
 
 function Protected({ children }) {
   const { session } = useAuth();
@@ -37,6 +38,7 @@ export default function App() {
       <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
       <Route path="/transactions" element={<Protected><Transactions /></Protected>} />
       <Route path="/contacts" element={<Protected><Contacts /></Protected>} />
+      <Route path="/users" element={<Protected><Users /></Protected>} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );

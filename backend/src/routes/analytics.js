@@ -1,7 +1,6 @@
 const express = require('express');
 const { execFile } = require('child_process');
 const path = require('path');
-const { existsSync } = require('fs');
 
 const router = express.Router();
 
@@ -20,7 +19,7 @@ function findPython() {
 const PYTHON = findPython();
 const SCRIPT = path.join(__dirname, '..', '..', 'analytics', 'analytics.py');
 
-router.get('/analytics', (req, res) => {
+router.get('/', (req, res) => {
   const env = {
     ...process.env,
     SUPABASE_URL: process.env.SUPABASE_URL,

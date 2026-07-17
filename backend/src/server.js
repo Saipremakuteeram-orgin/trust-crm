@@ -3,6 +3,7 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
+const { requireAuth, requireRole } = require('./middlewares/auth');
 
 const app = express();
 app.use(cors());
@@ -11,9 +12,11 @@ app.use(express.json());
 app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/contacts', require('./routes/contacts'));
 app.use('/api/dashboard', require('./routes/dashboard'));
-app.use('/api', require('./routes/analytics'));
+app.use('/api/analytics', requireAuth, require('./routes/analytics'));
+app.use('/api/categories', require('./routes/categories'));
+app.use('/api/users', require('./routes/users'));
 
-app.post('/api/reports/monthly/send-now', async (req, res) => {
+app.post('/api/reports/monthly/send-now', requireAuth, requireRole('admin'), async (req, res) => {
   const { generateAndSendMonthlyReport } = require('./cron/monthlyReport');
   await generateAndSendMonthlyReport();
   res.json({ success: true, message: 'Monthly report sent' });

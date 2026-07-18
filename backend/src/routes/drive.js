@@ -24,6 +24,9 @@ router.use(requireRole('admin', 'accountant'));
 // GET /api/drive — list files in Common folder (or subfolder)
 router.get('/', async (req, res) => {
   try {
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
+      return res.json({ success: true, result: { files: [], currentFolder: null, folderId: null, message: 'Google Drive not configured' } });
+    }
     const folderId = req.query.folderId || await getCommonFolderId();
     const files = await listFiles(folderId);
     let currentFolder = null;
@@ -49,6 +52,9 @@ router.get('/info/:fileId', async (req, res) => {
 // POST /api/drive/folder — create a new folder
 router.post('/folder', async (req, res) => {
   try {
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
+      return res.status(500).json({ success: false, message: 'Google Drive is not configured on the server.' });
+    }
     const { parentId, name } = req.body;
     const parent = parentId || await getCommonFolderId();
     if (!name || !name.trim()) {
@@ -75,6 +81,9 @@ router.post('/folder', async (req, res) => {
 // POST /api/drive/upload — upload a file
 router.post('/upload', upload.single('file'), async (req, res) => {
   try {
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
+      return res.status(500).json({ success: false, message: 'Google Drive is not configured on the server.' });
+    }
     if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
     const parentId = req.body.parentId || await getCommonFolderId();
     const file = await uploadFile(parentId, req.file.originalname, req.file.mimetype, req.file.buffer);

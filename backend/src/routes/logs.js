@@ -39,7 +39,12 @@ router.get('/', async (req, res) => {
     .order('created_at', { ascending: false })
     .range(from, to);
 
-  if (error) return res.status(400).json({ success: false, message: error.message });
+  if (error) {
+    if (error.message?.includes('does not exist') || error.code === '42P01') {
+      return res.json({ success: true, result: [], total: 0, page, limit });
+    }
+    return res.status(400).json({ success: false, message: error.message });
+  }
   res.json({ success: true, result: data, total: count, page, limit });
 });
 

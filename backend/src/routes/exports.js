@@ -118,6 +118,9 @@ router.post('/transactions/excel', requireRole('admin', 'accountant'), async (re
     const fileName = `Trust-CRM-Transactions-${now}.xlsx`;
 
     if (req.query.save === 'drive') {
+      if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
+        return res.status(500).json({ success: false, message: 'Google Drive is not configured on the server.' });
+      }
       try {
         const role = await getUserRole(req.user.id);
         const file = await uploadToDrive({
@@ -270,6 +273,10 @@ router.post('/transactions/pdf', requireRole('admin', 'accountant'), async (req,
 // POST /api/exports/spreadsheet/save — save UniverJS workbook data to Google Drive as Excel
 router.post('/spreadsheet/save', requireRole('admin', 'accountant'), async (req, res) => {
   try {
+    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
+      return res.status(500).json({ success: false, message: 'Google Drive is not configured. Please set GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_PRIVATE_KEY on the server.' });
+    }
+
     const { data, fileName: customName } = req.body;
     if (!data) return res.status(400).json({ success: false, message: 'No spreadsheet data provided' });
 

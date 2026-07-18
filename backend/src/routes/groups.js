@@ -8,29 +8,39 @@ router.use(requireAuth);
 
 // LIST all groups with member count
 router.get('/', async (req, res) => {
-  const { data: groups, error } = await supabaseAdmin
-    .from('contact_groups')
-    .select('*')
-    .order('name');
-  if (error) return res.status(400).json({ success: false, message: error.message });
+  try {
+    const { data: groups, error } = await supabaseAdmin
+      .from('contact_groups')
+      .select('*')
+      .order('name');
+    if (error) {
+      if (error.message?.includes('does not exist') || error.code === '42P01') {
+        return res.json({ success: true, result: [] });
+      }
+      return res.status(400).json({ success: false, message: error.message });
+    }
 
-  const { data: members } = await supabaseAdmin
-    .from('contact_group_members')
-    .select('group_id, contact_id');
+    const { data: members } = await supabaseAdmin
+      .from('contact_group_members')
+      .select('group_id, contact_id');
 
-  const memberMap = {};
-  (members || []).forEach((m) => {
-    if (!memberMap[m.group_id]) memberMap[m.group_id] = [];
-    memberMap[m.group_id].push(m.contact_id);
-  });
+    const memberMap = {};
+    (members || []).forEach((m) => {
+      if (!memberMap[m.group_id]) memberMap[m.group_id] = [];
+      memberMap[m.group_id].push(m.contact_id);
+    });
 
-  const result = (groups || []).map((g) => ({
-    ...g,
-    member_ids: memberMap[g.id] || [],
-    member_count: (memberMap[g.id] || []).length,
-  }));
+    const result = (groups || []).map((g) => ({
+      ...g,
+      member_ids: memberMap[g.id] || [],
+      member_count: (memberMap[g.id] || []).length,
+    }));
 
-  res.json({ success: true, result });
+    res.json({ success: true, result });
+  } catch (err) {
+    console.error('Groups list error:', err.message);
+    res.json({ success: true, result: [] });
+  }
 });
 
 // GET single group with members

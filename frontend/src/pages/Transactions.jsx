@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
-import { Plus, X, Trash2, Pencil, Search } from "lucide-react";
+import { Plus, X, Trash2, Pencil, Search, Download, FileText } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 
@@ -32,6 +32,7 @@ export default function Transactions() {
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [filterMode, setFilterMode] = useState("all");
+  const [exporting, setExporting] = useState(null);
 
   function load() {
     api.get("/transactions").then((res) => setTxns(res.data.result));
@@ -102,6 +103,46 @@ export default function Transactions() {
     }
   }
 
+  async function exportExcel() {
+    setExporting("excel");
+    try {
+      const res = await api.post("/exports/transactions/excel", {}, { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "transactions.xlsx");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      addToast("Downloaded Excel file", "success");
+    } catch (err) {
+      addToast("Failed to export Excel", "error");
+    } finally {
+      setExporting(null);
+    }
+  }
+
+  async function exportPDF() {
+    setExporting("pdf");
+    try {
+      const res = await api.post("/exports/transactions/pdf", {}, { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "transactions.pdf");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      addToast("Downloaded PDF file", "success");
+    } catch (err) {
+      addToast("Failed to export PDF", "error");
+    } finally {
+      setExporting(null);
+    }
+  }
+
   const canEdit = role === "admin" || role === "accountant";
 
   return (
@@ -109,13 +150,27 @@ export default function Transactions() {
       <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
         className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold text-stone-900 tracking-tight">Transactions</h1>
-        {canAdd && (
+        <div className="flex items-center gap-2">
           <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
-            onClick={openAdd}
-            className="flex items-center gap-2 bg-gradient-to-r from-saffron-500 to-saffron-600 hover:from-saffron-400 hover:to-saffron-500 text-white text-sm font-semibold px-5 py-2.5 rounded-xl shadow-lg shadow-saffron-500/20 transition-all duration-300">
-            <Plus size={16} /> Add Transaction
+            onClick={exportExcel} disabled={exporting === "excel"}
+            className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 transition-colors disabled:opacity-50">
+            <Download size={15} className={exporting === "excel" ? "animate-bounce" : ""} />
+            {exporting === "excel" ? "Exporting..." : "Excel"}
           </motion.button>
-        )}
+          <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+            onClick={exportPDF} disabled={exporting === "pdf"}
+            className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 transition-colors disabled:opacity-50">
+            <FileText size={15} className={exporting === "pdf" ? "animate-pulse" : ""} />
+            {exporting === "pdf" ? "Exporting..." : "PDF"}
+          </motion.button>
+          {canAdd && (
+            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+              onClick={openAdd}
+              className="flex items-center gap-2 bg-gradient-to-r from-saffron-500 to-saffron-600 hover:from-saffron-400 hover:to-saffron-500 text-white text-sm font-semibold px-5 py-2.5 rounded-xl shadow-lg shadow-saffron-500/20 transition-all duration-300">
+              <Plus size={16} /> Add Transaction
+            </motion.button>
+          )}
+        </div>
       </motion.div>
 
       {/* Search & Filters */}

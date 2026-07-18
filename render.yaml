@@ -20,3 +20,9 @@ services:
         sync: false
       - key: TELEGRAM_BOT_TOKEN
         sync: false
+      - key: GOOGLE_SERVICE_ACCOUNT_EMAIL
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY
+        sync: false
+      - key: GOOGLE_DRIVE_FOLDER_ID
+        sync: false

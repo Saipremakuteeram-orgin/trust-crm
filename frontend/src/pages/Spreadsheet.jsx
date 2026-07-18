@@ -1,13 +1,19 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import AppLayout from "../components/AppLayout";
+import api from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
-import { ShieldAlert, Table2 } from "lucide-react";
+import { useToast } from "../components/Toast";
+import { ShieldAlert, Table2, Download, CloudUpload, FileSpreadsheet } from "lucide-react";
 
 export default function Spreadsheet() {
   const { profile } = useAuth();
+  const { addToast } = useToast();
   const containerRef = useRef(null);
   const univerRef = useRef(null);
+  const [saving, setSaving] = useState(false);
+  const [downloading, setDownloading] = useState(false);
+  const [sheetName, setSheetName] = useState("");
 
   const role = profile?.role || "viewer";
   const canEdit = role === "admin" || role === "accountant";
@@ -22,6 +28,64 @@ export default function Spreadsheet() {
         </div>
       </AppLayout>
     );
+  }
+
+  function getSheetData() {
+    if (!univerRef.current) return null;
+    const fWorkbook = univerRef.current.getActiveWorkbook();
+    if (!fWorkbook) return null;
+    const snapshot = fWorkbook.save();
+    return snapshot;
+  }
+
+  async function saveToDrive() {
+    const data = getSheetData();
+    if (!data) {
+      addToast("No spreadsheet data to save", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await api.post("/exports/spreadsheet/save", {
+        data,
+        fileName: sheetName || undefined,
+      });
+      const file = res.data.result;
+      addToast(`Saved to Google Drive: ${file.name}`, "success");
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to save to Drive", "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function downloadExcel() {
+    const data = getSheetData();
+    if (!data) {
+      addToast("No spreadsheet data to download", "error");
+      return;
+    }
+    setDownloading(true);
+    try {
+      const res = await api.post("/exports/spreadsheet/download", {
+        data,
+        fileName: sheetName || undefined,
+      }, { responseType: "blob" });
+
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", res.headers["content-disposition"]?.split("filename=")?.[1]?.replace(/"/g, "") || "spreadsheet.xlsx");
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      addToast("Downloaded as Excel file", "success");
+    } catch (err) {
+      addToast("Failed to download", "error");
+    } finally {
+      setDownloading(false);
+    }
   }
 
   useEffect(() => {
@@ -72,11 +136,22 @@ export default function Spreadsheet() {
           <h1 className="text-3xl font-bold text-stone-900 tracking-tight">Spreadsheet</h1>
           <p className="text-sm text-stone-500 mt-1">Create and edit spreadsheets directly in your browser</p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-stone-500">
-          <Table2 size={16} />
-          <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">
-            {role?.charAt(0).toUpperCase() + role?.slice(1)}
-          </span>
+        <div className="flex items-center gap-3">
+          <input type="text" value={sheetName} onChange={(e) => setSheetName(e.target.value)}
+            placeholder="Sheet name..."
+            className="px-3 py-1.5 text-sm border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-saffron-400 w-44" />
+          <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+            onClick={downloadExcel} disabled={downloading}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 transition-colors disabled:opacity-50">
+            <Download size={15} className={downloading ? "animate-bounce" : ""} />
+            {downloading ? "Downloading..." : "Download Excel"}
+          </motion.button>
+          <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+            onClick={saveToDrive} disabled={saving}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl bg-gradient-to-r from-royal-500 to-royal-600 text-white shadow-md shadow-royal-500/25 hover:shadow-lg transition-all disabled:opacity-50">
+            <CloudUpload size={15} className={saving ? "animate-pulse" : ""} />
+            {saving ? "Saving..." : "Save to Drive"}
+          </motion.button>
         </div>
       </motion.div>
 

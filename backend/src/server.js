@@ -16,6 +16,7 @@ app.use('/api/analytics', requireAuth, require('./routes/analytics'));
 app.use('/api/categories', require('./routes/categories'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/logs', require('./routes/logs'));
+app.use('/api/exports', require('./routes/exports'));
 
 app.post('/api/reports/monthly/send-now', requireAuth, requireRole('admin', 'accountant'), async (req, res) => {
   const { generateAndSendMonthlyReport } = require('./cron/monthlyReport');

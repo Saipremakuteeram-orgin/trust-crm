@@ -4,7 +4,7 @@ import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
 import { useAuth } from "../lib/AuthContext";
 import {
-  History, ChevronLeft, ChevronRight, Filter,
+  History, ChevronLeft, ChevronRight, Filter, RefreshCw,
   ArrowDownCircle, Users, UserPlus, Shield, Settings, Tag
 } from "lucide-react";
 
@@ -90,8 +90,10 @@ export default function ActivityLog() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [filterEntity, setFilterEntity] = useState("");
   const limit = 30;
+  const canAdd = profile?.role === "admin" || profile?.role === "accountant";
   const isAdmin = profile?.role === "admin";
 
   function load(p = page, entity = filterEntity) {
@@ -109,6 +111,8 @@ export default function ActivityLog() {
 
   useEffect(() => { load(1, filterEntity); setPage(1); }, [filterEntity]);
 
+  function handleRefresh() { setRefreshing(true); load(); setTimeout(() => setRefreshing(false), 600); }
+
   const totalPages = Math.ceil(total / limit);
 
   return (
@@ -121,9 +125,17 @@ export default function ActivityLog() {
             {isAdmin ? "All user activities across the system" : "Your recent activity"}
           </p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-stone-500">
-          <History size={16} />
-          {total} event{total !== 1 ? "s" : ""}
+        <div className="flex items-center gap-3">
+          {canAdd && (
+            <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handleRefresh}
+              className="p-2.5 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 transition-colors">
+              <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+            </motion.button>
+          )}
+          <div className="flex items-center gap-2 text-sm text-stone-500">
+            <History size={16} />
+            {total} event{total !== 1 ? "s" : ""}
+          </div>
         </div>
       </motion.div>
 

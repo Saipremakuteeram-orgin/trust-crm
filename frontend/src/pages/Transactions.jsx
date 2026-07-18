@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
-import { Plus, X, Trash2, Pencil, Search, Download, FileText } from "lucide-react";
+import { Plus, X, Trash2, Pencil, Search, Download, FileText, RefreshCw } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 
@@ -34,6 +34,7 @@ export default function Transactions() {
   const [filterType, setFilterType] = useState("all");
   const [filterMode, setFilterMode] = useState("all");
   const [exporting, setExporting] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   function load() {
     api.get("/transactions").then((res) => setTxns(res.data.result));
@@ -42,6 +43,8 @@ export default function Transactions() {
     api.get("/categories").then((res) => setCategories(res.data.result)).catch(() => {});
   }
   useEffect(load, []);
+
+  function handleRefresh() { setRefreshing(true); load(); setTimeout(() => setRefreshing(false), 600); }
 
   const filtered = useMemo(() => {
     return txns.filter((t) => {
@@ -163,6 +166,10 @@ export default function Transactions() {
         className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold text-stone-900 tracking-tight">Transactions</h1>
         <div className="flex items-center gap-2">
+          <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handleRefresh}
+            className="p-2.5 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 transition-colors">
+            <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+          </motion.button>
           <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
             onClick={exportExcel} disabled={exporting === "excel"}
             className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 transition-colors disabled:opacity-50">

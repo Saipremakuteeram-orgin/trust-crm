@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
-import { Plus, X, Trash2, Pencil, Search } from "lucide-react";
+import { Plus, X, Trash2, Pencil, Search, RefreshCw } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 
@@ -22,9 +22,12 @@ export default function Contacts() {
   const [editing, setEditing] = useState(null);
   const [form, setForm] = useState({ ...emptyForm });
   const [search, setSearch] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   function load() { api.get("/contacts").then((res) => setContacts(res.data.result)); }
   useEffect(load, []);
+
+  function handleRefresh() { setRefreshing(true); load(); setTimeout(() => setRefreshing(false), 600); }
 
   const filtered = useMemo(() => {
     return contacts.filter((c) => {
@@ -77,12 +80,20 @@ export default function Contacts() {
       <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
         className="flex items-center justify-between mb-6">
         <h1 className="text-3xl font-bold text-stone-900 tracking-tight">Contacts</h1>
-        {canAdd && (
-          <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={openAdd}
+        <div className="flex items-center gap-2">
+          {canAdd && (
+            <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handleRefresh}
+              className="p-2.5 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 transition-colors">
+              <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+            </motion.button>
+          )}
+          {canAdd && (
+            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={openAdd}
             className="flex items-center gap-2 bg-gradient-to-r from-saffron-500 to-saffron-600 hover:from-saffron-400 hover:to-saffron-500 text-white text-sm font-semibold px-5 py-2.5 rounded-xl shadow-lg shadow-saffron-500/20 transition-all">
             <Plus size={16} /> Add Contact
           </motion.button>
         )}
+        </div>
       </motion.div>
 
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="mb-5">

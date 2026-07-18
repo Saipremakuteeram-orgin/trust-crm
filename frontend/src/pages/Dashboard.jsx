@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
-import { Wallet, Landmark, TrendingUp, TrendingDown, Activity, Users, Pencil, Check, X } from "lucide-react";
+import { Wallet, Landmark, TrendingUp, TrendingDown, Activity, Users, Pencil, Check, X, RefreshCw } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 import {
@@ -70,8 +70,10 @@ export default function Dashboard() {
   const { profile } = useAuth();
   const { addToast } = useToast();
   const isAdmin = profile?.role === "admin";
+  const canAdd = isAdmin || profile?.role === "accountant";
   const [editing, setEditing] = useState(null);
   const [editVal, setEditVal] = useState("");
+  const [refreshing, setRefreshing] = useState(false);
 
   function loadSummary() {
     api.get("/dashboard/summary").then((res) => setSummary(res.data.result));
@@ -81,6 +83,13 @@ export default function Dashboard() {
     loadSummary();
     api.get("/analytics").then((res) => setAnalytics(res.data.result)).catch(() => setAnalyticsError(true));
   }, []);
+
+  function handleRefresh() {
+    setRefreshing(true);
+    loadSummary();
+    api.get("/analytics").then((res) => setAnalytics(res.data.result)).catch(() => {});
+    setTimeout(() => setRefreshing(false), 600);
+  }
 
   async function saveBalance(type) {
     const num = parseFloat(editVal);
@@ -122,10 +131,18 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
-      <motion.h1 initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
-        className="text-3xl font-bold text-stone-900 mb-8 tracking-tight">
-        Dashboard
-      </motion.h1>
+      <div className="flex items-center justify-between mb-8">
+        <motion.h1 initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
+          className="text-3xl font-bold text-stone-900 tracking-tight">
+          Dashboard
+        </motion.h1>
+        {canAdd && (
+          <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handleRefresh}
+            className="p-2.5 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 transition-colors">
+            <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+          </motion.button>
+        )}
+      </div>
 
       {/* Stat Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">

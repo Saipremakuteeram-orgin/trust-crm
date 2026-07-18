@@ -4,220 +4,179 @@ const multer = require('multer');
 const supabaseAdmin = require('@/config/supabaseAdmin');
 const { requireAuth, requireRole } = require('@/middlewares/auth');
 const { logActivity } = require('@/lib/logger');
-const {
-  getCommonFolderId,
-  listFiles,
-  getFileInfo,
-  createFolder,
-  uploadFile,
-  renameFile,
-  moveFile,
-  copyFile,
-  trashFile,
-} = require('@/services/googleDrive');
+const storage = require('@/services/storage');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
 router.use(requireAuth);
 router.use(requireRole('admin', 'accountant'));
 
-// GET /api/drive/test — test Google Drive connection
-router.get('/test', async (req, res) => {
-  try {
-    const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-    const key = process.env.GOOGLE_PRIVATE_KEY;
-    const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
-    if (!email || !key) {
-      return res.json({ configured: false, message: 'GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_PRIVATE_KEY not set' });
-    }
-    const { driveApi } = await require('@/services/googleDrive').getDriveApi();
-    const result = await driveApi.about.get({ fields: 'user' });
-    const hasFolder = !!folderId;
-    res.json({ configured: true, user: result.data.user?.displayName, hasFolder, folderId: folderId || null });
-  } catch (err) {
-    console.error('Drive test error:', err.message);
-    res.json({ configured: false, message: err.message });
-  }
-});
-
-// GET /api/drive — list files in Common folder (or subfolder)
+// GET /api/drive — list files in a folder
 router.get('/', async (req, res) => {
   try {
-    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
-      return res.json({ success: true, result: { files: [], currentFolder: null, folderId: null, message: 'Google Drive not configured' } });
-    }
-    const folderId = req.query.folderId || await getCommonFolderId();
-    const files = await listFiles(folderId);
-    let currentFolder = null;
-    if (req.query.folderId) {
-      currentFolder = await getFileInfo(req.query.folderId);
-    }
-    res.json({ success: true, result: { files, currentFolder, folderId } });
+    const folder = req.query.folder || '';
+    const items = await storage.listFiles(folder);
+
+    const folders = items.filter((i) => i.id === null).map((f) => ({
+      id: `${folder ? folder + '/' : ''}${f.name}`,
+      name: f.name,
+      mimeType: 'application/vnd.google-apps.folder',
+      createdTime: f.created_at,
+    }));
+
+    const files = items.filter((i) => i.id !== null).map((f) => ({
+      id: `${folder ? folder + '/' : ''}${f.name}`,
+      name: f.name,
+      size: f.metadata?.size || 0,
+      mimeType: f.metadata?.mimetype || 'application/octet-stream',
+      createdTime: f.created_at,
+      modifiedTime: f.updated_at,
+    }));
+
+    res.json({ success: true, result: { files: [...folders, ...files], currentFolder: folder || null } });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error('Drive list error:', err.message);
+    res.json({ success: true, result: { files: [], currentFolder: null } });
   }
 });
 
-// GET /api/drive/info/:fileId — get file/folder details
-router.get('/info/:fileId', async (req, res) => {
-  try {
-    const info = await getFileInfo(req.params.fileId);
-    res.json({ success: true, result: info });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// POST /api/drive/folder — create a new folder
+// POST /api/drive/folder — create folder (by uploading a .folderkeep marker)
 router.post('/folder', async (req, res) => {
   try {
-    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
-      return res.status(500).json({ success: false, message: 'Google Drive is not configured on the server.' });
-    }
-    const { parentId, name } = req.body;
-    const parent = parentId || await getCommonFolderId();
+    const { parent, name } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: 'Folder name is required' });
     }
-    const folder = await createFolder(parent, name.trim());
+    const folderPath = `${parent ? parent + '/' : ''}${name.trim()}`;
+    const markerPath = `${folderPath}/.folderkeep`;
+    await storage.uploadFile(markerPath, Buffer.from(''), 'application/octet-stream');
 
     logActivity({
       userId: req.user.id,
       userEmail: req.user.email,
       action: 'create',
       entity: 'drive_folder',
-      entityId: folder.id,
-      details: { name: folder.name, parent_id: parent },
+      entityId: folderPath,
+      details: { name: name.trim(), parent: parent || null },
       ipAddress: req.ip,
     });
 
-    res.json({ success: true, result: folder });
+    res.json({ success: true, result: { id: folderPath, name: name.trim() } });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// POST /api/drive/upload — upload a file
-router.post('/upload', upload.single('file'), async (req, res) => {
+// POST /api/drive/upload — upload file(s)
+router.post('/upload', upload.array('files', 20), async (req, res) => {
   try {
-    if (!process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || !process.env.GOOGLE_PRIVATE_KEY) {
-      return res.status(500).json({ success: false, message: 'Google Drive is not configured on the server.' });
+    if (!req.files || req.files.length === 0) {
+      return res.status(400).json({ success: false, message: 'No files provided' });
     }
-    if (!req.file) return res.status(400).json({ success: false, message: 'No file provided' });
-    const parentId = req.body.parentId || await getCommonFolderId();
-    const file = await uploadFile(parentId, req.file.originalname, req.file.mimetype, req.file.buffer);
+    const folder = req.body.folder || '';
+    const results = [];
 
-    logActivity({
-      userId: req.user.id,
-      userEmail: req.user.email,
-      action: 'upload',
-      entity: 'drive_file',
-      entityId: file.id,
-      details: { name: file.name, size: file.size, parent_id: parentId },
-      ipAddress: req.ip,
-    });
+    for (const file of req.files) {
+      const filePath = folder ? `${folder}/${file.originalname}` : file.originalname;
+      await storage.uploadFile(filePath, file.buffer, file.mimetype);
 
-    res.json({ success: true, result: file });
+      logActivity({
+        userId: req.user.id,
+        userEmail: req.user.email,
+        action: 'upload',
+        entity: 'drive_file',
+        entityId: filePath,
+        details: { name: file.originalname, size: file.size },
+        ipAddress: req.ip,
+      });
+
+      results.push({ id: filePath, name: file.originalname, size: file.size });
+    }
+
+    res.json({ success: true, result: results });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// PATCH /api/drive/rename — rename a file or folder
+// DELETE /api/drive — delete file(s)
+router.delete('/', async (req, res) => {
+  try {
+    const { files } = req.body;
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      return res.status(400).json({ success: false, message: 'No files specified' });
+    }
+    for (const f of files) {
+      await storage.deleteFile(f);
+      logActivity({
+        userId: req.user.id,
+        userEmail: req.user.email,
+        action: 'delete',
+        entity: 'drive_file',
+        entityId: f,
+        details: { path: f },
+        ipAddress: req.ip,
+      });
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// POST /api/drive/move — move file(s) to a folder
+router.post('/move', async (req, res) => {
+  try {
+    const { files, targetFolder } = req.body;
+    if (!files || !Array.isArray(files)) {
+      return res.status(400).json({ success: false, message: 'No files specified' });
+    }
+    for (const f of files) {
+      const fileName = f.split('/').pop();
+      const toPath = targetFolder ? `${targetFolder}/${fileName}` : fileName;
+      await storage.moveFile(f, toPath);
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PATCH /api/drive/rename — rename file (move to new path)
 router.patch('/rename', async (req, res) => {
   try {
-    const { fileId, name } = req.body;
-    if (!fileId || !name || !name.trim()) {
-      return res.status(400).json({ success: false, message: 'fileId and name are required' });
+    const { path, newName } = req.body;
+    if (!path || !newName) {
+      return res.status(400).json({ success: false, message: 'path and newName required' });
     }
-    const result = await renameFile(fileId, name.trim());
+    const parts = path.split('/');
+    parts.pop();
+    const newPath = [...parts, newName].filter(Boolean).join('/');
+    await storage.moveFile(path, newPath);
 
     logActivity({
       userId: req.user.id,
       userEmail: req.user.email,
       action: 'rename',
       entity: 'drive_file',
-      entityId: fileId,
-      details: { new_name: name.trim() },
+      entityId: path,
+      details: { old: path, new: newPath },
       ipAddress: req.ip,
     });
 
-    res.json({ success: true, result });
+    res.json({ success: true, result: { id: newPath, name: newName } });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 });
 
-// PATCH /api/drive/move — move a file or folder
-router.patch('/move', async (req, res) => {
+// GET /api/drive/download — download file
+router.get('/download', async (req, res) => {
   try {
-    const { fileId, targetFolderId } = req.body;
-    if (!fileId || !targetFolderId) {
-      return res.status(400).json({ success: false, message: 'fileId and targetFolderId are required' });
-    }
-    const result = await moveFile(fileId, targetFolderId);
-
-    logActivity({
-      userId: req.user.id,
-      userEmail: req.user.email,
-      action: 'move',
-      entity: 'drive_file',
-      entityId: fileId,
-      details: { target_folder_id: targetFolderId },
-      ipAddress: req.ip,
-    });
-
-    res.json({ success: true, result });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// POST /api/drive/copy — copy a file
-router.post('/copy', async (req, res) => {
-  try {
-    const { fileId, targetFolderId, name } = req.body;
-    if (!fileId || !targetFolderId) {
-      return res.status(400).json({ success: false, message: 'fileId and targetFolderId are required' });
-    }
-    const result = await copyFile(fileId, targetFolderId, name);
-
-    logActivity({
-      userId: req.user.id,
-      userEmail: req.user.email,
-      action: 'copy',
-      entity: 'drive_file',
-      entityId: fileId,
-      details: { target_folder_id: targetFolderId, new_name: name },
-      ipAddress: req.ip,
-    });
-
-    res.json({ success: true, result });
-  } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
-  }
-});
-
-// POST /api/drive/trash — move to trash (not permanent delete)
-router.post('/trash', async (req, res) => {
-  try {
-    const { fileId } = req.body;
-    if (!fileId) return res.status(400).json({ success: false, message: 'fileId is required' });
-
-    const info = await getFileInfo(fileId);
-    const result = await trashFile(fileId);
-
-    logActivity({
-      userId: req.user.id,
-      userEmail: req.user.email,
-      action: 'trash',
-      entity: 'drive_file',
-      entityId: fileId,
-      details: { name: info.name },
-      ipAddress: req.ip,
-    });
-
-    res.json({ success: true, result });
+    const filePath = req.query.path;
+    if (!filePath) return res.status(400).json({ success: false, message: 'path required' });
+    const signedUrl = await storage.getSignedUrl(filePath, 300);
+    res.json({ success: true, result: { url: signedUrl } });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

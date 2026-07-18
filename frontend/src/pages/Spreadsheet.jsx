@@ -51,9 +51,9 @@ export default function Spreadsheet() {
         fileName: sheetName || undefined,
       });
       const file = res.data.result;
-      addToast(`Saved to Google Drive: ${file.name}`, "success");
+      addToast(`Saved to Drive: ${file.name}`, "success");
     } catch (err) {
-      addToast(err.response?.data?.message || "Failed to save to Drive", "error");
+      addToast(err.response?.data?.message || "Failed to save", "error");
     } finally {
       setSaving(false);
     }

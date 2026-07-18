@@ -6,7 +6,7 @@ import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 import {
   FolderOpen, File, Upload, FolderPlus, Trash2, Pencil, Copy,
-  ArrowRight, ChevronRight, Home, Search, MoreVertical, X, Loader2
+  ChevronRight, Home, Search, MoreVertical, X, Loader2, Download
 } from "lucide-react";
 
 function formatSize(bytes) {
@@ -22,12 +22,8 @@ function formatDate(d) {
   return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-function getIcon(mimeType) {
-  if (mimeType === "application/vnd.google-apps.folder") return FolderOpen;
-  if (mimeType?.startsWith("image/")) return File;
-  if (mimeType?.includes("pdf")) return File;
-  if (mimeType?.includes("spreadsheet") || mimeType?.includes("excel") || mimeType?.includes("csv")) return File;
-  return File;
+function isFolder(f) {
+  return f.mimeType === "application/vnd.google-apps.folder" || f.name?.endsWith("/");
 }
 
 export default function DriveManager() {
@@ -38,7 +34,7 @@ export default function DriveManager() {
   const fileInputRef = useRef(null);
 
   const [files, setFiles] = useState([]);
-  const [currentFolderId, setCurrentFolderId] = useState(null);
+  const [currentFolder, setCurrentFolder] = useState("");
   const [breadcrumbs, setBreadcrumbs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -48,47 +44,42 @@ export default function DriveManager() {
   const [creating, setCreating] = useState(false);
 
   const [uploading, setUploading] = useState(false);
-  const [selectedFile, setSelectedFile] = useState(null);
   const [actionMenu, setActionMenu] = useState(null);
   const [renameOpen, setRenameOpen] = useState(null);
   const [renameName, setRenameName] = useState("");
-  const [moving, setMoving] = useState(null);
-  const [copying, setCopying] = useState(null);
-  const [movingFolderId, setMovingFolderId] = useState(null);
+  const [selected, setSelected] = useState([]);
 
-  const loadFiles = useCallback(async (folderId) => {
+  const loadFiles = useCallback(async (folder) => {
     setLoading(true);
     try {
-      const params = folderId ? `?folderId=${folderId}` : "";
+      const params = folder ? `?folder=${encodeURIComponent(folder)}` : "";
       const res = await api.get("/drive" + params);
-      setFiles(res.data.result.files);
-      setCurrentFolderId(res.data.result.folderId);
-      if (res.data.result.currentFolder) {
-        setBreadcrumbs((prev) => [...prev, { id: folderId, name: res.data.result.currentFolder.name }]);
-      }
+      setFiles(res.data.result.files || []);
+      setCurrentFolder(res.data.result.currentFolder || "");
     } catch (err) {
       addToast("Failed to load files", "error");
     }
     setLoading(false);
   }, [addToast]);
 
-  useEffect(() => { loadFiles(null); }, [loadFiles]);
+  useEffect(() => { loadFiles(currentFolder); }, []);
 
-  function navigateToFolder(folderId, folderName) {
-    if (!folderId) {
-      setCurrentFolderId(null);
+  function navigateToFolder(folderPath, folderName) {
+    if (!folderPath) {
+      setCurrentFolder("");
       setBreadcrumbs([]);
-      loadFiles(null);
+      loadFiles("");
       return;
     }
-    const idx = breadcrumbs.findIndex((b) => b.id === folderId);
-    if (idx >= 0) {
-      const newCrumbs = breadcrumbs.slice(0, idx + 1);
-      setBreadcrumbs(newCrumbs);
-    } else {
-      setBreadcrumbs((prev) => [...prev, { id: folderId, name: folderName }]);
-    }
-    loadFiles(folderId);
+    setBreadcrumbs((prev) => [...prev, { path: folderPath, name: folderName }]);
+    loadFiles(folderPath);
+  }
+
+  function navigateToCrumb(idx) {
+    const crumb = breadcrumbs[idx];
+    const newCrumbs = breadcrumbs.slice(0, idx + 1);
+    setBreadcrumbs(newCrumbs);
+    loadFiles(crumb.path);
   }
 
   async function handleCreateFolder(e) {
@@ -96,11 +87,11 @@ export default function DriveManager() {
     if (!newFolderName.trim()) return;
     setCreating(true);
     try {
-      await api.post("/drive/folder", { parentId: currentFolderId, name: newFolderName.trim() });
+      await api.post("/drive/folder", { parent: currentFolder, name: newFolderName.trim() });
       addToast("Folder created", "success");
       setNewFolderOpen(false);
       setNewFolderName("");
-      loadFiles(currentFolderId);
+      loadFiles(currentFolder);
     } catch (err) {
       addToast(err.response?.data?.message || "Failed to create folder", "error");
     }
@@ -108,18 +99,18 @@ export default function DriveManager() {
   }
 
   async function handleUpload(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const fileList = e.target.files;
+    if (!fileList || fileList.length === 0) return;
     setUploading(true);
     try {
       const formData = new FormData();
-      formData.append("file", file);
-      if (currentFolderId) formData.append("parentId", currentFolderId);
+      for (const f of fileList) formData.append("files", f);
+      if (currentFolder) formData.append("folder", currentFolder);
       await api.post("/drive/upload", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
-      addToast(`Uploaded: ${file.name}`, "success");
-      loadFiles(currentFolderId);
+      addToast(`Uploaded ${fileList.length} file(s)`, "success");
+      loadFiles(currentFolder);
     } catch (err) {
       addToast(err.response?.data?.message || "Upload failed", "error");
     }
@@ -131,49 +122,41 @@ export default function DriveManager() {
     e.preventDefault();
     if (!renameName.trim() || !renameOpen) return;
     try {
-      await api.patch("/drive/rename", { fileId: renameOpen.id, name: renameName.trim() });
+      await api.patch("/drive/rename", { path: renameOpen.id, newName: renameName.trim() });
       addToast("Renamed successfully", "success");
       setRenameOpen(null);
-      loadFiles(currentFolderId);
+      loadFiles(currentFolder);
     } catch (err) {
       addToast("Failed to rename", "error");
     }
   }
 
-  async function handleTrash(file) {
-    if (!window.confirm(`Move "${file.name}" to trash?`)) return;
+  async function handleDelete() {
+    const toDelete = selected.length > 0 ? selected : (actionMenu ? [actionMenu] : []);
+    if (toDelete.length === 0) return;
+    if (!window.confirm(`Delete ${toDelete.length} item(s)?`)) return;
     try {
-      await api.post("/drive/trash", { fileId: file.id });
-      addToast("Moved to trash", "success");
+      await api.delete("/drive", { data: { files: toDelete } });
+      addToast("Deleted", "success");
+      setSelected([]);
       setActionMenu(null);
-      loadFiles(currentFolderId);
+      loadFiles(currentFolder);
     } catch (err) {
-      addToast("Failed to trash file", "error");
+      addToast("Failed to delete", "error");
     }
   }
 
-  async function handleCopy(file) {
+  async function handleDownload(file) {
     try {
-      await api.post("/drive/copy", { fileId: file.id, targetFolderId: currentFolderId });
-      addToast(`Copied: ${file.name}`, "success");
-      setActionMenu(null);
-      loadFiles(currentFolderId);
+      const res = await api.get(`/drive/download?path=${encodeURIComponent(file.id)}`);
+      window.open(res.data.result.url, "_blank");
     } catch (err) {
-      addToast("Failed to copy", "error");
+      addToast("Failed to download", "error");
     }
   }
 
-  async function handleMoveConfirm() {
-    if (!moving || !movingFolderId) return;
-    try {
-      await api.patch("/drive/move", { fileId: moving.id, targetFolderId: movingFolderId });
-      addToast(`Moved: ${moving.name}`, "success");
-      setMoving(null);
-      setMovingFolderId(null);
-      loadFiles(currentFolderId);
-    } catch (err) {
-      addToast("Failed to move", "error");
-    }
+  function toggleSelect(id) {
+    setSelected((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   }
 
   const filtered = files.filter((f) => {
@@ -181,8 +164,8 @@ export default function DriveManager() {
     return (f.name || "").toLowerCase().includes(search.toLowerCase());
   });
 
-  const folders = filtered.filter((f) => f.mimeType === "application/vnd.google-apps.folder");
-  const regularFiles = filtered.filter((f) => f.mimeType !== "application/vnd.google-apps.folder");
+  const folders = filtered.filter((f) => isFolder(f));
+  const regularFiles = filtered.filter((f) => !isFolder(f));
 
   return (
     <AppLayout>
@@ -194,7 +177,7 @@ export default function DriveManager() {
         </div>
         {canEdit && (
           <div className="flex items-center gap-2">
-            <input ref={fileInputRef} type="file" className="hidden" onChange={handleUpload} />
+            <input ref={fileInputRef} type="file" className="hidden" multiple onChange={handleUpload} />
             <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
               onClick={() => fileInputRef.current?.click()} disabled={uploading}
               className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 transition-colors disabled:opacity-50">
@@ -218,13 +201,9 @@ export default function DriveManager() {
           <Home size={14} /> Common
         </button>
         {breadcrumbs.map((b, i) => (
-          <span key={b.id} className="flex items-center gap-1">
+          <span key={b.path} className="flex items-center gap-1">
             <ChevronRight size={12} className="text-stone-400" />
-            <button onClick={() => {
-              const newCrumbs = breadcrumbs.slice(0, i + 1);
-              setBreadcrumbs(newCrumbs);
-              loadFiles(b.id);
-            }}
+            <button onClick={() => navigateToCrumb(i)}
               className="px-2 py-1 rounded-lg hover:bg-stone-100 text-stone-600 transition-colors font-medium">
               {b.name}
             </button>
@@ -232,14 +211,20 @@ export default function DriveManager() {
         ))}
       </motion.div>
 
-      {/* Search */}
+      {/* Search + bulk actions */}
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
-        className="mb-4">
-        <div className="relative max-w-sm">
+        className="mb-4 flex items-center gap-3">
+        <div className="relative max-w-sm flex-1">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
           <input placeholder="Search files..." value={search} onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-9 pr-4 py-2 text-sm border-2 border-stone-200 rounded-xl focus:border-saffron-400 transition-colors" />
         </div>
+        {selected.length > 0 && canEdit && (
+          <button onClick={handleDelete}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors">
+            <Trash2 size={14} /> Delete ({selected.length})
+          </button>
+        )}
       </motion.div>
 
       {/* File Grid */}
@@ -273,10 +258,14 @@ export default function DriveManager() {
                         <p className="text-[10px] text-stone-400">{formatDate(f.createdTime)}</p>
                       </div>
                       {canEdit && (
-                        <button onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === f.id ? null : f.id); }}
-                          className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-stone-200 transition-all">
-                          <MoreVertical size={14} className="text-stone-500" />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <button onClick={(e) => { e.stopPropagation(); toggleSelect(f.id); }}
+                            className={`w-4 h-4 rounded border-2 transition-colors ${selected.includes(f.id) ? "bg-saffron-500 border-saffron-500" : "border-stone-300"}`} />
+                          <button onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === f.id ? null : f.id); }}
+                            className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-stone-200 transition-all">
+                            <MoreVertical size={14} className="text-stone-500" />
+                          </button>
+                        </div>
                       )}
                       <AnimatePresence>
                         {actionMenu === f.id && (
@@ -288,18 +277,10 @@ export default function DriveManager() {
                               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:bg-stone-50">
                               <Pencil size={13} /> Rename
                             </button>
-                            <button onClick={() => { handleCopy(f); }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:bg-stone-50">
-                              <Copy size={13} /> Copy
-                            </button>
-                            <button onClick={() => { setMoving(f); setActionMenu(null); }}
-                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:bg-stone-50">
-                              <ArrowRight size={13} /> Move
-                            </button>
                             <hr className="my-1 border-stone-100" />
-                            <button onClick={() => { handleTrash(f); }}
+                            <button onClick={handleDelete}
                               className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50">
-                              <Trash2 size={13} /> Move to Trash
+                              <Trash2 size={13} /> Delete
                             </button>
                           </motion.div>
                         )}
@@ -314,53 +295,50 @@ export default function DriveManager() {
               <div>
                 <p className="text-xs font-semibold text-stone-500 uppercase tracking-wider mb-2">Files</p>
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
-                  {regularFiles.map((f) => {
-                    const Icon = getIcon(f.mimeType);
-                    return (
-                      <div key={f.id}
-                        className="group relative flex items-center gap-3 p-3 rounded-xl border border-stone-100 hover:border-royal-200 hover:bg-royal-50/30 cursor-pointer transition-all">
-                        <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-royal-400 to-royal-500 flex items-center justify-center text-white shadow-sm">
-                          <Icon size={18} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-semibold text-stone-800 truncate">{f.name}</p>
-                          <p className="text-[10px] text-stone-400">{formatSize(f.size)} · {formatDate(f.modifiedTime || f.createdTime)}</p>
-                        </div>
-                        {canEdit && (
+                  {regularFiles.map((f) => (
+                    <div key={f.id}
+                      className="group relative flex items-center gap-3 p-3 rounded-xl border border-stone-100 hover:border-royal-200 hover:bg-royal-50/30 cursor-pointer transition-all">
+                      <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-royal-400 to-royal-500 flex items-center justify-center text-white shadow-sm">
+                        <File size={18} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-semibold text-stone-800 truncate">{f.name}</p>
+                        <p className="text-[10px] text-stone-400">{formatSize(f.size)} · {formatDate(f.modifiedTime || f.createdTime)}</p>
+                      </div>
+                      {canEdit && (
+                        <div className="flex items-center gap-1">
+                          <button onClick={(e) => { e.stopPropagation(); toggleSelect(f.id); }}
+                            className={`w-4 h-4 rounded border-2 transition-colors ${selected.includes(f.id) ? "bg-saffron-500 border-saffron-500" : "border-stone-300"}`} />
                           <button onClick={(e) => { e.stopPropagation(); setActionMenu(actionMenu === f.id ? null : f.id); }}
                             className="opacity-0 group-hover:opacity-100 p-1 rounded-lg hover:bg-stone-200 transition-all">
                             <MoreVertical size={14} className="text-stone-500" />
                           </button>
+                        </div>
+                      )}
+                      <AnimatePresence>
+                        {actionMenu === f.id && (
+                          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-stone-200 py-1 z-30 w-40"
+                            onClick={(e) => e.stopPropagation()}>
+                            <button onClick={() => handleDownload(f)}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:bg-stone-50">
+                              <Download size={13} /> Download
+                            </button>
+                            <button onClick={() => { setRenameOpen(f); setRenameName(f.name); setActionMenu(null); }}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:bg-stone-50">
+                              <Pencil size={13} /> Rename
+                            </button>
+                            <hr className="my-1 border-stone-100" />
+                            <button onClick={handleDelete}
+                              className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50">
+                              <Trash2 size={13} /> Delete
+                            </button>
+                          </motion.div>
                         )}
-                        <AnimatePresence>
-                          {actionMenu === f.id && (
-                            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}
-                              exit={{ opacity: 0, scale: 0.95 }}
-                              className="absolute right-0 top-full mt-1 bg-white rounded-xl shadow-xl border border-stone-200 py-1 z-30 w-40"
-                              onClick={(e) => e.stopPropagation()}>
-                              <button onClick={() => { setRenameOpen(f); setRenameName(f.name); setActionMenu(null); }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:bg-stone-50">
-                                <Pencil size={13} /> Rename
-                              </button>
-                              <button onClick={() => { handleCopy(f); }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:bg-stone-50">
-                                <Copy size={13} /> Copy
-                              </button>
-                              <button onClick={() => { setMoving(f); setActionMenu(null); }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-stone-700 hover:bg-stone-50">
-                                <ArrowRight size={13} /> Move
-                              </button>
-                              <hr className="my-1 border-stone-100" />
-                              <button onClick={() => { handleTrash(f); }}
-                                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-rose-600 hover:bg-rose-50">
-                                <Trash2 size={13} /> Move to Trash
-                              </button>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    );
-                  })}
+                      </AnimatePresence>
+                    </div>
+                  ))}
                 </div>
               </div>
             )}
@@ -414,47 +392,6 @@ export default function DriveManager() {
                   Rename
                 </motion.button>
               </form>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Move Modal */}
-      <AnimatePresence>
-        {moving && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-            <motion.div initial={{ opacity: 0, scale: 0.92, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.92, y: 24 }} transition={{ duration: 0.3 }}
-              className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl max-h-[70vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-lg font-bold text-stone-900">Move "{moving.name}"</h2>
-                <button onClick={() => { setMoving(null); setMovingFolderId(null); }} className="p-1.5 rounded-lg hover:bg-stone-100"><X size={18} /></button>
-              </div>
-              <div className="space-y-2 mb-4">
-                <button onClick={() => setMovingFolderId(currentFolderId)}
-                  className={`w-full text-left flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm transition-all ${
-                    movingFolderId === currentFolderId ? "bg-saffron-50 border-2 border-saffron-300 text-saffron-700 font-semibold" : "border-2 border-stone-100 hover:border-stone-200"
-                  }`}>
-                  <FolderOpen size={16} /> Current Folder
-                </button>
-                {folders.filter((f) => f.id !== moving.id).map((f) => (
-                  <button key={f.id} onClick={() => setMovingFolderId(f.id)}
-                    className={`w-full text-left flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm transition-all ${
-                      movingFolderId === f.id ? "bg-saffron-50 border-2 border-saffron-300 text-saffron-700 font-semibold" : "border-2 border-stone-100 hover:border-stone-200"
-                    }`}>
-                    <FolderOpen size={16} /> {f.name}
-                  </button>
-                ))}
-                {folders.length <= 1 && (
-                  <p className="text-xs text-stone-400 text-center py-2">No other folders to move to</p>
-                )}
-              </div>
-              <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-                onClick={handleMoveConfirm} disabled={!movingFolderId}
-                className="w-full bg-gradient-to-r from-saffron-500 to-saffron-600 text-white rounded-xl py-2.5 text-sm font-semibold shadow-lg shadow-saffron-500/25 disabled:opacity-50">
-                Move Here
-              </motion.button>
             </motion.div>
           </motion.div>
         )}

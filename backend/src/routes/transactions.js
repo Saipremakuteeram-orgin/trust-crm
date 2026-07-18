@@ -51,12 +51,30 @@ router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
   // Fire notifications
   let notificationStatus = 'sent';
   const notifyIds = body.notify_contact_ids || [];
-  if (notifyIds.length > 0) {
+  const notifyGroupIds = body.notify_group_ids || [];
+  const allNotifyIds = [...new Set([...notifyIds])];
+
+  // Resolve group IDs to member contact IDs
+  if (notifyGroupIds.length > 0) {
+    try {
+      const { data: groupMembers } = await supabaseAdmin
+        .from('contact_group_members')
+        .select('contact_id')
+        .in('group_id', notifyGroupIds);
+      (groupMembers || []).forEach((m) => {
+        if (!allNotifyIds.includes(m.contact_id)) allNotifyIds.push(m.contact_id);
+      });
+    } catch (err) {
+      console.error('Group resolution error:', err.message);
+    }
+  }
+
+  if (allNotifyIds.length > 0) {
     try {
       const { data: contacts } = await supabaseAdmin
         .from('contacts')
         .select('*')
-        .in('id', notifyIds)
+        .in('id', allNotifyIds)
         .eq('enabled', true);
       const results = await notifyContactsOfTransaction(txn, contacts || []);
       const anyFailed = results.some((r) => r.emailRes.ok === false || r.tgRes.ok === false);
@@ -74,7 +92,7 @@ router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
 
 // UPDATE
 router.patch('/:id', requireRole('admin', 'accountant'), async (req, res) => {
-  const allowed = ['type', 'mode', 'amount', 'category_id', 'description', 'txn_date', 'party_name', 'contact_id', 'notify_contact_ids'];
+  const allowed = ['type', 'mode', 'amount', 'category_id', 'description', 'txn_date', 'party_name', 'contact_id', 'notify_contact_ids', 'notify_group_ids'];
   const updates = {};
   for (const key of allowed) {
     if (req.body[key] !== undefined) updates[key] = req.body[key];

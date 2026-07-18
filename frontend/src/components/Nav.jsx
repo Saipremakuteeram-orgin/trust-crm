@@ -1,11 +1,12 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, ArrowDownCircle, Users, Shield, History, Table2 } from "lucide-react";
+import { LayoutDashboard, ArrowDownCircle, Users, Shield, History, Table2, UsersRound } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 
 const links = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/transactions", label: "Transactions", icon: ArrowDownCircle },
   { to: "/contacts", label: "Contacts", icon: Users },
+  { to: "/groups", label: "Groups", icon: UsersRound },
   { to: "/activity", label: "Activity Log", icon: History },
 ];
 

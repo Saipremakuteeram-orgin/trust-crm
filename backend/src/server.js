@@ -11,6 +11,7 @@ app.use(express.json());
 
 app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/contacts', require('./routes/contacts'));
+app.use('/api/groups', require('./routes/groups'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/analytics', requireAuth, require('./routes/analytics'));
 app.use('/api/categories', require('./routes/categories'));

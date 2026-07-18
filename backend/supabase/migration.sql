@@ -147,10 +147,29 @@ as $$
 $$;
 
 -- ============================================
+-- CONTACT GROUPS
+-- ============================================
+create table if not exists contact_groups (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text,
+  created_by uuid references profiles(id),
+  created_at timestamptz default now()
+);
+
+create table if not exists contact_group_members (
+  group_id uuid references contact_groups(id) on delete cascade,
+  contact_id uuid references contacts(id) on delete cascade,
+  primary key (group_id, contact_id)
+);
+
+-- ============================================
 -- 5. ENABLE RLS ON ALL TABLES
 -- ============================================
 alter table profiles    enable row level security;
 alter table contacts    enable row level security;
+alter table contact_groups enable row level security;
+alter table contact_group_members enable row level security;
 alter table transactions enable row level security;
 alter table categories  enable row level security;
 alter table settings    enable row level security;
@@ -192,6 +211,43 @@ drop policy if exists "delete contacts" on contacts;
 create policy "delete contacts"
   on contacts for delete
   using (current_role_is(array['admin']));
+
+-- CONTACT GROUPS
+drop policy if exists "read contact_groups" on contact_groups;
+create policy "read contact_groups"
+  on contact_groups for select
+  using (current_role_is(array['admin', 'accountant', 'viewer']));
+
+drop policy if exists "insert contact_groups" on contact_groups;
+create policy "insert contact_groups"
+  on contact_groups for insert
+  with check (current_role_is(array['admin', 'accountant']));
+
+drop policy if exists "update contact_groups" on contact_groups;
+create policy "update contact_groups"
+  on contact_groups for update
+  using (current_role_is(array['admin', 'accountant']));
+
+drop policy if exists "delete contact_groups" on contact_groups;
+create policy "delete contact_groups"
+  on contact_groups for delete
+  using (current_role_is(array['admin']));
+
+-- CONTACT GROUP MEMBERS
+drop policy if exists "read contact_group_members" on contact_group_members;
+create policy "read contact_group_members"
+  on contact_group_members for select
+  using (current_role_is(array['admin', 'accountant', 'viewer']));
+
+drop policy if exists "insert contact_group_members" on contact_group_members;
+create policy "insert contact_group_members"
+  on contact_group_members for insert
+  with check (current_role_is(array['admin', 'accountant']));
+
+drop policy if exists "delete contact_group_members" on contact_group_members;
+create policy "delete contact_group_members"
+  on contact_group_members for delete
+  using (current_role_is(array['admin', 'accountant']));
 
 -- TRANSACTIONS
 drop policy if exists "read transactions" on transactions;

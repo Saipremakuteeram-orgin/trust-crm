@@ -30,6 +30,22 @@ create table contacts (
   created_at timestamptz default now()
 );
 
+-- Contact Groups: named groups for bulk notifications
+create table contact_groups (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  description text,
+  created_by uuid references profiles(id),
+  created_at timestamptz default now()
+);
+
+-- Contact Group Members: junction table linking contacts to groups
+create table contact_group_members (
+  group_id uuid references contact_groups(id) on delete cascade,
+  contact_id uuid references contacts(id) on delete cascade,
+  primary key (group_id, contact_id)
+);
+
 -- Expense/income categories
 create table categories (
   id uuid primary key default gen_random_uuid(),
@@ -113,6 +129,8 @@ $$;
 -- ============================================
 alter table profiles enable row level security;
 alter table contacts enable row level security;
+alter table contact_groups enable row level security;
+alter table contact_group_members enable row level security;
 alter table transactions enable row level security;
 alter table categories enable row level security;
 alter table settings enable row level security;
@@ -132,6 +150,24 @@ create policy "update contacts" on contacts
   for update using (current_role_is(array['admin','accountant']));
 create policy "delete contacts" on contacts
   for delete using (current_role_is(array['admin']));
+
+-- CONTACT GROUPS
+create policy "read contact_groups" on contact_groups
+  for select using (current_role_is(array['admin','accountant','viewer']));
+create policy "insert contact_groups" on contact_groups
+  for insert with check (current_role_is(array['admin','accountant']));
+create policy "update contact_groups" on contact_groups
+  for update using (current_role_is(array['admin','accountant']));
+create policy "delete contact_groups" on contact_groups
+  for delete using (current_role_is(array['admin']));
+
+-- CONTACT GROUP MEMBERS
+create policy "read contact_group_members" on contact_group_members
+  for select using (current_role_is(array['admin','accountant','viewer']));
+create policy "insert contact_group_members" on contact_group_members
+  for insert with check (current_role_is(array['admin','accountant']));
+create policy "delete contact_group_members" on contact_group_members
+  for delete using (current_role_is(array['admin','accountant']));
 
 -- TRANSACTIONS
 create policy "read transactions" on transactions

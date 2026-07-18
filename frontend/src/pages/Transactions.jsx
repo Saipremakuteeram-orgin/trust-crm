@@ -12,7 +12,7 @@ const fmt = (n) =>
 const emptyForm = {
   type: "credit", mode: "cash", digital_method: "upi", amount: "",
   party: "", description: "", txn_date: new Date().toISOString().slice(0, 10),
-  notify_contact_ids: [], category_id: "",
+  notify_contact_ids: [], notify_group_ids: [], category_id: "",
 };
 
 export default function Transactions() {
@@ -24,6 +24,7 @@ export default function Transactions() {
 
   const [txns, setTxns] = useState([]);
   const [contacts, setContacts] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [categories, setCategories] = useState([]);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -37,6 +38,7 @@ export default function Transactions() {
   function load() {
     api.get("/transactions").then((res) => setTxns(res.data.result));
     api.get("/contacts").then((res) => setContacts(res.data.result));
+    api.get("/groups").then((res) => setGroups(res.data.result)).catch(() => {});
     api.get("/categories").then((res) => setCategories(res.data.result)).catch(() => {});
   }
   useEffect(load, []);
@@ -59,6 +61,15 @@ export default function Transactions() {
     }));
   }
 
+  function toggleGroup(id) {
+    setForm((f) => ({
+      ...f,
+      notify_group_ids: f.notify_group_ids.includes(id)
+        ? f.notify_group_ids.filter((x) => x !== id)
+        : [...f.notify_group_ids, id],
+    }));
+  }
+
   function openAdd() { setEditing(null); setForm({ ...emptyForm }); setOpen(true); }
 
   function openEdit(txn) {
@@ -67,6 +78,7 @@ export default function Transactions() {
       type: txn.type, mode: txn.mode, digital_method: txn.digital_method || "upi",
       amount: txn.amount, party: txn.party || "", description: txn.description || "",
       txn_date: txn.txn_date, notify_contact_ids: txn.notify_contact_ids || [],
+      notify_group_ids: txn.notify_group_ids || [],
       category_id: txn.category_id || "",
     });
     setOpen(true);
@@ -338,7 +350,31 @@ export default function Transactions() {
 
                 <div>
                   <div className="text-sm font-semibold text-stone-700 mb-2">Notify (email + Telegram)</div>
+                  {groups.length > 0 && (
+                    <div className="mb-3">
+                      <p className="text-xs font-medium text-stone-500 mb-1.5 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-royal-500" />
+                        Groups
+                      </p>
+                      <div className="space-y-1.5 border-2 border-royal-100 rounded-xl p-3 bg-royal-50/30">
+                        {groups.map((g) => (
+                          <label key={g.id} className="flex items-center justify-between text-sm text-stone-700 cursor-pointer group">
+                            <div className="flex items-center gap-2.5">
+                              <input type="checkbox" checked={form.notify_group_ids.includes(g.id)}
+                                onChange={() => toggleGroup(g.id)} className="rounded border-stone-300 text-royal-600 focus:ring-royal-500" />
+                              <span className="group-hover:text-stone-900 transition-colors font-medium">{g.name}</span>
+                            </div>
+                            <span className="text-[10px] text-stone-400">{g.member_count} members</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-1.5 max-h-32 overflow-y-auto border-2 border-stone-200 rounded-xl p-3">
+                    <p className="text-xs font-medium text-stone-500 mb-1 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-saffron-500" />
+                      Individual Contacts
+                    </p>
                     {contacts.length === 0 && <p className="text-xs text-stone-400">No contacts yet</p>}
                     {contacts.map((c) => (
                       <label key={c.id} className="flex items-center gap-2.5 text-sm text-stone-700 cursor-pointer group">
@@ -348,6 +384,14 @@ export default function Transactions() {
                       </label>
                     ))}
                   </div>
+                  {(form.notify_group_ids.length > 0 || form.notify_contact_ids.length > 0) && (
+                    <p className="text-xs text-stone-400 mt-1.5">
+                      {form.notify_group_ids.length > 0 && `${form.notify_group_ids.length} group(s)`}
+                      {form.notify_group_ids.length > 0 && form.notify_contact_ids.length > 0 && " + "}
+                      {form.notify_contact_ids.length > 0 && `${form.notify_contact_ids.length} contact(s)`}
+                      {" "}will be notified
+                    </p>
+                  )}
                 </div>
 
                 <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} disabled={saving}

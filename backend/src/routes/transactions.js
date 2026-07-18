@@ -112,7 +112,7 @@ router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
 
 // UPDATE
 router.patch('/:id', requireRole('admin', 'accountant'), async (req, res) => {
-  const allowed = ['type', 'mode', 'amount', 'category_id', 'description', 'txn_date', 'party_name', 'contact_id', 'notify_contact_ids', 'notify_group_ids', 'voucher_filed'];
+  const allowed = ['type', 'mode', 'amount', 'category_id', 'description', 'txn_date', 'party', 'notify_contact_ids', 'notify_group_ids', 'voucher_filed'];
   const updates = {};
   for (const key of allowed) {
     if (req.body[key] !== undefined) updates[key] = req.body[key];
@@ -120,6 +120,12 @@ router.patch('/:id', requireRole('admin', 'accountant'), async (req, res) => {
   if (Object.keys(updates).length === 0) {
     return res.status(400).json({ success: false, message: 'No valid fields to update' });
   }
+
+  const editReason = (req.body.edit_reason || '').trim();
+  if (!editReason) {
+    return res.status(400).json({ success: false, message: 'Please provide a reason for this edit' });
+  }
+
   const { data, error } = await supabaseAdmin
     .from('transactions')
     .update(updates)
@@ -134,7 +140,7 @@ router.patch('/:id', requireRole('admin', 'accountant'), async (req, res) => {
     action: 'update',
     entity: 'transaction',
     entityId: req.params.id,
-    details: updates,
+    details: { ...updates, edit_reason: editReason },
     ipAddress: req.ip,
   });
 

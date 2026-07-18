@@ -12,7 +12,7 @@ const fmt = (n) =>
 const emptyForm = {
   type: "credit", mode: "cash", digital_method: "upi", amount: "",
   party: "", description: "", txn_date: new Date().toISOString().slice(0, 10),
-  notify_contact_ids: [], notify_group_ids: [], category_id: "", voucher_filed: null,
+  notify_contact_ids: [], notify_group_ids: [], category_id: "", voucher_filed: null, edit_reason: "",
 };
 
 export default function Transactions() {
@@ -76,12 +76,17 @@ export default function Transactions() {
 
   async function handleToggleVoucher(txn) {
     const newVal = !txn.voucher_filed;
+    const reason = window.prompt(`Reason for changing voucher status to "${newVal ? "Filed" : "Not Filed"}":`);
+    if (reason === null || !reason.trim()) {
+      if (reason !== null) addToast("Please provide a reason", "error");
+      return;
+    }
     try {
-      await api.patch("/transactions/" + txn.id, { voucher_filed: newVal });
+      await api.patch("/transactions/" + txn.id, { voucher_filed: newVal, edit_reason: reason.trim() });
       addToast(`Voucher marked as ${newVal ? "filed" : "not filed"}`, "success");
       load();
     } catch (err) {
-      addToast("Failed to update voucher status", "error");
+      addToast(err.response?.data?.message || "Failed to update voucher status", "error");
     }
   }
 
@@ -96,6 +101,7 @@ export default function Transactions() {
       notify_group_ids: txn.notify_group_ids || [],
       category_id: txn.category_id || "",
       voucher_filed: txn.mode === "cash" ? !!txn.voucher_filed : null,
+      edit_reason: "",
     });
     setOpen(true);
   }
@@ -106,10 +112,15 @@ export default function Transactions() {
       addToast("Please select voucher filed status for cash transactions", "error");
       return;
     }
+    if (editing && !form.edit_reason.trim()) {
+      addToast("Please provide a reason for this edit", "error");
+      return;
+    }
     setSaving(true);
     try {
       const payload = { ...form, amount: Number(form.amount) };
       if (payload.mode !== "cash") delete payload.voucher_filed;
+      if (!editing) delete payload.edit_reason;
       if (editing) {
         await api.patch("/transactions/" + editing.id, payload);
         addToast("Transaction updated successfully", "success");
@@ -494,6 +505,18 @@ export default function Transactions() {
                     </p>
                   )}
                 </div>
+
+                <AnimatePresence>
+                  {editing && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }} className="space-y-1">
+                      <label className="text-sm font-semibold text-stone-700">Reason for edit <span className="text-rose-500">*</span></label>
+                      <textarea required rows={2} placeholder="Why are you editing this transaction?"
+                        value={form.edit_reason} onChange={(e) => setForm({ ...form, edit_reason: e.target.value })}
+                        className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors resize-none" />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} disabled={saving}
                   className="w-full bg-gradient-to-r from-saffron-500 to-saffron-600 hover:from-saffron-400 hover:to-saffron-500 text-white rounded-xl py-2.5 text-sm font-semibold shadow-lg shadow-saffron-500/25 transition-all disabled:opacity-50">

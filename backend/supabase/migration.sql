@@ -7,7 +7,7 @@
 -- ============================================
 -- 1. TYPES
 -- ============================================
-DO $$ BEGIN
+DO $$ BEGIN   
   create type user_role as enum ('admin', 'accountant', 'viewer');
 exception
   when duplicate_object then null;

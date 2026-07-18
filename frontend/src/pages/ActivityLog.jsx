@@ -53,24 +53,31 @@ function formatDetails(entity, details) {
     if (details.amount) parts.push(`₹${Number(details.amount).toLocaleString("en-IN")}`);
     if (details.mode) parts.push(details.mode);
     if (details.party) parts.push(details.party);
-    return parts.join(" · ");
+    if (details.voucher_filed !== undefined) parts.push(details.voucher_filed ? "Voucher Filed" : "Voucher Not Filed");
+    const main = parts.join(" · ");
+    if (details.edit_reason) {
+      return { text: main, reason: details.edit_reason };
+    }
+    return { text: main, reason: null };
   }
   if (entity === "user") {
-    if (details.email) return details.email + (details.role ? ` (${details.role})` : "");
-    if (details.from && details.to) return `${details.from} → ${details.to}`;
-    if (details.synced !== undefined) return `${details.synced} user(s) synced`;
-    if (details.email && details.full_name) return details.email;
+    let text = null;
+    if (details.email) text = details.email + (details.role ? ` (${details.role})` : "");
+    else if (details.from && details.to) text = `${details.from} → ${details.to}`;
+    else if (details.synced !== undefined) text = `${details.synced} user(s) synced`;
+    else if (details.email && details.full_name) text = details.email;
+    return { text, reason: null };
   }
   if (entity === "contact") {
-    return details.name || details.email || null;
+    return { text: details.name || details.email || null, reason: null };
   }
   if (entity === "category") {
-    return details.name || null;
+    return { text: details.name || null, reason: null };
   }
   if (entity === "settings") {
-    return details.key ? `${details.key}: ₹${Number(details.value).toLocaleString("en-IN")}` : null;
+    return { text: details.key ? `${details.key}: ₹${Number(details.value).toLocaleString("en-IN")}` : null, reason: null };
   }
-  return null;
+  return { text: null, reason: null };
 }
 
 function timeAgo(date) {
@@ -185,8 +192,11 @@ export default function ActivityLog() {
                       </span>
                       <span className="text-xs text-stone-400 capitalize">{log.entity}</span>
                     </div>
-                    {detail && (
-                      <p className="text-sm text-stone-500 mt-1 truncate">{detail}</p>
+                    {detail.text && (
+                      <p className="text-sm text-stone-500 mt-1 truncate">{detail.text}</p>
+                    )}
+                    {detail.reason && (
+                      <p className="text-xs text-stone-400 mt-0.5 italic">Reason: "{detail.reason}"</p>
                     )}
                   </div>
                   <div className="text-xs text-stone-400 whitespace-nowrap mt-1">

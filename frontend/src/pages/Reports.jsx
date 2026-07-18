@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
+import TransactionListModal from "../components/TransactionListModal";
 import { FileBarChart, Download, RefreshCw, Calendar, Wallet, Landmark, TrendingUp, TrendingDown } from "lucide-react";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
@@ -40,10 +41,11 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-function StatCard({ icon: Icon, label, value, sub, color, delay }) {
+function StatCard({ icon: Icon, label, value, sub, color, delay, onClick }) {
   return (
     <motion.div custom={delay} variants={cardVariants} initial="hidden" animate="visible"
-      className="relative group overflow-hidden bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover-lift">
+      onClick={onClick}
+      className={`relative group overflow-hidden bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover-lift ${onClick ? "cursor-pointer hover:border-saffron-300" : ""}`}>
       <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
         style={{ background: `radial-gradient(circle at 80% 20%, ${color}10 0%, transparent 60%)` }} />
       <div className="relative z-10 flex items-start justify-between">
@@ -56,6 +58,11 @@ function StatCard({ icon: Icon, label, value, sub, color, delay }) {
           <Icon size={22} style={{ color }} />
         </div>
       </div>
+      {onClick && (
+        <div className="relative z-10 mt-3 text-[11px] font-medium text-stone-400 group-hover:text-saffron-600 transition-colors">
+          Click to view transactions →
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -80,6 +87,7 @@ export default function Reports() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(null);
+  const [modal, setModal] = useState({ open: false, title: "", subtitle: "", transactions: null, loading: false });
 
   const query = useMemo(() => {
     const q = { range };
@@ -101,6 +109,22 @@ export default function Reports() {
   }
 
   useEffect(load, [qs]);
+
+  function openTxnModal(filterMode, title, subtitle) {
+    setModal({ open: true, title, subtitle: `${subtitle} · ${data?.label || ""}`, transactions: null, loading: true });
+    api.get("/reports/transactions?" + qs)
+      .then((res) => {
+        const all = res.data.result || [];
+        let filtered = all;
+        if (filterMode === "cash" || filterMode === "digital") {
+          filtered = all.filter((t) => t.mode === filterMode);
+        } else if (filterMode === "credit" || filterMode === "debit") {
+          filtered = all.filter((t) => t.type === filterMode);
+        }
+        setModal((m) => ({ ...m, transactions: filtered, loading: false }));
+      })
+      .catch(() => setModal((m) => ({ ...m, transactions: [], loading: false })));
+  }
 
   async function exportExcel() {
     setExporting("excel");
@@ -249,10 +273,14 @@ export default function Reports() {
         <>
           {/* Stat cards */}
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-            <StatCard icon={TrendingUp} label="Total Income" value={fmtShort(ov.total_credit)} sub={`${data.txn_count} transactions`} color="#059669" delay={0} />
-            <StatCard icon={TrendingDown} label="Total Expenses" value={fmtShort(ov.total_debit)} sub={`Net: ${fmtShort(ov.net_balance)}`} color="#e11d48" delay={1} />
-            <StatCard icon={Wallet} label="Cash in Hand" value={fmt(ov.cash_in_hand)} color="#10b981" delay={2} />
-            <StatCard icon={Landmark} label="Digital Balance" value={fmt(ov.digital_balance)} color="#6366f1" delay={3} />
+            <StatCard icon={TrendingUp} label="Total Income" value={fmtShort(ov.total_credit)} sub={`${data.txn_count} transactions`} color="#059669" delay={0}
+              onClick={() => openTxnModal("credit", "Income Transactions", "All credit (in) for period")} />
+            <StatCard icon={TrendingDown} label="Total Expenses" value={fmtShort(ov.total_debit)} sub={`Net: ${fmtShort(ov.net_balance)}`} color="#e11d48" delay={1}
+              onClick={() => openTxnModal("debit", "Expense Transactions", "All debit (out) for period")} />
+            <StatCard icon={Wallet} label="Cash in Hand" value={fmt(ov.cash_in_hand)} color="#10b981" delay={2}
+              onClick={() => openTxnModal("cash", "Cash Transactions", "All cash-mode for period")} />
+            <StatCard icon={Landmark} label="Digital Balance" value={fmt(ov.digital_balance)} color="#6366f1" delay={3}
+              onClick={() => openTxnModal("digital", "Digital Transactions", "All digital-mode for period")} />
           </div>
 
           {/* Trend + Category */}
@@ -343,6 +371,15 @@ export default function Reports() {
           )}
         </>
       )}
+
+      <TransactionListModal
+        open={modal.open}
+        onClose={() => setModal((m) => ({ ...m, open: false }))}
+        title={modal.title}
+        subtitle={modal.subtitle}
+        transactions={modal.transactions}
+        loading={modal.loading}
+      />
     </AppLayout>
   );
 }

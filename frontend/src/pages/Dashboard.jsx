@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
+import TransactionListModal from "../components/TransactionListModal";
 import { Wallet, Landmark, TrendingUp, TrendingDown, Activity, Users, Pencil, Check, X, RefreshCw, Download } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
@@ -43,10 +44,11 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
-function StatCard({ icon: Icon, label, value, sub, color, delay }) {
+function StatCard({ icon: Icon, label, value, sub, color, delay, onClick }) {
   return (
     <motion.div custom={delay} variants={cardVariants} initial="hidden" animate="visible"
-      className="relative group overflow-hidden bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover-lift">
+      onClick={onClick}
+      className={`relative group overflow-hidden bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover-lift ${onClick ? "cursor-pointer hover:border-saffron-300" : ""}`}>
       <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500"
         style={{ background: `radial-gradient(circle at 80% 20%, ${color}10 0%, transparent 60%)` }} />
       <div className="relative z-10 flex items-start justify-between">
@@ -59,6 +61,11 @@ function StatCard({ icon: Icon, label, value, sub, color, delay }) {
           <Icon size={22} style={{ color }} />
         </div>
       </div>
+      {onClick && (
+        <div className="relative z-10 mt-3 text-[11px] font-medium text-stone-400 group-hover:text-saffron-600 transition-colors">
+          Click to view transactions →
+        </div>
+      )}
     </motion.div>
   );
 }
@@ -75,6 +82,7 @@ export default function Dashboard() {
   const [editVal, setEditVal] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
+  const [modal, setModal] = useState({ open: false, title: "", subtitle: "", transactions: null, loading: false });
 
   function loadSummary() {
     api.get("/dashboard/summary").then((res) => setSummary(res.data.result));
@@ -90,6 +98,22 @@ export default function Dashboard() {
     loadSummary();
     api.get("/analytics").then((res) => setAnalytics(res.data.result)).catch(() => {});
     setTimeout(() => setRefreshing(false), 600);
+  }
+
+  function openTxnModal(filterMode, title, subtitle) {
+    setModal({ open: true, title, subtitle, transactions: null, loading: true });
+    api.get("/transactions")
+      .then((res) => {
+        const all = res.data.result || [];
+        let filtered = all;
+        if (filterMode === "cash" || filterMode === "digital") {
+          filtered = all.filter((t) => t.mode === filterMode);
+        } else if (filterMode === "credit" || filterMode === "debit") {
+          filtered = all.filter((t) => t.type === filterMode);
+        }
+        setModal((m) => ({ ...m, transactions: filtered, loading: false }));
+      })
+      .catch(() => setModal((m) => ({ ...m, transactions: [], loading: false })));
   }
 
   async function handleBackupNow() {
@@ -167,12 +191,16 @@ export default function Dashboard() {
       </div>
 
       {/* Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-        <StatCard icon={Wallet} label="Cash in Hand" value={fmt(cash?.cash_in_hand)} color="#10b981" delay={0} />
-        <StatCard icon={Landmark} label="Digital Balance" value={fmt(digital?.digital_balance)} color="#6366f1" delay={1} />
-        <StatCard icon={TrendingUp} label="Total Income" value={fmtShort(ov.total_credit)} sub={`${ov.txn_count || 0} transactions`} color="#059669" delay={2} />
-        <StatCard icon={TrendingDown} label="Total Expenses" value={fmtShort(ov.total_debit)} sub={`Net: ${fmtShort(ov.net_balance)}`} color="#e11d48" delay={3} />
-      </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+            <StatCard icon={Wallet} label="Cash in Hand" value={fmt(cash?.cash_in_hand)} color="#10b981" delay={0}
+              onClick={() => openTxnModal("cash", "Cash Transactions", "All cash-mode transactions")} />
+            <StatCard icon={Landmark} label="Digital Balance" value={fmt(digital?.digital_balance)} color="#6366f1" delay={1}
+              onClick={() => openTxnModal("digital", "Digital Transactions", "All digital-mode transactions")} />
+            <StatCard icon={TrendingUp} label="Total Income" value={fmtShort(ov.total_credit)} sub={`${ov.txn_count || 0} transactions`} color="#059669" delay={2}
+              onClick={() => openTxnModal("credit", "Income Transactions", "All credit (in) transactions")} />
+            <StatCard icon={TrendingDown} label="Total Expenses" value={fmtShort(ov.total_debit)} sub={`Net: ${fmtShort(ov.net_balance)}`} color="#e11d48" delay={3}
+              onClick={() => openTxnModal("debit", "Expense Transactions", "All debit (out) transactions")} />
+          </div>
 
       {/* Cash Flow + Digital Flow Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">
@@ -453,6 +481,15 @@ export default function Dashboard() {
           <p className="text-sm text-amber-700 font-medium">Analytics charts could not be loaded. Please try again later.</p>
         </div>
       )}
+
+      <TransactionListModal
+        open={modal.open}
+        onClose={() => setModal((m) => ({ ...m, open: false }))}
+        title={modal.title}
+        subtitle={modal.subtitle}
+        transactions={modal.transactions}
+        loading={modal.loading}
+      />
     </AppLayout>
   );
 }

@@ -36,6 +36,7 @@ function buildWorkbook(txns, profile) {
     { header: 'Category', key: 'category', width: 20 },
     { header: 'Description', key: 'description', width: 30 },
     { header: 'Reference', key: 'reference_no', width: 16 },
+    { header: 'Voucher', key: 'voucher_filed', width: 12 },
     { header: 'Notification', key: 'notification_status', width: 14 },
   ];
 
@@ -62,6 +63,7 @@ function buildWorkbook(txns, profile) {
       category: t.categories?.name || '',
       description: t.description || '',
       reference_no: t.reference_no || '',
+      voucher_filed: t.mode === 'cash' ? (t.voucher_filed ? 'Filed' : 'Not Filed') : '',
       notification_status: t.notification_status || '',
     });
 
@@ -84,7 +86,7 @@ function buildWorkbook(txns, profile) {
   });
   summaryRow.font = { bold: true, size: 11 };
   summaryRow.getCell('txn_date').font = { bold: true, size: 12 };
-  sheet.autoFilter = { from: 'A1', to: 'I1' };
+  sheet.autoFilter = { from: 'A1', to: 'J1' };
 
   return workbook;
 }
@@ -218,8 +220,8 @@ router.post('/transactions/pdf', requireRole('admin', 'accountant'), async (req,
     let totalCredit = 0;
     let totalDebit = 0;
 
-    const headers = ['Date', 'Type', 'Mode', 'Amount', 'Party', 'Category', 'Description', 'Reference'];
-    const colWidths = [75, 55, 55, 85, 140, 110, 180, 80];
+    const headers = ['Date', 'Type', 'Mode', 'Amount', 'Party', 'Category', 'Description', 'Reference', 'Voucher'];
+    const colWidths = [75, 55, 55, 85, 140, 110, 180, 80, 60];
     let x = 40;
     const headerY = 112;
 
@@ -257,6 +259,7 @@ router.post('/transactions/pdf', requireRole('admin', 'accountant'), async (req,
         t.categories?.name || '-',
         t.description || '-',
         t.reference_no || '-',
+        t.mode === 'cash' ? (t.voucher_filed ? 'Filed' : 'Not Filed') : '-',
       ];
 
       vals.forEach((v, i) => {

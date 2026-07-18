@@ -29,10 +29,30 @@ router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
   if (!body.mode || !['cash', 'digital'].includes(body.mode)) {
     return res.status(400).json({ success: false, message: 'Invalid or missing mode' });
   }
+  if (body.mode === 'cash' && body.voucher_filed === undefined) {
+    return res.status(400).json({ success: false, message: 'Voucher filed status is required for cash transactions' });
+  }
+
+  const insertData = {
+    type: body.type,
+    mode: body.mode,
+    amount: body.amount,
+    party: body.party,
+    description: body.description,
+    txn_date: body.txn_date,
+    category_id: body.category_id,
+    reference_no: body.reference_no,
+    digital_method: body.digital_method,
+    notify_contact_ids: body.notify_contact_ids,
+    created_by: req.user.id,
+  };
+  if (body.mode === 'cash') {
+    insertData.voucher_filed = !!body.voucher_filed;
+  }
 
   const { data: txn, error } = await supabaseAdmin
     .from('transactions')
-    .insert({ ...body, created_by: req.user.id })
+    .insert(insertData)
     .select()
     .single();
 
@@ -92,7 +112,7 @@ router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
 
 // UPDATE
 router.patch('/:id', requireRole('admin', 'accountant'), async (req, res) => {
-  const allowed = ['type', 'mode', 'amount', 'category_id', 'description', 'txn_date', 'party_name', 'contact_id', 'notify_contact_ids', 'notify_group_ids'];
+  const allowed = ['type', 'mode', 'amount', 'category_id', 'description', 'txn_date', 'party_name', 'contact_id', 'notify_contact_ids', 'notify_group_ids', 'voucher_filed'];
   const updates = {};
   for (const key of allowed) {
     if (req.body[key] !== undefined) updates[key] = req.body[key];

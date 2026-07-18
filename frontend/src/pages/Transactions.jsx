@@ -12,7 +12,7 @@ const fmt = (n) =>
 const emptyForm = {
   type: "credit", mode: "cash", digital_method: "upi", amount: "",
   party: "", description: "", txn_date: new Date().toISOString().slice(0, 10),
-  notify_contact_ids: [], notify_group_ids: [], category_id: "",
+  notify_contact_ids: [], notify_group_ids: [], category_id: "", voucher_filed: null,
 };
 
 export default function Transactions() {
@@ -74,6 +74,17 @@ export default function Transactions() {
     }));
   }
 
+  async function handleToggleVoucher(txn) {
+    const newVal = !txn.voucher_filed;
+    try {
+      await api.patch("/transactions/" + txn.id, { voucher_filed: newVal });
+      addToast(`Voucher marked as ${newVal ? "filed" : "not filed"}`, "success");
+      load();
+    } catch (err) {
+      addToast("Failed to update voucher status", "error");
+    }
+  }
+
   function openAdd() { setEditing(null); setForm({ ...emptyForm }); setOpen(true); }
 
   function openEdit(txn) {
@@ -84,15 +95,21 @@ export default function Transactions() {
       txn_date: txn.txn_date, notify_contact_ids: txn.notify_contact_ids || [],
       notify_group_ids: txn.notify_group_ids || [],
       category_id: txn.category_id || "",
+      voucher_filed: txn.mode === "cash" ? !!txn.voucher_filed : null,
     });
     setOpen(true);
   }
 
   async function handleSubmit(e) {
     e.preventDefault();
+    if (form.mode === "cash" && form.voucher_filed === null) {
+      addToast("Please select voucher filed status for cash transactions", "error");
+      return;
+    }
     setSaving(true);
     try {
       const payload = { ...form, amount: Number(form.amount) };
+      if (payload.mode !== "cash") delete payload.voucher_filed;
       if (editing) {
         await api.patch("/transactions/" + editing.id, payload);
         addToast("Transaction updated successfully", "success");
@@ -258,6 +275,7 @@ export default function Transactions() {
               <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Amount</th>
               <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Mode</th>
               <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Category</th>
+              <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Voucher</th>
               <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Notified</th>
               {(canEdit || canDelete) && <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider text-right">Actions</th>}
             </tr>
@@ -281,6 +299,20 @@ export default function Transactions() {
                     }`}>{t.mode === "cash" ? "Cash" : t.digital_method?.toUpperCase() || "Digital"}</span>
                   </td>
                   <td className="px-5 py-3.5 text-stone-500 text-xs">{t.categories?.name || "-"}</td>
+                  <td className="px-5 py-3.5">
+                    {t.mode === "cash" ? (
+                      <button onClick={() => handleToggleVoucher(t)}
+                        className={`text-xs font-semibold px-2.5 py-1 rounded-full cursor-pointer transition-all hover:scale-105 ${
+                          t.voucher_filed
+                            ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 hover:bg-emerald-100"
+                            : "bg-amber-50 text-amber-700 ring-1 ring-amber-200 hover:bg-amber-100"
+                        }`} title="Click to toggle">
+                        {t.voucher_filed ? "Filed" : "Pending"}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-stone-300">—</span>
+                    )}
+                  </td>
                   <td className="px-5 py-3.5">
                     <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                       t.notification_status === "sent" ? "bg-emerald-50 text-emerald-600" :
@@ -312,7 +344,7 @@ export default function Transactions() {
               ))}
             </AnimatePresence>
             {filtered.length === 0 && (
-              <tr><td colSpan={8} className="px-5 py-12 text-center text-stone-400">
+              <tr><td colSpan={9} className="px-5 py-12 text-center text-stone-400">
                 <div className="flex flex-col items-center gap-2">
                   <div className="w-12 h-12 rounded-full bg-stone-100 flex items-center justify-center text-stone-300">
                     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
@@ -365,6 +397,35 @@ export default function Transactions() {
                   <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={() => setForm({ ...form, mode: "digital" })}
                     className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${form.mode === "digital" ? "bg-royal-600 text-white border-royal-600 shadow-lg shadow-royal-500/25" : "border-stone-200 text-stone-600 hover:border-royal-300"}`}>Digital</motion.button>
                 </div>
+
+                <AnimatePresence>
+                  {form.mode === "cash" && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }}
+                      className="space-y-2">
+                      <label className="text-sm font-semibold text-stone-700">Voucher Filed? <span className="text-rose-500">*</span></label>
+                      <div className="flex gap-2">
+                        <motion.button whileTap={{ scale: 0.95 }} type="button"
+                          onClick={() => setForm({ ...form, voucher_filed: true })}
+                          className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${
+                            form.voucher_filed === true
+                              ? "bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-500/25"
+                              : "border-stone-200 text-stone-600 hover:border-emerald-300"
+                          }`}>Yes, Filed</motion.button>
+                        <motion.button whileTap={{ scale: 0.95 }} type="button"
+                          onClick={() => setForm({ ...form, voucher_filed: false })}
+                          className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${
+                            form.voucher_filed === false
+                              ? "bg-amber-600 text-white border-amber-600 shadow-lg shadow-amber-500/25"
+                              : "border-stone-200 text-stone-600 hover:border-amber-300"
+                          }`}>No, Not Filed</motion.button>
+                      </div>
+                      {form.voucher_filed === null && (
+                        <p className="text-xs text-rose-500">Please select voucher status</p>
+                      )}
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 <AnimatePresence>
                   {form.mode === "digital" && (

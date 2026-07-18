@@ -4,16 +4,25 @@ const ExcelJS = require('exceljs');
 const PDFDocument = require('pdfkit');
 const supabaseAdmin = require('@/config/supabaseAdmin');
 const { requireAuth, requireRole } = require('@/middlewares/auth');
-const { uploadToDrive, listDriveFiles } = require('@/services/googleDrive');
+const { uploadToDrive, listDriveStructure } = require('@/services/googleDrive');
 const { logActivity } = require('@/lib/logger');
 
 router.use(requireAuth);
 
-// GET /api/exports/drive-files — list files in Google Drive folder
+async function getUserRole(userId) {
+  const { data } = await supabaseAdmin
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .single();
+  return data?.role || 'accountant';
+}
+
+// GET /api/exports/drive-files — list files in Google Drive folder (organized by role)
 router.get('/drive-files', requireRole('admin', 'accountant'), async (req, res) => {
   try {
-    const files = await listDriveFiles();
-    res.json({ success: true, result: files });
+    const structure = await listDriveStructure();
+    res.json({ success: true, result: structure });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -110,10 +119,12 @@ router.post('/transactions/excel', requireRole('admin', 'accountant'), async (re
 
     if (req.query.save === 'drive') {
       try {
+        const role = await getUserRole(req.user.id);
         const file = await uploadToDrive({
           fileName,
           mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
           fileBuffer: buffer,
+          role,
         });
         logActivity({
           userId: req.user.id,
@@ -298,10 +309,12 @@ router.post('/spreadsheet/save', requireRole('admin', 'accountant'), async (req,
     const now = new Date().toISOString().slice(0, 10);
     const fileName = customName ? `${customName}.xlsx` : `Trust-CRM-Sheet-${now}.xlsx`;
 
+    const role = await getUserRole(req.user.id);
     const file = await uploadToDrive({
       fileName,
       mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       fileBuffer: buffer,
+      role,
     });
 
     logActivity({
@@ -309,7 +322,7 @@ router.post('/spreadsheet/save', requireRole('admin', 'accountant'), async (req,
       userEmail: req.user.email,
       action: 'save_to_drive',
       entity: 'spreadsheet',
-      details: { file_name: fileName, drive_file_id: file.id },
+      details: { file_name: fileName, drive_file_id: file.id, role },
       ipAddress: req.ip,
     });
 

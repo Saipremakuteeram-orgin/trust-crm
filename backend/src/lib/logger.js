@@ -2,7 +2,7 @@ const supabaseAdmin = require('@/config/supabaseAdmin');
 
 async function logActivity({ userId, userEmail, action, entity, entityId, details, ipAddress }) {
   try {
-    await supabaseAdmin.from('activity_logs').insert({
+    const { error } = await supabaseAdmin.from('activity_logs').insert({
       user_id: userId || null,
       user_email: userEmail || null,
       action,
@@ -11,8 +11,11 @@ async function logActivity({ userId, userEmail, action, entity, entityId, detail
       details: details || {},
       ip_address: ipAddress || null,
     });
+    if (error) {
+      console.error('[logActivity] insert failed:', error.message, error.code);
+    }
   } catch (err) {
-    console.error('Logging error:', err.message);
+    console.error('[logActivity] exception:', err.message);
   }
 }
 

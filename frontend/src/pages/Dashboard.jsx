@@ -66,6 +66,7 @@ function StatCard({ icon: Icon, label, value, sub, color, delay }) {
 export default function Dashboard() {
   const [summary, setSummary] = useState(null);
   const [analytics, setAnalytics] = useState(null);
+  const [analyticsError, setAnalyticsError] = useState(false);
   const { profile } = useAuth();
   const { addToast } = useToast();
   const isAdmin = profile?.role === "admin";
@@ -78,7 +79,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadSummary();
-    api.get("/analytics").then((res) => setAnalytics(res.data.result)).catch(() => {});
+    api.get("/analytics").then((res) => setAnalytics(res.data.result)).catch(() => setAnalyticsError(true));
   }, []);
 
   async function saveBalance(type) {
@@ -406,6 +407,12 @@ export default function Dashboard() {
             </motion.div>
           </div>
         </>
+      )}
+
+      {analyticsError && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 text-center mb-8">
+          <p className="text-sm text-amber-700 font-medium">Analytics charts could not be loaded. Please try again later.</p>
+        </div>
       )}
     </AppLayout>
   );

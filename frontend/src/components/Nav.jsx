@@ -1,6 +1,5 @@
-import { NavLink, useNavigate } from "react-router-dom";
-import { supabase } from "../lib/supabase";
-import { LayoutDashboard, ArrowDownCircle, Users, LogOut, Shield } from "lucide-react";
+import { NavLink } from "react-router-dom";
+import { LayoutDashboard, ArrowDownCircle, Users, Shield } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 
 const links = [
@@ -14,25 +13,9 @@ const adminLinks = [
 ];
 
 export default function Nav() {
-  const navigate = useNavigate();
   const { profile } = useAuth();
   const role = profile?.role || "viewer";
   const isAdmin = role === "admin";
-
-  async function handleLogout() {
-    await supabase.auth.signOut();
-    navigate("/login");
-  }
-
-  const initials = profile?.full_name
-    ? profile.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
-    : "?";
-
-  const roleColors = {
-    admin: "bg-saffron-500/20 text-saffron-300",
-    accountant: "bg-emerald-500/20 text-emerald-300",
-    viewer: "bg-royal-400/20 text-royal-200",
-  };
 
   return (
     <nav className="w-60 shrink-0 min-h-screen flex flex-col relative overflow-hidden animate-slide-in-left"
@@ -82,25 +65,7 @@ export default function Nav() {
         ))}
       </div>
 
-      <div className="relative z-10 w-full h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
-
-      <div className="relative z-10 p-3">
-        <div className="flex items-center gap-3 px-3 py-2 mb-2">
-          <div className="w-9 h-9 rounded-full bg-gradient-to-br from-saffron-400 to-saffron-600 flex items-center justify-center text-white text-xs font-bold shadow-lg shadow-saffron-500/25">
-            {initials}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-sm font-medium text-white truncate">{profile?.full_name || "Loading..."}</div>
-            <span className={`inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-full ${roleColors[role] || roleColors.viewer}`}>
-              {role?.charAt(0).toUpperCase() + role?.slice(1)}
-            </span>
-          </div>
-        </div>
-        <button onClick={handleLogout}
-          className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm text-royal-300 hover:bg-white/10 hover:text-white transition-all duration-200 w-full group btn-press">
-          <LogOut size={18} className="transition-transform group-hover:-translate-x-1" /> Logout
-        </button>
-      </div>
+      <div className="relative z-10 p-3 mt-auto" />
     </nav>
   );
 }

@@ -20,6 +20,7 @@ app.use('/api/logs', require('./routes/logs'));
 app.use('/api/exports', require('./routes/exports'));
 app.use('/api/drive', require('./routes/drive'));
 app.use('/api/backup', require('./routes/backup'));
+app.use('/api/reports', require('./routes/reports'));
 
 app.post('/api/reports/monthly/send-now', requireAuth, requireRole('admin', 'accountant'), async (req, res) => {
   const { generateAndSendMonthlyReport } = require('./cron/monthlyReport');

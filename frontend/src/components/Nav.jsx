@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, ArrowDownCircle, Users, Shield, History, Table2, UsersRound, FolderCog, Database } from "lucide-react";
+import { LayoutDashboard, ArrowDownCircle, Users, Shield, History, Table2, UsersRound, FolderCog, Database, FileBarChart } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 
 const links = [
@@ -11,6 +11,7 @@ const links = [
 ];
 
 const roleLinks = [
+  { to: "/reports", label: "Reports", icon: FileBarChart, roles: ["admin", "accountant"] },
   { to: "/spreadsheet", label: "Spreadsheet", icon: Table2, roles: ["admin", "accountant"] },
   { to: "/drive", label: "Common Drive", icon: FolderCog, roles: ["admin", "accountant"] },
 ];

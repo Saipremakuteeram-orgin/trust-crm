@@ -380,4 +380,5 @@ router.delete('/delete/:folder/:fileName', requireRole('admin'), async (req, res
   }
 });
 
+router.buildWorkbook = buildWorkbook;
 module.exports = router;

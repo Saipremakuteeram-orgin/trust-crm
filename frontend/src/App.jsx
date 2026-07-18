@@ -9,6 +9,7 @@ import Groups from "./pages/Groups";
 import Users from "./pages/Users";
 import ActivityLog from "./pages/ActivityLog";
 import Spreadsheet from "./pages/Spreadsheet";
+import DriveManager from "./pages/DriveManager";
 
 function Protected({ children }) {
   const { session } = useAuth();
@@ -52,6 +53,7 @@ export default function App() {
       <Route path="/users" element={<Protected><AdminProtected><Users /></AdminProtected></Protected>} />
       <Route path="/activity" element={<Protected><ActivityLog /></Protected>} />
       <Route path="/spreadsheet" element={<Protected><Spreadsheet /></Protected>} />
+      <Route path="/drive" element={<Protected><DriveManager /></Protected>} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );

@@ -19,17 +19,12 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/logs', require('./routes/logs'));
 app.use('/api/exports', require('./routes/exports'));
 app.use('/api/drive', require('./routes/drive'));
+app.use('/api/backup', require('./routes/backup'));
 
 app.post('/api/reports/monthly/send-now', requireAuth, requireRole('admin', 'accountant'), async (req, res) => {
   const { generateAndSendMonthlyReport } = require('./cron/monthlyReport');
   await generateAndSendMonthlyReport();
   res.json({ success: true, message: 'Monthly report sent' });
-});
-
-app.post('/api/backup/run-now', requireAuth, requireRole('admin'), async (req, res) => {
-  const { runDailyBackup } = require('./services/backup');
-  const result = await runDailyBackup();
-  res.json({ success: true, result });
 });
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
@@ -42,3 +37,6 @@ startMonthlyReportCron();
 
 const { startDailyBackupCron } = require('./cron/dailyBackup');
 startDailyBackupCron();
+
+const { startBackupHealthCheckCron } = require('./cron/backupHealthCheck');
+startBackupHealthCheckCron();

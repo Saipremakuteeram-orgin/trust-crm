@@ -340,3 +340,37 @@ create policy "admin read all logs" on activity_logs
 drop policy if exists "user read own logs" on activity_logs;
 create policy "user read own logs" on activity_logs
   for select using (auth.uid() = user_id);
+
+-- ============================================
+-- BACKUP LOGS
+-- ============================================
+create table if not exists backup_logs (
+  id uuid primary key default gen_random_uuid(),
+  backup_date date not null default current_date,
+  trigger_type text not null default 'scheduled',
+  status text not null default 'running',
+  tables_backed_up integer default 0,
+  total_rows integer default 0,
+  file_size integer default 0,
+  file_name text,
+  telegram_sent boolean default false,
+  error_message text,
+  duration_ms integer default 0,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_backup_logs_date on backup_logs(backup_date desc);
+
+alter table backup_logs enable row level security;
+
+drop policy if exists "admin read backup_logs" on backup_logs;
+create policy "admin read backup_logs" on backup_logs
+  for select using (current_role_is(array['admin']));
+
+drop policy if exists "service insert backup_logs" on backup_logs;
+create policy "service insert backup_logs" on backup_logs
+  for insert with check (true);
+
+drop policy if exists "service update backup_logs" on backup_logs;
+create policy "service update backup_logs" on backup_logs
+  for update using (true);

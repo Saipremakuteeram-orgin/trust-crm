@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
-import { Plus, X, Trash2, Pencil, Search, Download, FileText, RefreshCw } from "lucide-react";
+import { Plus, X, Trash2, Pencil, Search, Download, FileText, RefreshCw, Upload } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 
@@ -35,6 +35,7 @@ export default function Transactions() {
   const [filterMode, setFilterMode] = useState("all");
   const [exporting, setExporting] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [restoring, setRestoring] = useState(false);
 
   function load() {
     api.get("/transactions").then((res) => setTxns(res.data.result));
@@ -158,6 +159,31 @@ export default function Transactions() {
     }
   }
 
+  async function handleRestoreUpload(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith(".xlsx") && !file.name.endsWith(".xls")) {
+      addToast("Please upload an Excel file (.xlsx or .xls)", "error");
+      return;
+    }
+    setRestoring(true);
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const data = Array.from(new Uint8Array(arrayBuffer));
+      const res = await api.post("/backup/restore-excel", {
+        fileBuffer: { data, type: "Buffer" },
+        fileName: file.name,
+      });
+      const r = res.data.result;
+      addToast(`Restored: ${r.inserted} inserted, ${r.skipped} skipped out of ${r.total}`, "success");
+      load();
+    } catch (err) {
+      addToast(err.response?.data?.message || "Restore failed", "error");
+    }
+    setRestoring(false);
+    e.target.value = "";
+  }
+
   const canEdit = role === "admin" || role === "accountant";
 
   return (
@@ -182,6 +208,13 @@ export default function Transactions() {
             <FileText size={15} className={exporting === "pdf" ? "animate-pulse" : ""} />
             {exporting === "pdf" ? "Exporting..." : "PDF"}
           </motion.button>
+          {canAdd && (
+            <label className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 transition-colors cursor-pointer">
+              <Upload size={15} />
+              {restoring ? "Restoring..." : "Restore"}
+              <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handleRestoreUpload} disabled={restoring} />
+            </label>
+          )}
           {canAdd && (
             <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
               onClick={openAdd}

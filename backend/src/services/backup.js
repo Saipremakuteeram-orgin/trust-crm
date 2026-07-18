@@ -14,6 +14,18 @@ const TABLES = [
   { name: 'activity_logs', label: 'Activity Logs' },
 ];
 
+async function createLog(log) {
+  const { data, error } = await supabaseAdmin.from('backup_logs').insert(log).select().single();
+  if (error) console.error('Failed to write backup log:', error.message);
+  return data;
+}
+
+async function updateLog(id, updates) {
+  if (!id) return;
+  const { error } = await supabaseAdmin.from('backup_logs').update(updates).eq('id', id);
+  if (error) console.error('Failed to update backup log:', error.message);
+}
+
 async function fetchAllTables() {
   const results = {};
   for (const t of TABLES) {
@@ -99,36 +111,90 @@ async function sendMessageToTelegram(text) {
   }
 }
 
-async function runDailyBackup() {
+async function runDailyBackup(triggerType = 'scheduled') {
   const startTime = Date.now();
-  console.log('📦 Starting daily backup...');
+  console.log(`📦 Starting backup (trigger: ${triggerType})...`);
 
-  const tables = await fetchAllTables();
-  const totalRows = Object.values(tables).reduce((sum, rows) => sum + rows.length, 0);
+  const log = await createLog({
+    backup_date: new Date().toISOString().slice(0, 10),
+    trigger_type: triggerType,
+    status: 'running',
+  });
 
-  const workbook = buildBackupWorkbook(tables);
-  const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
+  try {
+    const tables = await fetchAllTables();
+    const tableCount = Object.values(tables).filter((rows) => rows.length > 0).length;
+    const totalRows = Object.values(tables).reduce((sum, rows) => sum + rows.length, 0);
 
-  const now = new Date();
-  const dateStr = now.toISOString().slice(0, 10);
-  const fileName = `Trust-CRM-Backup-${dateStr}.xlsx`;
+    const workbook = buildBackupWorkbook(tables);
+    const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
 
-  const sent = await sendBufferToTelegram(buffer, fileName,
-    `📦 Daily Backup — ${dateStr}\nTables: ${TABLES.map((t) => t.label).join(', ')}\nTotal Rows: ${totalRows}`);
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    const fileName = `Trust-CRM-Backup-${dateStr}.xlsx`;
 
-  if (sent) {
-    await sendMessageToTelegram(
-      `✅ <b>Daily Backup Complete</b>\n` +
-      `📅 ${dateStr}\n` +
-      `📊 ${totalRows} rows across ${TABLES.length} tables\n` +
-      `⏱️ Took ${((Date.now() - startTime) / 1000).toFixed(1)}s`
-    );
-  } else {
-    console.warn('⚠️  Backup Excel generated but not sent to Telegram (TELEGRAM_STORAGE_CHAT_ID not set?)');
+    const sent = await sendBufferToTelegram(buffer, fileName,
+      `📦 Backup — ${dateStr}\nTables: ${TABLES.map((t) => t.label).join(', ')}\nTotal Rows: ${totalRows}`);
+
+    if (sent) {
+      await sendMessageToTelegram(
+        `✅ <b>Backup Complete</b>\n` +
+        `📅 ${dateStr}\n` +
+        `📊 ${totalRows} rows across ${TABLES.length} tables\n` +
+        `⏱️ Took ${((Date.now() - startTime) / 1000).toFixed(1)}s`
+      );
+    }
+
+    const durationMs = Date.now() - startTime;
+
+    await updateLog(log?.id, {
+      status: 'success',
+      tables_backed_up: tableCount,
+      total_rows: totalRows,
+      file_size: buffer.length,
+      file_name: fileName,
+      telegram_sent: !!sent,
+      duration_ms: durationMs,
+    });
+
+    console.log(`✅ Backup done: ${fileName} (${totalRows} rows, ${buffer.length} bytes, ${durationMs}ms)`);
+    return { fileName, totalRows, size: buffer.length, sent: !!sent, logId: log?.id };
+  } catch (err) {
+    const durationMs = Date.now() - startTime;
+    console.error('❌ Backup failed:', err.message);
+
+    await updateLog(log?.id, {
+      status: 'failed',
+      error_message: err.message,
+      duration_ms: durationMs,
+    });
+
+    return { error: err.message, logId: log?.id };
   }
-
-  console.log(`✅ Daily backup done: ${fileName} (${totalRows} rows, ${buffer.length} bytes)`);
-  return { fileName, totalRows, size: buffer.length, sent: !!sent };
 }
 
-module.exports = { runDailyBackup };
+async function getBackupStatusToday() {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabaseAdmin
+    .from('backup_logs')
+    .select('*')
+    .eq('backup_date', today)
+    .order('created_at', { ascending: false });
+
+  if (error) return null;
+  return data;
+}
+
+async function getBackupLogs(limit = 30, offset = 0) {
+  const { data, error } = await supabaseAdmin
+    .from('backup_logs')
+    .select('*')
+    .order('backup_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+module.exports = { runDailyBackup, getBackupStatusToday, getBackupLogs, TABLES };

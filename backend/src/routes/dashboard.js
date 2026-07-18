@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const supabaseAdmin = require('@/config/supabaseAdmin');
 const { requireAuth, requireRole } = require('@/middlewares/auth');
+const { logActivity } = require('@/lib/logger');
 
 router.use(requireAuth);
 
@@ -26,6 +27,16 @@ router.patch('/opening-balance', requireRole('admin'), async (req, res) => {
     .from('settings')
     .upsert({ key: column, value: amount.toString(), updated_at: new Date().toISOString() }, { onConflict: 'key' });
   if (error) return res.status(500).json({ success: false, message: error.message });
+
+  logActivity({
+    userId: req.user.id,
+    userEmail: req.user.email,
+    action: 'update',
+    entity: 'settings',
+    details: { key: column, value: amount },
+    ipAddress: req.ip,
+  });
+
   res.json({ success: true });
 });
 

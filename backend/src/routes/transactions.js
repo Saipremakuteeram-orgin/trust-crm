@@ -3,6 +3,7 @@ const router = express.Router();
 const supabaseAdmin = require('@/config/supabaseAdmin');
 const { requireAuth, requireRole } = require('@/middlewares/auth');
 const { notifyContactsOfTransaction } = require('@/services/notify');
+const { logActivity } = require('@/lib/logger');
 
 router.use(requireAuth);
 
@@ -36,6 +37,16 @@ router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
     .single();
 
   if (error) return res.status(400).json({ success: false, message: error.message });
+
+  logActivity({
+    userId: req.user.id,
+    userEmail: req.user.email,
+    action: 'create',
+    entity: 'transaction',
+    entityId: txn.id,
+    details: { type: txn.type, mode: txn.mode, amount: txn.amount, party: txn.party },
+    ipAddress: req.ip,
+  });
 
   // Fire notifications
   let notificationStatus = 'sent';
@@ -78,11 +89,32 @@ router.patch('/:id', requireRole('admin', 'accountant'), async (req, res) => {
     .select()
     .single();
   if (error) return res.status(400).json({ success: false, message: error.message });
+
+  logActivity({
+    userId: req.user.id,
+    userEmail: req.user.email,
+    action: 'update',
+    entity: 'transaction',
+    entityId: req.params.id,
+    details: updates,
+    ipAddress: req.ip,
+  });
+
   res.json({ success: true, result: data });
 });
 
 // DELETE
 router.delete('/:id', requireRole('admin'), async (req, res) => {
+  logActivity({
+    userId: req.user.id,
+    userEmail: req.user.email,
+    action: 'delete',
+    entity: 'transaction',
+    entityId: req.params.id,
+    details: {},
+    ipAddress: req.ip,
+  });
+
   const { error } = await supabaseAdmin.from('transactions').delete().eq('id', req.params.id);
   if (error) return res.status(400).json({ success: false, message: error.message });
   res.json({ success: true });

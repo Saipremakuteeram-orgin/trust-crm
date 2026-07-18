@@ -255,3 +255,32 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function handle_new_user();
+
+-- ============================================
+-- ACTIVITY LOGS
+-- ============================================
+create table if not exists activity_logs (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references profiles(id),
+  user_email text,
+  action text not null,
+  entity text not null,
+  entity_id uuid,
+  details jsonb default '{}',
+  ip_address text,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_activity_logs_user on activity_logs(user_id);
+create index if not exists idx_activity_logs_created on activity_logs(created_at desc);
+create index if not exists idx_activity_logs_entity on activity_logs(entity);
+
+alter table activity_logs enable row level security;
+
+drop policy if exists "admin read all logs" on activity_logs;
+create policy "admin read all logs" on activity_logs
+  for select using (current_role_is(array['admin']));
+
+drop policy if exists "user read own logs" on activity_logs;
+create policy "user read own logs" on activity_logs
+  for select using (auth.uid() = user_id);

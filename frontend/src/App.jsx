@@ -6,6 +6,8 @@ import Dashboard from "./pages/Dashboard";
 import Transactions from "./pages/Transactions";
 import Contacts from "./pages/Contacts";
 import Users from "./pages/Users";
+import ActivityLog from "./pages/ActivityLog";
+import Spreadsheet from "./pages/Spreadsheet";
 
 function Protected({ children }) {
   const { session } = useAuth();
@@ -46,6 +48,8 @@ export default function App() {
       <Route path="/transactions" element={<Protected><Transactions /></Protected>} />
       <Route path="/contacts" element={<Protected><Contacts /></Protected>} />
       <Route path="/users" element={<Protected><AdminProtected><Users /></AdminProtected></Protected>} />
+      <Route path="/activity" element={<Protected><ActivityLog /></Protected>} />
+      <Route path="/spreadsheet" element={<Protected><Spreadsheet /></Protected>} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );

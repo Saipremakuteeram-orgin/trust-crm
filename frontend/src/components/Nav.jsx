@@ -1,11 +1,16 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, ArrowDownCircle, Users, Shield } from "lucide-react";
+import { LayoutDashboard, ArrowDownCircle, Users, Shield, History, Table2 } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 
 const links = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/transactions", label: "Transactions", icon: ArrowDownCircle },
   { to: "/contacts", label: "Contacts", icon: Users },
+  { to: "/activity", label: "Activity Log", icon: History },
+];
+
+const roleLinks = [
+  { to: "/spreadsheet", label: "Spreadsheet", icon: Table2, roles: ["admin", "accountant"] },
 ];
 
 const adminLinks = [
@@ -52,6 +57,18 @@ export default function Nav() {
           </NavLink>
         ))}
         {isAdmin && adminLinks.map(({ to, label, icon: Icon }) => (
+          <NavLink key={to} to={to}
+            className={({ isActive }) =>
+              `group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                isActive
+                  ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
+                  : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
+              } animate-fade-in-up`
+            }>
+            <Icon size={18} className="transition-transform group-hover:scale-110" /> {label}
+          </NavLink>
+        ))}
+        {roleLinks.filter(l => l.roles.includes(role)).map(({ to, label, icon: Icon }) => (
           <NavLink key={to} to={to}
             className={({ isActive }) =>
               `group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${

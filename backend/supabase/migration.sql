@@ -113,6 +113,14 @@ on conflict (key) do nothing;
 -- ============================================
 -- 3. VIEWS
 -- ============================================
+
+-- Add voucher_filed column if it doesn't exist (for existing databases)
+DO $$ BEGIN
+  ALTER TABLE transactions ADD COLUMN voucher_filed boolean default false;
+exception
+  when duplicate_column then null;
+END $$;
+
 drop view if exists v_cash_summary;
 drop view if exists v_digital_summary;
 

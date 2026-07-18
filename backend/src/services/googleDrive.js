@@ -14,6 +14,7 @@ function getDrive() {
     ?.replace(/\r\n/g, '\n')
     ?.trim();
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+  const userEmail = process.env.GOOGLE_DRIVE_USER_EMAIL;
 
   if (!clientEmail || !privateKey) {
     console.error('Google Drive: missing env vars', {
@@ -24,7 +25,7 @@ function getDrive() {
     return null;
   }
 
-  console.log('Google Drive: initializing with email:', clientEmail, 'folderId:', folderId || '(none)');
+  console.log('Google Drive: initializing with email:', clientEmail, 'folderId:', folderId || '(none)', 'userEmail:', userEmail || '(none)');
 
   try {
     const auth = new google.auth.JWT({
@@ -33,7 +34,7 @@ function getDrive() {
       scopes: ['https://www.googleapis.com/auth/drive'],
     });
 
-    driveClient = { auth, folderId };
+    driveClient = { auth, folderId, userEmail };
     return driveClient;
   } catch (err) {
     console.error('Google Drive: auth initialization failed:', err.message);
@@ -45,6 +46,24 @@ function getDriveApi() {
   const drive = getDrive();
   if (!drive) throw new Error('Google Drive not configured');
   return { driveApi: google.drive({ version: 'v3', auth: drive.auth }), drive };
+}
+
+async function shareWithEmail(fileId, email) {
+  if (!email) return;
+  try {
+    const { driveApi } = getDriveApi();
+    await driveApi.permissions.create({
+      fileId,
+      resource: {
+        type: 'user',
+        role: 'writer',
+        emailAddress: email,
+      },
+      sendNotificationEmail: false,
+    });
+  } catch (err) {
+    console.error('Drive share error:', err.message);
+  }
 }
 
 async function getOrCreateSubfolder(parentFolderId, folderName) {
@@ -73,14 +92,43 @@ async function getOrCreateSubfolder(parentFolderId, folderName) {
   return response.data.id;
 }
 
-async function getCommonFolderId() {
+async function getOrCreateRootFolder() {
   const { drive, driveApi } = getDriveApi();
-  if (!drive.folderId) throw new Error('GOOGLE_DRIVE_FOLDER_ID not configured');
+  if (drive.folderId) return drive.folderId;
+
+  const rootResponse = await driveApi.about.get({ fields: 'user' });
+  const rootId = rootResponse.data.user ? 'root' : null;
+  if (!rootId) throw new Error('Cannot access Google Drive root');
+
+  const folderName = 'Trust CRM';
+  const query = `name = '${folderName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`;
+  const existing = await driveApi.files.list({ q: query, fields: 'files(id)', pageSize: 1 });
+
+  if (existing.data.files && existing.data.files.length > 0) {
+    return existing.data.files[0].id;
+  }
+
+  const response = await driveApi.files.create({
+    resource: {
+      name: folderName,
+      mimeType: 'application/vnd.google-apps.folder',
+      parents: [rootId],
+    },
+    fields: 'id',
+  });
+
+  await shareWithEmail(response.data.id, drive.userEmail);
+  return response.data.id;
+}
+
+async function getCommonFolderId() {
+  const { drive } = getDriveApi();
 
   const commonId = process.env.GOOGLE_DRIVE_COMMON_FOLDER_ID;
   if (commonId) return commonId;
 
-  return getOrCreateSubfolder(drive.folderId, 'Common');
+  const rootId = await getOrCreateRootFolder();
+  return getOrCreateSubfolder(rootId, 'Common');
 }
 
 async function listFiles(folderId, pageSize = 100) {
@@ -109,7 +157,7 @@ async function getFileInfo(fileId) {
 }
 
 async function createFolder(parentId, name) {
-  const { driveApi } = getDriveApi();
+  const { driveApi, drive } = getDriveApi();
   const response = await driveApi.files.create({
     resource: {
       name,
@@ -118,16 +166,20 @@ async function createFolder(parentId, name) {
     },
     fields: 'id, name, mimeType, createdTime',
   });
+
+  await shareWithEmail(response.data.id, drive.userEmail);
   return response.data;
 }
 
 async function uploadFile(parentId, fileName, mimeType, fileBuffer) {
-  const { driveApi } = getDriveApi();
+  const { driveApi, drive } = getDriveApi();
   const response = await driveApi.files.create({
     resource: { name: fileName, parents: [parentId] },
     media: { mimeType, body: stream.Readable.from(fileBuffer) },
     fields: 'id, name, mimeType, size, createdTime',
   });
+
+  await shareWithEmail(response.data.id, drive.userEmail);
   return response.data;
 }
 
@@ -156,7 +208,7 @@ async function moveFile(fileId, newParentId) {
 }
 
 async function copyFile(fileId, newParentId, newName) {
-  const { driveApi } = getDriveApi();
+  const { driveApi, drive } = getDriveApi();
   const resource = { parents: [newParentId] };
   if (newName) resource.name = newName;
 
@@ -165,6 +217,8 @@ async function copyFile(fileId, newParentId, newName) {
     resource,
     fields: 'id, name, mimeType, size, createdTime',
   });
+
+  await shareWithEmail(response.data.id, drive.userEmail);
   return response.data;
 }
 
@@ -179,27 +233,36 @@ async function trashFile(fileId) {
 }
 
 async function uploadToDrive({ fileName, mimeType, fileBuffer, role }) {
-  const { driveApi, drive } = getDriveApi();
-  let targetFolderId = drive.folderId;
+  const { drive } = getDriveApi();
+  let targetFolderId = await getOrCreateRootFolder();
 
-  if (drive.folderId && role && (role === 'admin' || role === 'accountant')) {
-    targetFolderId = await getOrCreateSubfolder(drive.folderId, role);
+  if (role && (role === 'admin' || role === 'accountant')) {
+    targetFolderId = await getOrCreateSubfolder(targetFolderId, role);
   }
 
+  const { driveApi } = getDriveApi();
   const response = await driveApi.files.create({
-    resource: { name: fileName, parents: targetFolderId ? [targetFolderId] : undefined },
+    resource: { name: fileName, parents: [targetFolderId] },
     media: { mimeType, body: stream.Readable.from(fileBuffer) },
     fields: 'id, name, webViewLink, createdTime',
   });
 
+  await shareWithEmail(response.data.id, drive.userEmail);
   return response.data;
 }
 
 async function listDriveStructure() {
   const { drive } = getDriveApi();
-  if (!drive.folderId) return { root: [], admin: [], accountant: [], common: [] };
 
-  const rootFiles = await listFiles(drive.folderId);
+  let rootId;
+  try {
+    rootId = drive.folderId || await getOrCreateRootFolder();
+  } catch (err) {
+    console.error('Drive structure error:', err.message);
+    return { root: [], admin: [], accountant: [], common: [] };
+  }
+
+  const rootFiles = await listFiles(rootId);
 
   let adminFolderId = null;
   let accountantFolderId = null;
@@ -224,6 +287,7 @@ module.exports = {
   getDrive,
   getDriveApi,
   getCommonFolderId,
+  getOrCreateRootFolder,
   listFiles,
   getFileInfo,
   createFolder,

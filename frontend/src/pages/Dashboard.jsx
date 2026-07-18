@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
-import { Wallet, Landmark, TrendingUp, TrendingDown, Activity, Users, Pencil, Check, X, RefreshCw } from "lucide-react";
+import { Wallet, Landmark, TrendingUp, TrendingDown, Activity, Users, Pencil, Check, X, RefreshCw, Download } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 import {
@@ -74,6 +74,7 @@ export default function Dashboard() {
   const [editing, setEditing] = useState(null);
   const [editVal, setEditVal] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  const [backingUp, setBackingUp] = useState(false);
 
   function loadSummary() {
     api.get("/dashboard/summary").then((res) => setSummary(res.data.result));
@@ -89,6 +90,18 @@ export default function Dashboard() {
     loadSummary();
     api.get("/analytics").then((res) => setAnalytics(res.data.result)).catch(() => {});
     setTimeout(() => setRefreshing(false), 600);
+  }
+
+  async function handleBackupNow() {
+    setBackingUp(true);
+    try {
+      const res = await api.post("/backup/run-now");
+      const r = res.data.result;
+      addToast(`Backup sent: ${r.fileName} (${r.totalRows} rows)`, "success");
+    } catch (err) {
+      addToast(err.response?.data?.message || "Backup failed", "error");
+    }
+    setBackingUp(false);
   }
 
   async function saveBalance(type) {
@@ -137,10 +150,19 @@ export default function Dashboard() {
           Dashboard
         </motion.h1>
         {canAdd && (
-          <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handleRefresh}
-            className="p-2.5 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 transition-colors">
-            <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
-          </motion.button>
+          <div className="flex items-center gap-2">
+            {isAdmin && (
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handleBackupNow} disabled={backingUp}
+                className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-saffron-500 to-saffron-600 text-white text-sm font-semibold shadow-lg shadow-saffron-500/20 hover:shadow-xl transition-all disabled:opacity-50">
+                <Download size={14} className={backingUp ? "animate-bounce" : ""} />
+                {backingUp ? "Backing up..." : "Backup Now"}
+              </motion.button>
+            )}
+            <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handleRefresh}
+              className="p-2.5 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 transition-colors">
+              <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+            </motion.button>
+          </div>
         )}
       </div>
 

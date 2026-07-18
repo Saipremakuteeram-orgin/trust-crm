@@ -26,6 +26,12 @@ app.post('/api/reports/monthly/send-now', requireAuth, requireRole('admin', 'acc
   res.json({ success: true, message: 'Monthly report sent' });
 });
 
+app.post('/api/backup/run-now', requireAuth, requireRole('admin'), async (req, res) => {
+  const { runDailyBackup } = require('./services/backup');
+  const result = await runDailyBackup();
+  res.json({ success: true, result });
+});
+
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 8888;
@@ -33,3 +39,6 @@ app.listen(PORT, '0.0.0.0', () => console.log(`Express running → On PORT : ${P
 
 const { startMonthlyReportCron } = require('./cron/monthlyReport');
 startMonthlyReportCron();
+
+const { startDailyBackupCron } = require('./cron/dailyBackup');
+startDailyBackupCron();

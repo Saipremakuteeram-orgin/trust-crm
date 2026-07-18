@@ -7,21 +7,38 @@ function getDrive() {
   if (driveClient) return driveClient;
 
   const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n');
+  const rawKey = process.env.GOOGLE_PRIVATE_KEY;
+  const privateKey = rawKey
+    ?.replace(/\\n/g, '\n')
+    ?.replace(/\\r/g, '')
+    ?.replace(/\r\n/g, '\n')
+    ?.trim();
   const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
 
   if (!clientEmail || !privateKey) {
+    console.error('Google Drive: missing env vars', {
+      hasEmail: !!clientEmail,
+      hasKey: !!privateKey,
+      rawKeyLength: rawKey?.length || 0,
+    });
     return null;
   }
 
-  const auth = new google.auth.JWT({
-    email: clientEmail,
-    key: privateKey,
-    scopes: ['https://www.googleapis.com/auth/drive'],
-  });
+  console.log('Google Drive: initializing with email:', clientEmail, 'folderId:', folderId || '(none)');
 
-  driveClient = { auth, folderId };
-  return driveClient;
+  try {
+    const auth = new google.auth.JWT({
+      email: clientEmail,
+      key: privateKey,
+      scopes: ['https://www.googleapis.com/auth/drive'],
+    });
+
+    driveClient = { auth, folderId };
+    return driveClient;
+  } catch (err) {
+    console.error('Google Drive: auth initialization failed:', err.message);
+    return null;
+  }
 }
 
 function getDriveApi() {

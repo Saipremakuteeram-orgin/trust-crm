@@ -336,7 +336,8 @@ router.post('/spreadsheet/save', requireRole('admin', 'accountant'), async (req,
     res.json({ success: true, result: file });
   } catch (err) {
     console.error('Spreadsheet save error:', err.message);
-    res.status(500).json({ success: false, message: err.message });
+    console.error('Spreadsheet save error stack:', err.stack);
+    res.status(500).json({ success: false, message: `Failed to save: ${err.message}` });
   }
 });
 

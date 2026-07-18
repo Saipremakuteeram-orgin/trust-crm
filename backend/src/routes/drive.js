@@ -21,6 +21,25 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 
 router.use(requireAuth);
 router.use(requireRole('admin', 'accountant'));
 
+// GET /api/drive/test — test Google Drive connection
+router.get('/test', async (req, res) => {
+  try {
+    const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
+    const key = process.env.GOOGLE_PRIVATE_KEY;
+    const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    if (!email || !key) {
+      return res.json({ configured: false, message: 'GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_PRIVATE_KEY not set' });
+    }
+    const { driveApi } = await require('@/services/googleDrive').getDriveApi();
+    const result = await driveApi.about.get({ fields: 'user' });
+    const hasFolder = !!folderId;
+    res.json({ configured: true, user: result.data.user?.displayName, hasFolder, folderId: folderId || null });
+  } catch (err) {
+    console.error('Drive test error:', err.message);
+    res.json({ configured: false, message: err.message });
+  }
+});
+
 // GET /api/drive — list files in Common folder (or subfolder)
 router.get('/', async (req, res) => {
   try {

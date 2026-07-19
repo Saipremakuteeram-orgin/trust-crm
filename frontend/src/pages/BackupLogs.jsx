@@ -175,22 +175,38 @@ export default function BackupLogs() {
           </div>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-          className="bg-white rounded-2xl border border-stone-200/80 p-5 shadow-sm">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-saffron-50">
-              <Send size={20} className="text-saffron-500" />
-            </div>
-            <div>
-              <p className="text-xs text-stone-500 font-medium">Total Backups</p>
-              <p className="text-sm font-bold text-stone-800">{logs.length} runs</p>
-              <p className="text-[10px] text-stone-400 mt-0.5">
-                {logs.filter((l) => l.status === "success").length} successful · {logs.filter((l) => l.status === "failed").length} failed
-              </p>
-            </div>
-          </div>
-        </motion.div>
-      </div>
+         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
+           className="bg-white rounded-2xl border border-stone-200/80 p-5 shadow-sm">
+           <div className="flex items-center gap-3">
+             <div className="p-2.5 rounded-xl bg-saffron-50">
+               <Send size={20} className="text-saffron-500" />
+             </div>
+             <div>
+               <p className="text-xs text-stone-500 font-medium">Total Backups</p>
+               <p className="text-sm font-bold text-stone-800">{logs.length} runs</p>
+               <p className="text-[10px] text-stone-400 mt-0.5">
+                 {logs.filter((l) => l.status === "success").length} successful · {logs.filter((l) => l.status === "failed").length} failed
+               </p>
+             </div>
+           </div>
+         </motion.div>
+
+         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
+           className="bg-white rounded-2xl border border-stone-200/80 p-5 shadow-sm">
+           <div className="flex items-center gap-3">
+             <div className="p-2.5 rounded-xl bg-royal-50">
+               <Clock size={20} className="text-royal-500" />
+             </div>
+             <div>
+               <p className="text-xs text-stone-500 font-medium">Auto Backup Schedule</p>
+               <p className="text-sm font-bold text-stone-800">Daily 06:00 IST</p>
+               <p className="text-[10px] text-stone-400 mt-0.5">
+                 Recovery retries: 08:00, 12:00, 16:00, 20:00 IST
+               </p>
+             </div>
+           </div>
+         </motion.div>
+       </div>
 
       {/* Actions Row */}
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}

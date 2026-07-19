@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
+import PasswordInput from "../components/PasswordInput";
 import { Shield, Trash2, ChevronDown, UserPlus, RefreshCw, X, KeyRound, Mail } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
@@ -281,7 +282,7 @@ export default function Users() {
                 {addMode === "create" && (
                   <div>
                     <label className="text-sm font-medium text-stone-700 mb-1 block">Password *</label>
-                    <input type="password" required minLength={6} value={addForm.password}
+                    <PasswordInput required minLength={6} value={addForm.password}
                       onChange={(e) => setAddForm({ ...addForm, password: e.target.value })}
                       className="w-full px-3 py-2 text-sm border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-saffron-400"
                       placeholder="Minimum 6 characters" />
@@ -334,7 +335,7 @@ export default function Users() {
               <form onSubmit={resetPassword} className="space-y-4">
                 <div>
                   <label className="text-sm font-medium text-stone-700 mb-1 block">New Password</label>
-                  <input type="password" required minLength={6} autoFocus value={resetPw}
+                  <PasswordInput required minLength={6} autoFocus value={resetPw}
                     onChange={(e) => setResetPw(e.target.value)}
                     className="w-full px-3 py-2 text-sm border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-saffron-400"
                     placeholder="Minimum 6 characters" />

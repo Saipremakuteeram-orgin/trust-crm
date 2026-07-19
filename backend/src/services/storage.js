@@ -88,6 +88,25 @@ async function sendFileToTelegram(filePath, fileName, caption) {
   }
 }
 
+async function getTelegramFileStream(fileId) {
+  if (!BOT_TOKEN || !fileId) return null;
+  try {
+    const meta = await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/getFile`, {
+      params: { file_id: fileId },
+    });
+    const filePath = meta.data?.result?.file_path;
+    if (!filePath) return null;
+    const resp = await axios.get(`https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`, {
+      responseType: 'stream',
+      timeout: 60000,
+    });
+    return { stream: resp.data, filePath };
+  } catch (err) {
+    console.error('Telegram get file stream failed:', err.message);
+    return null;
+  }
+}
+
 module.exports = {
   ensureBucket,
   uploadFile,
@@ -97,5 +116,6 @@ module.exports = {
   moveFile,
   getSignedUrl,
   sendFileToTelegram,
+  getTelegramFileStream,
   BUCKET_NAME,
 };

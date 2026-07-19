@@ -15,7 +15,7 @@ router.get('/logs', requireRole('admin'), async (req, res) => {
     const logs = await getBackupLogs(limit, offset);
     res.json({ success: true, result: logs });
   } catch (err) {
-    res.json({ success: true, result: [] });
+    res.status(500).json({ success: false, message: err.message });
   }
 });
 

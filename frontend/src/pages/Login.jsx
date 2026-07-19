@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "../lib/supabase";
+import PasswordInput from "../components/PasswordInput";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -58,7 +59,7 @@ export default function Login() {
                 className="w-full rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm text-white placeholder-royal-300/60 focus:ring-2 focus:ring-saffron-400/50 focus:border-saffron-400/50 transition-all duration-200" />
             </motion.div>
             <motion.div initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
-              <input type="password" required placeholder="Password" value={password}
+              <PasswordInput required placeholder="Password" value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="w-full rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm text-white placeholder-royal-300/60 focus:ring-2 focus:ring-saffron-400/50 focus:border-saffron-400/50 transition-all duration-200" />
             </motion.div>

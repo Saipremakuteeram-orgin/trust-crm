@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, ArrowDownCircle, Users, Shield, History, Table2, UsersRound, FolderCog, Database, FileBarChart } from "lucide-react";
+import { LayoutDashboard, ArrowDownCircle, Users, Shield, History, Table2, UsersRound, FolderCog, Database, FileBarChart, Send } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 
 const links = [
@@ -8,6 +8,7 @@ const links = [
   { to: "/contacts", label: "Contacts", icon: Users },
   { to: "/groups", label: "Groups", icon: UsersRound },
   { to: "/activity", label: "Activity Log", icon: History },
+  { to: "/file-send", label: "Send File", icon: Send },
 ];
 
 const roleLinks = [

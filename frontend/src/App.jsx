@@ -12,6 +12,7 @@ import Spreadsheet from "./pages/Spreadsheet";
 import DriveManager from "./pages/DriveManager";
 import BackupLogs from "./pages/BackupLogs";
 import Reports from "./pages/Reports";
+import FileSend from "./pages/FileSend";
 
 function Protected({ children }) {
   const { session } = useAuth();
@@ -57,6 +58,7 @@ export default function App() {
       <Route path="/spreadsheet" element={<Protected><Spreadsheet /></Protected>} />
       <Route path="/drive" element={<Protected><DriveManager /></Protected>} />
       <Route path="/backup" element={<Protected><BackupLogs /></Protected>} />
+      <Route path="/file-send" element={<Protected><FileSend /></Protected>} />
       <Route path="/reports" element={<Protected><Reports /></Protected>} />
       <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>

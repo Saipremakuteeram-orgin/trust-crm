@@ -15,11 +15,13 @@ function getTransporter() {
   return transporter;
 }
 
-async function sendEmail({ to, subject, html }) {
+async function sendEmail({ to, subject, html, attachments }) {
   const t = getTransporter();
   if (!t || !to) return { ok: false, reason: 'no-transporter-or-recipient' };
   try {
-    await t.sendMail({ from: `"Trust CRM" <${process.env.SMTP_USER}>`, to, subject, html });
+    const mailOptions = { from: `"Trust CRM" <${process.env.SMTP_USER}>`, to, subject, html };
+    if (attachments && attachments.length > 0) mailOptions.attachments = attachments;
+    await t.sendMail(mailOptions);
     return { ok: true };
   } catch (err) {
     console.error('Email send failed:', err.message);
@@ -78,4 +80,4 @@ async function notifyContactsOfTransaction(txn, contacts) {
   );
 }
 
-module.exports = { sendEmail, sendTelegram, notifyContactsOfTransaction, fmt };
+module.exports = { sendEmail, sendTelegram, notifyContactsOfTransaction, fmt, getTransporter };

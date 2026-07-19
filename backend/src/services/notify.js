@@ -8,9 +8,19 @@ function getTransporter() {
     console.warn('⚠️  SMTP_USER / SMTP_PASS not set — email notifications disabled');
     return null;
   }
+  // Use explicit SMTP config on port 587 (STARTTLS) with a connection timeout.
+  // Render's free tier blocks outbound 465 (implicit TLS) but usually allows 587.
   transporter = nodemailer.createTransport({
-    service: 'gmail',
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    requireTLS: true,
     auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 20000,
+    pool: false,
+    debug: false,
   });
   return transporter;
 }

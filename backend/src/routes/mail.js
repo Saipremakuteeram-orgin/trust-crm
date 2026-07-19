@@ -80,7 +80,7 @@ router.post('/send', requireAuth, requireRole('admin', 'accountant'), upload.arr
     });
 
     const status = mailRes.ok ? 'sent' : 'failed';
-    const errorMessage = mailRes.ok ? null : mailRes.reason;
+    const errorMessage = mailRes.ok ? null : (mailRes.reason || 'Email delivery failed');
 
     // Mirror to Telegram log channel
     try {
@@ -142,7 +142,16 @@ router.post('/send', requireAuth, requireRole('admin', 'accountant'), upload.arr
       ipAddress: req.ip,
     });
 
-    if (!mailRes.ok) return res.status(500).json({ success: false, message: errorMessage || 'Email failed to send' });
+    if (!mailRes.ok) {
+      const reason = errorMessage || 'Email failed to send';
+      const smtpMissing = !process.env.SMTP_USER || !process.env.SMTP_PASS;
+      return res.status(502).json({
+        success: false,
+        message: smtpMissing
+          ? 'SMTP is not configured on the server (set SMTP_USER and SMTP_PASS). ' + reason
+          : 'Email delivery failed: ' + reason,
+      });
+    }
     return res.json({ success: true, result: { subject, recipients: validRecipients, status, attachments: attachmentNames.length } });
   } catch (err) {
     console.error('[mail] send failed:', err.message);

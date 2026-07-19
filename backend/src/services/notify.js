@@ -16,6 +16,10 @@ function getTransporter() {
 }
 
 async function sendEmail({ to, subject, html, attachments }) {
+  if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    console.error('Email send skipped: SMTP_USER / SMTP_PASS not set');
+    return { ok: false, reason: 'smtp-not-configured' };
+  }
   const t = getTransporter();
   if (!t || !to) return { ok: false, reason: 'no-transporter-or-recipient' };
   try {

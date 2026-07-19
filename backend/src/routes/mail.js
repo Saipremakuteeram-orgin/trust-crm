@@ -132,7 +132,13 @@ router.post('/send', requireAuth, requireRole('admin', 'accountant'), upload.arr
       userEmail: req.user.email,
       action: 'send_mail',
       entity: 'mail',
-      details: { subject: subject || '(no subject)', recipients: validRecipients, attachments: attachmentNames.length, status },
+      details: {
+        subject: subject || '(no subject)',
+        recipients: validRecipients,
+        attachments: attachmentNames,
+        body_text: (body || '').replace(/<[^>]+>/g, ' ').slice(0, 2000),
+        status,
+      },
       ipAddress: req.ip,
     });
 
@@ -145,15 +151,44 @@ router.post('/send', requireAuth, requireRole('admin', 'accountant'), upload.arr
 });
 
 // GET /api/mail/logs — visible to all authenticated roles (metadata only)
+// Reads from the dedicated mail_logs table when present, otherwise falls back
+// to activity_logs (entity = 'mail') so the Sent folder always works.
 router.get('/logs', requireAuth, async (req, res) => {
   try {
-    const { data, error } = await supabaseAdmin
+    const { data: direct, error: directErr } = await supabaseAdmin
       .from('mail_logs')
       .select('*')
       .order('created_at', { ascending: false })
       .limit(200);
+
+    if (!directErr && direct) {
+      return res.json({ success: true, result: direct });
+    }
+
+    // Fallback: derive sent mail from activity_logs
+    const { data, error } = await supabaseAdmin
+      .from('activity_logs')
+      .select('*')
+      .eq('entity', 'mail')
+      .order('created_at', { ascending: false })
+      .limit(200);
     if (error) return res.status(400).json({ success: false, message: error.message });
-    return res.json({ success: true, result: data || [] });
+
+    const result = (data || []).map((row) => {
+      const d = row.details || {};
+      return {
+        id: row.id,
+        subject: d.subject || '(no subject)',
+        sender_email: row.user_email,
+        recipients: Array.isArray(d.recipients) ? d.recipients.map((e) => ({ email: e, status: 'sent' })) : [],
+        body_text: d.body_text || '',
+        attachment_names: d.attachments || [],
+        status: d.status || 'sent',
+        error_message: null,
+        created_at: row.created_at,
+      };
+    });
+    return res.json({ success: true, result });
   } catch (err) {
     return res.status(500).json({ success: false, message: err.message });
   }

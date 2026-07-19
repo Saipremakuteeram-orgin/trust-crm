@@ -13,6 +13,8 @@ backend/apply-grants.js
 backend/check-tables.js
 backend/check-mail.js
 backend/e2e-test.js
+backend/test-smtp.js
+backend/cleanup-e2e.js
 
 # Runtime JSON logs written by the server
 backend/logs/

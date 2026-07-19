@@ -21,6 +21,7 @@ app.use('/api/exports', require('./routes/exports'));
 app.use('/api/drive', require('./routes/drive'));
 app.use('/api/backup', require('./routes/backup'));
 app.use('/api/file-send', require('./routes/fileSend'));
+app.use('/api/mail', require('./routes/mail'));
 app.use('/api/reports', require('./routes/reports'));
 
 app.post('/api/reports/monthly/send-now', requireAuth, requireRole('admin', 'accountant'), async (req, res) => {

@@ -7,3 +7,12 @@ node_modules/
 dist/
 build/
 *.log
+
+# Dev/diagnostic helper scripts (not part of the app)
+backend/apply-grants.js
+backend/check-tables.js
+backend/check-mail.js
+backend/e2e-test.js
+
+# Runtime JSON logs written by the server
+backend/logs/

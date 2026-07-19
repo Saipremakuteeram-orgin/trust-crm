@@ -18,6 +18,10 @@ services:
         sync: false
       - key: SMTP_PASS
         sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
       - key: TELEGRAM_BOT_TOKEN
         sync: false
       - key: TELEGRAM_STORAGE_CHAT_ID

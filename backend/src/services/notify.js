@@ -25,10 +25,48 @@ function getTransporter() {
   return transporter;
 }
 
+async function sendViaResend({ to, subject, html, attachments }) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return null; // signal "not configured"
+  const from = process.env.MAIL_FROM || process.env.SMTP_USER || 'onboarding@resend.dev';
+  const payload = {
+    from,
+    to: Array.isArray(to) ? to : String(to).split(',').map((s) => s.trim()),
+    subject,
+    html,
+  };
+  if (attachments && attachments.length > 0) {
+    payload.attachments = attachments.map((a) => {
+      const content = a.content && typeof a.content === 'string'
+        ? a.content
+        : (a.content && a.content.toString ? Buffer.from(a.content).toString('base64') : '');
+      // Resend needs base64 string for buffer content
+      const isBase64 = typeof a.content !== 'string';
+      return { filename: a.filename, content: isBase64 ? Buffer.from(a.content).toString('base64') : a.content };
+    });
+  }
+  try {
+    const resp = await axios.post('https://api.resend.com/emails', payload, {
+      headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      timeout: 20000,
+    });
+    return { ok: true, id: resp.data?.id };
+  } catch (err) {
+    const detail = err.response?.data?.message || err.message;
+    console.error('[Resend] send failed:', detail);
+    return { ok: false, reason: 'resend: ' + detail };
+  }
+}
+
 async function sendEmail({ to, subject, html, attachments }) {
+  // Prefer Resend (HTTPS/443) — works on hosts that block outbound SMTP (e.g. Render).
+  const resendResult = await sendViaResend({ to, subject, html, attachments });
+  if (resendResult) return resendResult; // configured (success or hard fail)
+
+  // Fallback to Gmail SMTP (works locally / on SMTP-allowed hosts).
   if (!process.env.SMTP_USER || !process.env.SMTP_PASS) {
-    console.error('Email send skipped: SMTP_USER / SMTP_PASS not set');
-    return { ok: false, reason: 'smtp-not-configured' };
+    console.error('Email send skipped: neither RESEND_API_KEY nor SMTP configured');
+    return { ok: false, reason: 'email-not-configured' };
   }
   const t = getTransporter();
   if (!t || !to) return { ok: false, reason: 'no-transporter-or-recipient' };

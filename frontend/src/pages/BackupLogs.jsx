@@ -184,9 +184,19 @@ function VersionLogTab() {
     );
   }
 
-  const { summary, snapshots, diffs } = versionLog;
-  const morningSnapshot = snapshots[0];
-  const eveningSnapshot = snapshots[snapshots.length - 1];
+  const { summary, backups, diffs } = versionLog;
+  const morningSnapshot = backups?.[0];
+  const eveningSnapshot = backups?.[backups.length - 1];
+
+  if (!morningSnapshot || !eveningSnapshot) {
+    return (
+      <div className="text-center py-16 text-stone-400">
+        <GitCompareArrows size={40} className="mx-auto mb-3 opacity-40" />
+        <p className="font-medium">Insufficient backup data</p>
+        <p className="text-sm mt-1">Run at least two backups to see changes</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -3,6 +3,7 @@ const router = express.Router();
 const supabaseAdmin = require('@/config/supabaseAdmin');
 const { requireAuth, requireRole } = require('@/middlewares/auth');
 const { logActivity } = require('@/lib/logger');
+const { safeErrorMessage } = require('@/lib/security');
 
 router.use(requireAuth);
 
@@ -17,7 +18,7 @@ router.get('/', async (req, res) => {
       if (error.message?.includes('does not exist') || error.code === '42P01') {
         return res.json({ success: true, result: [] });
       }
-      return res.status(400).json({ success: false, message: error.message });
+      return res.status(400).json({ success: false, message: 'Failed to fetch groups' });
     }
 
     const { data: members } = await supabaseAdmin
@@ -111,7 +112,7 @@ router.patch('/:id', requireRole('admin', 'accountant'), async (req, res) => {
       .from('contact_groups')
       .update(updates)
       .eq('id', req.params.id);
-    if (error) return res.status(400).json({ success: false, message: error.message });
+  if (error) return res.status(400).json({ success: false, message: 'Failed to update group' });
   }
 
   if (member_ids !== undefined) {
@@ -154,7 +155,7 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
   });
 
   const { error } = await supabaseAdmin.from('contact_groups').delete().eq('id', req.params.id);
-  if (error) return res.status(400).json({ success: false, message: error.message });
+  if (error) return res.status(400).json({ success: false, message: 'Failed to delete group' });
   res.json({ success: true });
 });
 
@@ -167,7 +168,7 @@ router.post('/:id/members', requireRole('admin', 'accountant'), async (req, res)
     .from('contact_group_members')
     .insert({ group_id: req.params.id, contact_id });
   if (error && error.code !== '23505') {
-    return res.status(400).json({ success: false, message: error.message });
+    return res.status(400).json({ success: false, message: 'Failed to add member' });
   }
 
   res.json({ success: true });
@@ -180,7 +181,7 @@ router.delete('/:id/members/:contactId', requireRole('admin', 'accountant'), asy
     .delete()
     .eq('group_id', req.params.id)
     .eq('contact_id', req.params.contactId);
-  if (error) return res.status(400).json({ success: false, message: error.message });
+  if (error) return res.status(400).json({ success: false, message: 'Failed to remove member' });
   res.json({ success: true });
 });
 

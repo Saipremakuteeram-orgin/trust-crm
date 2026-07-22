@@ -24,7 +24,7 @@ export function AuthProvider({ children }) {
       setProfile(null);
       return;
     }
-    const { data } = await supabase.from("profiles").select("*").eq("id", userId).single();
+    const { data } = await supabase.from("profiles").select("id, email, full_name, role").eq("id", userId).single();
     setProfile(data);
   }
 

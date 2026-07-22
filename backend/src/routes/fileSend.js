@@ -8,6 +8,7 @@ const { requireAuth, requireRole } = require('@/middlewares/auth');
 const { logActivity } = require('@/lib/logger');
 const storage = require('@/services/storage');
 const { sendEmail, sendTelegram } = require('@/services/notify');
+const { safeErrorMessage } = require('@/lib/security');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const STORAGE_CHAT_ID = process.env.TELEGRAM_STORAGE_CHAT_ID;
@@ -28,9 +29,14 @@ function appendJsonLog(entry) {
 // POST /api/file-send/send — upload from device, send to Telegram, email as attachment
 router.post('/send', requireAuth, requireRole('admin', 'accountant'), upload.single('file'), async (req, res) => {
   const file = req.file;
-  const recipients = Array.isArray(req.body.recipients)
-    ? req.body.recipients
-    : (req.body.recipients ? JSON.parse(req.body.recipients) : []);
+  let recipients = [];
+  try {
+    recipients = Array.isArray(req.body.recipients)
+      ? req.body.recipients
+      : (req.body.recipients ? JSON.parse(req.body.recipients) : []);
+  } catch {
+    return res.status(400).json({ success: false, message: 'Invalid recipients data' });
+  }
 
   if (!file) return res.status(400).json({ success: false, message: 'No file uploaded' });
   if (!recipients.length) return res.status(400).json({ success: false, message: 'No recipients selected' });
@@ -81,7 +87,7 @@ router.post('/send', requireAuth, requireRole('admin', 'accountant'), upload.sin
 
         perRecipient.push({ email, status: mailRes.ok ? 'sent' : 'failed', error: mailRes.ok ? null : mailRes.reason });
       } catch (err) {
-        perRecipient.push({ email, status: 'failed', error: err.message });
+        perRecipient.push({ email, status: 'failed', error: 'Delivery failed' });
       }
     }
 
@@ -146,8 +152,8 @@ router.post('/send', requireAuth, requireRole('admin', 'accountant'), upload.sin
 
     return res.json({ success: true, result: { docName, status, recipients: perRecipient } });
   } catch (err) {
-    console.error('[fileSend] send failed:', err.message);
-    return res.status(500).json({ success: false, message: err.message });
+    console.error('[fileSend] send failed:', safeErrorMessage(err));
+    return res.status(500).json({ success: false, message: 'Failed to send file' });
   }
 });
 
@@ -159,10 +165,10 @@ router.get('/logs', requireAuth, async (req, res) => {
       .select('*')
       .order('created_at', { ascending: false })
       .limit(200);
-    if (error) return res.status(400).json({ success: false, message: error.message });
+    if (error) return res.status(400).json({ success: false, message: 'Failed to fetch file send logs' });
     return res.json({ success: true, result: data || [] });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
+    return res.status(500).json({ success: false, message: 'Failed to fetch file send logs' });
   }
 });
 

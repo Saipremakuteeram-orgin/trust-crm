@@ -8,6 +8,7 @@ const { requireAuth, requireRole } = require('@/middlewares/auth');
 const { logActivity } = require('@/lib/logger');
 const storage = require('@/services/storage');
 const { sendEmail, sendTelegram } = require('@/services/notify');
+const { sanitizeHtml, safeErrorMessage } = require('@/lib/security');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const STORAGE_CHAT_ID = process.env.TELEGRAM_STORAGE_CHAT_ID;
@@ -75,7 +76,7 @@ router.post('/send', requireAuth, requireRole('admin', 'accountant'), upload.arr
     const mailRes = await sendEmail({
       to: validRecipients.join(','),
       subject: subject || '(no subject)',
-      html: body || '<p></p>',
+      html: sanitizeHtml(body) || '<p></p>',
       attachments,
     });
 
@@ -143,19 +144,15 @@ router.post('/send', requireAuth, requireRole('admin', 'accountant'), upload.arr
     });
 
     if (!mailRes.ok) {
-      const reason = errorMessage || 'Email failed to send';
-      const smtpMissing = !process.env.SMTP_USER || !process.env.SMTP_PASS;
       return res.status(502).json({
         success: false,
-        message: smtpMissing
-          ? 'SMTP is not configured on the server (set SMTP_USER and SMTP_PASS). ' + reason
-          : 'Email delivery failed: ' + reason,
+        message: 'Email delivery failed. Please try again later.',
       });
     }
     return res.json({ success: true, result: { subject, recipients: validRecipients, status, attachments: attachmentNames.length } });
   } catch (err) {
-    console.error('[mail] send failed:', err.message);
-    return res.status(500).json({ success: false, message: err.message });
+    console.error('[mail] send failed:', safeErrorMessage(err));
+    return res.status(500).json({ success: false, message: 'Failed to send email' });
   }
 });
 
@@ -181,7 +178,7 @@ router.get('/logs', requireAuth, async (req, res) => {
       .eq('entity', 'mail')
       .order('created_at', { ascending: false })
       .limit(200);
-    if (error) return res.status(400).json({ success: false, message: error.message });
+    if (error) return res.status(400).json({ success: false, message: 'Failed to fetch mail logs' });
 
     const result = (data || []).map((row) => {
       const d = row.details || {};
@@ -199,7 +196,7 @@ router.get('/logs', requireAuth, async (req, res) => {
     });
     return res.json({ success: true, result });
   } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
+    return res.status(500).json({ success: false, message: 'Failed to fetch mail logs' });
   }
 });
 

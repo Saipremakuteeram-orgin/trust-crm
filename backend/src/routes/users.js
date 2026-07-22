@@ -6,12 +6,14 @@ const { logActivity } = require('@/lib/logger');
 
 router.use(requireAuth);
 
+const SAFE_PROFILE_COLS = 'id, full_name, role, created_at';
+
 router.get('/', requireRole('admin'), async (req, res) => {
   const { data: profiles, error } = await supabaseAdmin
     .from('profiles')
-    .select('*')
+    .select(SAFE_PROFILE_COLS)
     .order('created_at', { ascending: false });
-  if (error) return res.status(400).json({ success: false, message: error.message });
+  if (error) return res.status(400).json({ success: false, message: 'Failed to fetch users' });
 
   const enriched = await Promise.all(profiles.map(async (p) => {
     try {
@@ -27,7 +29,7 @@ router.get('/', requireRole('admin'), async (req, res) => {
 
 router.post('/sync', requireRole('admin'), async (req, res) => {
   const { data: authUsers, error: listErr } = await supabaseAdmin.auth.admin.listUsers();
-  if (listErr) return res.status(500).json({ success: false, message: listErr.message });
+  if (listErr) return res.status(500).json({ success: false, message: 'Failed to sync users' });
 
   const { data: existingProfiles } = await supabaseAdmin.from('profiles').select('id');
   const existingIds = new Set((existingProfiles || []).map(p => p.id));
@@ -66,8 +68,8 @@ router.post('/', requireRole('admin'), async (req, res) => {
   if (!email || !password) {
     return res.status(400).json({ success: false, message: 'Email and password are required' });
   }
-  if (password.length < 6) {
-    return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+  if (password.length < 8) {
+    return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
   }
   if (role && !['admin', 'accountant', 'viewer'].includes(role)) {
     return res.status(400).json({ success: false, message: 'Invalid role' });
@@ -79,7 +81,7 @@ router.post('/', requireRole('admin'), async (req, res) => {
     email_confirm: true,
     user_metadata: { full_name: full_name || email.split('@')[0] },
   });
-  if (error) return res.status(400).json({ success: false, message: error.message });
+  if (error) return res.status(400).json({ success: false, message: 'Failed to create user' });
 
   if (data?.user) {
     await supabaseAdmin
@@ -114,7 +116,7 @@ router.post('/invite', requireRole('admin'), async (req, res) => {
   const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
     data: { full_name: full_name || email.split('@')[0] },
   });
-  if (error) return res.status(400).json({ success: false, message: error.message });
+  if (error) return res.status(400).json({ success: false, message: 'Failed to invite user' });
 
   if (role && data?.user) {
     await supabaseAdmin
@@ -138,15 +140,15 @@ router.post('/invite', requireRole('admin'), async (req, res) => {
 
 router.post('/:id/reset-password', requireRole('admin'), async (req, res) => {
   const { password } = req.body;
-  if (!password || password.length < 6) {
-    return res.status(400).json({ success: false, message: 'Password must be at least 6 characters' });
+  if (!password || password.length < 8) {
+    return res.status(400).json({ success: false, message: 'Password must be at least 8 characters' });
   }
   if (req.params.id === req.user.id) {
     return res.status(400).json({ success: false, message: 'Cannot reset your own password here' });
   }
 
   const { error } = await supabaseAdmin.auth.admin.updateUserById(req.params.id, { password });
-  if (error) return res.status(400).json({ success: false, message: error.message });
+  if (error) return res.status(400).json({ success: false, message: 'Failed to reset password' });
 
   logActivity({
     userId: req.user.id,
@@ -178,7 +180,7 @@ router.patch('/:id/role', requireRole('admin'), async (req, res) => {
     .eq('id', req.params.id)
     .select()
     .single();
-  if (error) return res.status(400).json({ success: false, message: error.message });
+  if (error) return res.status(400).json({ success: false, message: 'Failed to update role' });
 
   logActivity({
     userId: req.user.id,
@@ -209,7 +211,7 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
   });
 
   const { error } = await supabaseAdmin.auth.admin.deleteUser(req.params.id);
-  if (error) return res.status(400).json({ success: false, message: error.message });
+  if (error) return res.status(400).json({ success: false, message: 'Failed to delete user' });
   res.json({ success: true });
 });
 

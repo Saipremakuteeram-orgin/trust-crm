@@ -5,16 +5,39 @@ const supabaseAdmin = require('@/config/supabaseAdmin');
 const { requireAuth, requireRole } = require('@/middlewares/auth');
 const { logActivity } = require('@/lib/logger');
 const storage = require('@/services/storage');
+const { isSafePath, safeErrorMessage } = require('@/lib/security');
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+const ALLOWED_MIMES = [
+  'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint', 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/plain', 'text/csv', 'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+  'application/zip', 'application/x-zip-compressed',
+];
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIMES.includes(file.mimetype)) cb(null, true);
+    else cb(new Error('File type not allowed'));
+  },
+});
 
 router.use(requireAuth);
 router.use(requireRole('admin', 'accountant'));
+
+function validatePath(p) {
+  return p && typeof p === 'string' && isSafePath(p) && !p.includes('..');
+}
 
 // GET /api/drive — list files in a folder
 router.get('/', async (req, res) => {
   try {
     const folder = req.query.folder || '';
+    if (folder && !validatePath(folder)) {
+      return res.status(400).json({ success: false, message: 'Invalid folder path' });
+    }
     const items = await storage.listFiles(folder);
 
     const folders = items.filter((i) => i.id === null).map((f) => ({
@@ -35,19 +58,23 @@ router.get('/', async (req, res) => {
 
     res.json({ success: true, result: { files: [...folders, ...files], currentFolder: folder || null } });
   } catch (err) {
-    console.error('Drive list error:', err.message);
+    console.error('Drive list error:', safeErrorMessage(err));
     res.json({ success: true, result: { files: [], currentFolder: null } });
   }
 });
 
-// POST /api/drive/folder — create folder (by uploading a .folderkeep marker)
+// POST /api/drive/folder — create folder
 router.post('/folder', async (req, res) => {
   try {
     const { parent, name } = req.body;
     if (!name || !name.trim()) {
       return res.status(400).json({ success: false, message: 'Folder name is required' });
     }
-    const folderPath = `${parent ? parent + '/' : ''}${name.trim()}`;
+    const sanitizedName = name.trim().replace(/[^\w\s.\-]/g, '_').slice(0, 200);
+    if (parent && !validatePath(parent)) {
+      return res.status(400).json({ success: false, message: 'Invalid parent path' });
+    }
+    const folderPath = `${parent ? parent + '/' : ''}${sanitizedName}`;
     const markerPath = `${folderPath}/.folderkeep`;
     await storage.uploadFile(markerPath, Buffer.from(''), 'application/octet-stream');
 
@@ -57,13 +84,13 @@ router.post('/folder', async (req, res) => {
       action: 'create',
       entity: 'drive_folder',
       entityId: folderPath,
-      details: { name: name.trim(), parent: parent || null },
+      details: { name: sanitizedName, parent: parent || null },
       ipAddress: req.ip,
     });
 
-    res.json({ success: true, result: { id: folderPath, name: name.trim() } });
+    res.json({ success: true, result: { id: folderPath, name: sanitizedName } });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: 'Failed to create folder' });
   }
 });
 
@@ -74,10 +101,14 @@ router.post('/upload', upload.array('files', 20), async (req, res) => {
       return res.status(400).json({ success: false, message: 'No files provided' });
     }
     const folder = req.body.folder || '';
+    if (folder && !validatePath(folder)) {
+      return res.status(400).json({ success: false, message: 'Invalid folder path' });
+    }
     const results = [];
 
     for (const file of req.files) {
-      const filePath = folder ? `${folder}/${file.originalname}` : file.originalname;
+      const safeName = file.originalname.replace(/[^\w.\-]/g, '_').slice(0, 200);
+      const filePath = folder ? `${folder}/${safeName}` : safeName;
       await storage.uploadFile(filePath, file.buffer, file.mimetype);
 
       logActivity({
@@ -86,16 +117,16 @@ router.post('/upload', upload.array('files', 20), async (req, res) => {
         action: 'upload',
         entity: 'drive_file',
         entityId: filePath,
-        details: { name: file.originalname, size: file.size },
+        details: { name: safeName, size: file.size },
         ipAddress: req.ip,
       });
 
-      results.push({ id: filePath, name: file.originalname, size: file.size });
+      results.push({ id: filePath, name: safeName, size: file.size });
     }
 
     res.json({ success: true, result: results });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: 'Failed to upload files' });
   }
 });
 
@@ -107,6 +138,7 @@ router.delete('/', async (req, res) => {
       return res.status(400).json({ success: false, message: 'No files specified' });
     }
     for (const f of files) {
+      if (!validatePath(f)) continue;
       await storage.deleteFile(f);
       logActivity({
         userId: req.user.id,
@@ -120,7 +152,7 @@ router.delete('/', async (req, res) => {
     }
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: 'Failed to delete files' });
   }
 });
 
@@ -131,42 +163,50 @@ router.post('/move', async (req, res) => {
     if (!files || !Array.isArray(files)) {
       return res.status(400).json({ success: false, message: 'No files specified' });
     }
+    if (targetFolder && !validatePath(targetFolder)) {
+      return res.status(400).json({ success: false, message: 'Invalid target folder' });
+    }
     for (const f of files) {
-      const fileName = f.split('/').pop();
+      if (!validatePath(f)) continue;
+      const fileName = f.split('/').pop().replace(/[^\w.\-]/g, '_');
       const toPath = targetFolder ? `${targetFolder}/${fileName}` : fileName;
       await storage.moveFile(f, toPath);
     }
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: 'Failed to move files' });
   }
 });
 
 // PATCH /api/drive/rename — rename file (move to new path)
 router.patch('/rename', async (req, res) => {
   try {
-    const { path, newName } = req.body;
-    if (!path || !newName) {
+    const { path: filePath, newName } = req.body;
+    if (!filePath || !newName) {
       return res.status(400).json({ success: false, message: 'path and newName required' });
     }
-    const parts = path.split('/');
+    if (!validatePath(filePath)) {
+      return res.status(400).json({ success: false, message: 'Invalid file path' });
+    }
+    const safeName = newName.replace(/[^\w.\-]/g, '_').slice(0, 200);
+    const parts = filePath.split('/');
     parts.pop();
-    const newPath = [...parts, newName].filter(Boolean).join('/');
-    await storage.moveFile(path, newPath);
+    const newPath = [...parts, safeName].filter(Boolean).join('/');
+    await storage.moveFile(filePath, newPath);
 
     logActivity({
       userId: req.user.id,
       userEmail: req.user.email,
       action: 'rename',
       entity: 'drive_file',
-      entityId: path,
-      details: { old: path, new: newPath },
+      entityId: filePath,
+      details: { old: filePath, new: newPath },
       ipAddress: req.ip,
     });
 
-    res.json({ success: true, result: { id: newPath, name: newName } });
+    res.json({ success: true, result: { id: newPath, name: safeName } });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: 'Failed to rename file' });
   }
 });
 
@@ -174,11 +214,13 @@ router.patch('/rename', async (req, res) => {
 router.get('/download', async (req, res) => {
   try {
     const filePath = req.query.path;
-    if (!filePath) return res.status(400).json({ success: false, message: 'path required' });
+    if (!filePath || !validatePath(filePath)) {
+      return res.status(400).json({ success: false, message: 'Valid path required' });
+    }
     const signedUrl = await storage.getSignedUrl(filePath, 300);
     res.json({ success: true, result: { url: signedUrl } });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: 'Failed to get download link' });
   }
 });
 

@@ -4,6 +4,9 @@ const supabaseAdmin = require('@/config/supabaseAdmin');
 const { requireAuth, requireRole } = require('@/middlewares/auth');
 const { logActivity } = require('@/lib/logger');
 const { runDailyBackup, getBackupLogs } = require('@/services/backup');
+const { safeErrorMessage } = require('@/lib/security');
+
+const MAX_RESTORE_ROWS = 10000;
 
 router.use(requireAuth);
 
@@ -15,7 +18,7 @@ router.get('/logs', requireRole('admin'), async (req, res) => {
     const logs = await getBackupLogs(limit, offset);
     res.json({ success: true, result: logs });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: 'Failed to fetch backup logs' });
   }
 });
 
@@ -25,7 +28,8 @@ router.post('/run-now', requireRole('admin'), async (req, res) => {
     const result = await runDailyBackup('manual');
     res.json({ success: true, result });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    console.error('Backup run-now error:', safeErrorMessage(err));
+    res.status(500).json({ success: false, message: 'Backup failed' });
   }
 });
 
@@ -35,6 +39,9 @@ router.post('/restore', requireRole('admin'), async (req, res) => {
     const { transactions } = req.body;
     if (!transactions || !Array.isArray(transactions) || transactions.length === 0) {
       return res.status(400).json({ success: false, message: 'No transaction data provided' });
+    }
+    if (transactions.length > MAX_RESTORE_ROWS) {
+      return res.status(400).json({ success: false, message: `Too many rows (max ${MAX_RESTORE_ROWS})` });
     }
 
     let inserted = 0;
@@ -64,13 +71,13 @@ router.post('/restore', requireRole('admin'), async (req, res) => {
 
         const { error } = await supabaseAdmin.from('transactions').insert(row);
         if (error) {
-          errors.push({ row: txn, error: error.message });
+          errors.push({ row: txn, error: 'Insert failed' });
           skipped++;
         } else {
           inserted++;
         }
       } catch (err) {
-        errors.push({ row: txn, error: err.message });
+        errors.push({ row: txn, error: 'Insert failed' });
         skipped++;
       }
     }
@@ -89,7 +96,7 @@ router.post('/restore', requireRole('admin'), async (req, res) => {
       result: { inserted, skipped, total: transactions.length, errors: errors.slice(0, 5) },
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: 'Restore failed' });
   }
 });
 
@@ -168,10 +175,10 @@ router.post('/restore-excel', requireRole('admin'), async (req, res) => {
         };
 
         const { error } = await supabaseAdmin.from('transactions').insert(row);
-        if (error) { errors.push({ error: error.message }); skipped++; }
+        if (error) { errors.push({ error: 'Insert failed' }); skipped++; }
         else { inserted++; }
       } catch (err) {
-        errors.push({ error: err.message });
+        errors.push({ error: 'Insert failed' });
         skipped++;
       }
     }
@@ -190,7 +197,7 @@ router.post('/restore-excel', requireRole('admin'), async (req, res) => {
       result: { inserted, skipped, total: transactions.length, errors: errors.slice(0, 5) },
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: 'Excel restore failed' });
   }
 });
 
@@ -311,8 +318,8 @@ router.get('/version-log', requireRole('admin'), async (req, res) => {
 
     res.json({ success: true, result: { backups: snapshots, diffs: [], summary: null } });
   } catch (err) {
-    console.error('Version log error:', err.message);
-    res.status(500).json({ success: false, message: err.message });
+    console.error('Version log error:', safeErrorMessage(err));
+    res.status(500).json({ success: false, message: 'Failed to fetch version log' });
   }
 });
 

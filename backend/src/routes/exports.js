@@ -6,6 +6,7 @@ const supabaseAdmin = require('@/config/supabaseAdmin');
 const { requireAuth, requireRole } = require('@/middlewares/auth');
 const { logActivity } = require('@/lib/logger');
 const storage = require('@/services/storage');
+const { isSafePath, sanitizeFileName, safeContentDisposition, safeErrorMessage } = require('@/lib/security');
 
 router.use(requireAuth);
 
@@ -184,8 +185,8 @@ router.post('/transactions/excel', requireRole('admin', 'accountant'), async (re
     res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
     res.send(Buffer.from(buffer));
   } catch (err) {
-    console.error('Excel export error:', err.message);
-    res.status(500).json({ success: false, message: err.message });
+    console.error('Excel export error:', safeErrorMessage(err));
+    res.status(500).json({ success: false, message: 'Failed to export transactions' });
   }
 });
 
@@ -290,8 +291,8 @@ router.post('/transactions/pdf', requireRole('admin', 'accountant'), async (req,
       ipAddress: req.ip,
     });
   } catch (err) {
-    console.error('PDF export error:', err.message);
-    res.status(500).json({ success: false, message: err.message });
+    console.error('PDF export error:', safeErrorMessage(err));
+    res.status(500).json({ success: false, message: 'Failed to export PDF' });
   }
 });
 
@@ -303,15 +304,14 @@ router.post('/spreadsheet/save', requireRole('admin', 'accountant'), async (req,
 
     const workbook = buildWorkbookFromSpreadsheet(data);
     const now = new Date().toISOString().slice(0, 10);
-    const fileName = customName ? `${customName}.xlsx` : `Trust-CRM-Sheet-${now}.xlsx`;
+    const fileName = customName ? sanitizeFileName(customName) + '.xlsx' : `Trust-CRM-Sheet-${now}.xlsx`;
     const role = await getUserRole(req.user.id);
     const result = await saveAndNotify(workbook, fileName, req.user.id, req.user.email, role);
 
     res.json({ success: true, result });
   } catch (err) {
-    console.error('Spreadsheet save error:', err.message);
-    console.error('Spreadsheet save error stack:', err.stack);
-    res.status(500).json({ success: false, message: `Failed to save: ${err.message}` });
+    console.error('Spreadsheet save error:', safeErrorMessage(err));
+    res.status(500).json({ success: false, message: 'Failed to save spreadsheet' });
   }
 });
 
@@ -324,7 +324,7 @@ router.post('/spreadsheet/download', requireRole('admin', 'accountant'), async (
     const workbook = buildWorkbookFromSpreadsheet(data);
     const buffer = await workbook.xlsx.writeBuffer();
     const now = new Date().toISOString().slice(0, 10);
-    const fileName = customName ? `${customName}.xlsx` : `Trust-CRM-Sheet-${now}.xlsx`;
+    const fileName = customName ? sanitizeFileName(customName) + '.xlsx' : `Trust-CRM-Sheet-${now}.xlsx`;
 
     logActivity({
       userId: req.user.id,
@@ -336,11 +336,10 @@ router.post('/spreadsheet/download', requireRole('admin', 'accountant'), async (
     });
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+    res.setHeader('Content-Disposition', safeContentDisposition(fileName));
     res.send(Buffer.from(buffer));
   } catch (err) {
-    console.error('Spreadsheet download error:', err.message);
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: 'Failed to download spreadsheet' });
   }
 });
 
@@ -358,11 +357,16 @@ router.get('/saved-files', requireRole('admin', 'accountant'), async (req, res) 
 // GET /api/exports/download/:folder/:fileName
 router.get('/download/:folder/:fileName', requireRole('admin', 'accountant'), async (req, res) => {
   try {
-    const path = `${req.params.folder}/${req.params.fileName}`;
-    const data = await storage.downloadFile(path);
+    const folder = sanitizeFileName(req.params.folder);
+    const fileName = sanitizeFileName(req.params.fileName);
+    const filePath = `${folder}/${fileName}`;
+    if (!isSafePath(filePath)) {
+      return res.status(400).json({ success: false, message: 'Invalid file path' });
+    }
+    const data = await storage.downloadFile(filePath);
     const buffer = Buffer.from(await data.arrayBuffer());
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${req.params.fileName}"`);
+    res.setHeader('Content-Disposition', safeContentDisposition(fileName));
     res.send(buffer);
   } catch (err) {
     res.status(404).json({ success: false, message: 'File not found' });
@@ -372,11 +376,16 @@ router.get('/download/:folder/:fileName', requireRole('admin', 'accountant'), as
 // DELETE /api/exports/delete/:folder/:fileName
 router.delete('/delete/:folder/:fileName', requireRole('admin'), async (req, res) => {
   try {
-    const path = `${req.params.folder}/${req.params.fileName}`;
-    await storage.deleteFile(path);
+    const folder = sanitizeFileName(req.params.folder);
+    const fileName = sanitizeFileName(req.params.fileName);
+    const filePath = `${folder}/${fileName}`;
+    if (!isSafePath(filePath)) {
+      return res.status(400).json({ success: false, message: 'Invalid file path' });
+    }
+    await storage.deleteFile(filePath);
     res.json({ success: true });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    res.status(500).json({ success: false, message: 'Failed to delete file' });
   }
 });
 

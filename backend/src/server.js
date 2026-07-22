@@ -41,6 +41,7 @@ app.use('/api/backup', sensitiveLimiter, require('./routes/backup'));
 app.use('/api/file-send', sensitiveLimiter, require('./routes/fileSend'));
 app.use('/api/mail', sensitiveLimiter, require('./routes/mail'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/scheduled-reports', require('./routes/scheduledReports'));
 
 app.post('/api/reports/monthly/send-now', requireAuth, sensitiveLimiter, requireRole('admin', 'accountant'), async (req, res) => {
   const { generateAndSendMonthlyReport } = require('./cron/monthlyReport');
@@ -61,3 +62,6 @@ startDailyBackupCron();
 
 const { startBackupHealthCheckCron } = require('./cron/backupHealthCheck');
 startBackupHealthCheckCron();
+
+const { startScheduledReportsCron } = require('./cron/scheduledReports');
+startScheduledReportsCron();

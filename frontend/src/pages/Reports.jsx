@@ -1,11 +1,17 @@
-import { useEffect, useState, useMemo } from "react";
-import { motion } from "framer-motion";
+import { useEffect, useState, useMemo, useCallback } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
 import TransactionListModal from "../components/TransactionListModal";
-import { FileBarChart, Download, RefreshCw, Calendar, Wallet, Landmark, TrendingUp, TrendingDown } from "lucide-react";
+import { useToast } from "../components/Toast";
 import {
-  AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
+  FileBarChart, Download, RefreshCw, Calendar, Wallet, Landmark, TrendingUp, TrendingDown,
+  Clock, Send, Loader2, Plus, Pencil, Trash2, Eye, ToggleLeft, ToggleRight,
+  Mail, MessageSquare, Users, Filter, X, CheckCircle, XCircle, ChevronDown, ChevronRight,
+  CalendarClock, Zap,
+} from "lucide-react";
+import {
+  AreaChart, Area, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
 
@@ -67,14 +73,577 @@ function StatCard({ icon: Icon, label, value, sub, color, delay, onClick }) {
   );
 }
 
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+function todayISO() { return new Date().toISOString().slice(0, 10); }
+function thisMonth() { return new Date().toISOString().slice(0, 7); }
+function thisYear() { return String(new Date().getUTCFullYear()); }
+
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+const SCHEDULE_TYPES = [
+  { value: "once", label: "Once" },
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "biweekly", label: "Bi-weekly" },
+  { value: "monthly", label: "Monthly" },
+];
+
+const FORMAT_OPTIONS = [
+  { value: "excel", label: "Excel", icon: FileBarChart, color: "text-emerald-600" },
+  { value: "pdf", label: "PDF", icon: FileBarChart, color: "text-rose-600" },
+  { value: "summary", label: "Summary", icon: Mail, color: "text-blue-600" },
+];
+
+const EMPTY_FORM = {
+  name: "", filter_type: "", filter_mode: "", filter_categories: [],
+  filter_from: todayISO(), filter_to: todayISO(),
+  schedule_type: "weekly", schedule_day: 1, schedule_hour: 8, schedule_minute: 0,
+  format: "excel", delivery_email: true, delivery_telegram: false,
+  recipient_mode: "subscribed", recipient_contact_ids: [],
+};
+
+function ScheduleForm({ form, setForm, categories, contacts, onSave, onClose, saving }) {
+  const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const filteredContacts = contacts.filter((c) => c.enabled);
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <label className="block text-xs font-semibold text-stone-600 mb-1.5">Report Name</label>
+        <input type="text" value={form.name} onChange={(e) => update("name", e.target.value)}
+          placeholder="e.g. Weekly Cash Transactions"
+          className="w-full border-2 border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
+      </div>
+
+      {/* Filters */}
+      <div className="bg-stone-50 rounded-xl p-4 space-y-4">
+        <h4 className="text-xs font-bold text-stone-600 uppercase tracking-wider flex items-center gap-1.5">
+          <Filter size={13} /> Filters
+        </h4>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-stone-500 mb-1">Transaction Type</label>
+            <select value={form.filter_type} onChange={(e) => update("filter_type", e.target.value)}
+              className="w-full border-2 border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-saffron-400 transition-colors">
+              <option value="">All Types</option>
+              <option value="credit">Credit (Income)</option>
+              <option value="debit">Debit (Expense)</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-stone-500 mb-1">Payment Mode</label>
+            <select value={form.filter_mode} onChange={(e) => update("filter_mode", e.target.value)}
+              className="w-full border-2 border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-saffron-400 transition-colors">
+              <option value="">All Modes</option>
+              <option value="cash">Cash Only</option>
+              <option value="digital">Digital Only</option>
+            </select>
+          </div>
+        </div>
+        {categories.length > 0 && (
+          <div>
+            <label className="block text-xs text-stone-500 mb-1">Categories (leave empty = all)</label>
+            <div className="flex flex-wrap gap-2">
+              {categories.map((cat) => (
+                <button key={cat.id} type="button"
+                  onClick={() => {
+                    const ids = form.filter_categories || [];
+                    update("filter_categories", ids.includes(cat.id) ? ids.filter((x) => x !== cat.id) : [...ids, cat.id]);
+                  }}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                    (form.filter_categories || []).includes(cat.id)
+                      ? "bg-saffron-100 text-saffron-700 border-saffron-300"
+                      : "bg-white text-stone-500 border-stone-200 hover:border-saffron-300"
+                  }`}>
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {form.schedule_type === "once" && (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-stone-500 mb-1">From Date</label>
+              <input type="date" value={form.filter_from} onChange={(e) => update("filter_from", e.target.value)}
+                className="w-full border-2 border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-saffron-400 transition-colors" />
+            </div>
+            <div>
+              <label className="block text-xs text-stone-500 mb-1">To Date</label>
+              <input type="date" value={form.filter_to} onChange={(e) => update("filter_to", e.target.value)}
+                className="w-full border-2 border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-saffron-400 transition-colors" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Schedule */}
+      <div className="bg-stone-50 rounded-xl p-4 space-y-4">
+        <h4 className="text-xs font-bold text-stone-600 uppercase tracking-wider flex items-center gap-1.5">
+          <CalendarClock size={13} /> Schedule
+        </h4>
+        <div>
+          <label className="block text-xs text-stone-500 mb-1">Repeat</label>
+          <div className="flex flex-wrap gap-2">
+            {SCHEDULE_TYPES.map((s) => (
+              <button key={s.value} type="button" onClick={() => update("schedule_type", s.value)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium border-2 transition-all ${
+                  form.schedule_type === s.value
+                    ? "bg-saffron-600 text-white border-saffron-600"
+                    : "border-stone-200 text-stone-600 hover:border-saffron-300"
+                }`}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {(form.schedule_type === "weekly" || form.schedule_type === "biweekly") && (
+          <div>
+            <label className="block text-xs text-stone-500 mb-1">Day of Week</label>
+            <select value={form.schedule_day} onChange={(e) => update("schedule_day", parseInt(e.target.value))}
+              className="w-full border-2 border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-saffron-400 transition-colors">
+              {DAY_NAMES.map((d, i) => <option key={i} value={i}>{d}</option>)}
+            </select>
+          </div>
+        )}
+        {form.schedule_type === "monthly" && (
+          <div>
+            <label className="block text-xs text-stone-500 mb-1">Day of Month</label>
+            <select value={form.schedule_day ?? 1} onChange={(e) => update("schedule_day", parseInt(e.target.value))}
+              className="w-full border-2 border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-saffron-400 transition-colors">
+              {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => <option key={d} value={d}>{d}</option>)}
+            </select>
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-xs text-stone-500 mb-1">Hour (UTC)</label>
+            <select value={form.schedule_hour} onChange={(e) => update("schedule_hour", parseInt(e.target.value))}
+              className="w-full border-2 border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-saffron-400 transition-colors">
+              {Array.from({ length: 24 }, (_, i) => <option key={i} value={i}>{String(i).padStart(2, "0")}:00</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs text-stone-500 mb-1">Minute</label>
+            <select value={form.schedule_minute} onChange={(e) => update("schedule_minute", parseInt(e.target.value))}
+              className="w-full border-2 border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-saffron-400 transition-colors">
+              {[0, 15, 30, 45].map((m) => <option key={m} value={m}>:{String(m).padStart(2, "0")}</option>)}
+            </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Format */}
+      <div className="bg-stone-50 rounded-xl p-4 space-y-3">
+        <h4 className="text-xs font-bold text-stone-600 uppercase tracking-wider flex items-center gap-1.5">
+          <FileBarChart size={13} /> Report Format
+        </h4>
+        <div className="flex gap-2">
+          {FORMAT_OPTIONS.map((fo) => {
+            const FIcon = fo.icon;
+            return (
+              <button key={fo.value} type="button" onClick={() => update("format", fo.value)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border-2 transition-all ${
+                  form.format === fo.value
+                    ? "bg-saffron-600 text-white border-saffron-600"
+                    : "border-stone-200 text-stone-600 hover:border-saffron-300"
+                }`}>
+                <FIcon size={14} /> {fo.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Delivery */}
+      <div className="bg-stone-50 rounded-xl p-4 space-y-4">
+        <h4 className="text-xs font-bold text-stone-600 uppercase tracking-wider flex items-center gap-1.5">
+          <Send size={13} /> Delivery
+        </h4>
+        <div className="flex gap-4">
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.delivery_email} onChange={(e) => update("delivery_email", e.target.checked)}
+              className="w-4 h-4 rounded border-stone-300 text-saffron-600 focus:ring-saffron-500" />
+            <Mail size={14} className="text-stone-500" />
+            <span className="text-sm text-stone-700">Email</span>
+          </label>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" checked={form.delivery_telegram} onChange={(e) => update("delivery_telegram", e.target.checked)}
+              className="w-4 h-4 rounded border-stone-300 text-saffron-600 focus:ring-saffron-500" />
+            <MessageSquare size={14} className="text-stone-500" />
+            <span className="text-sm text-stone-700">Telegram</span>
+          </label>
+        </div>
+        <div>
+          <label className="block text-xs text-stone-500 mb-1">Recipients</label>
+          <select value={form.recipient_mode} onChange={(e) => update("recipient_mode", e.target.value)}
+            className="w-full border-2 border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-saffron-400 transition-colors">
+            <option value="subscribed">All Subscribed Contacts</option>
+            <option value="selected">Select Specific Contacts</option>
+          </select>
+        </div>
+        {form.recipient_mode === "selected" && (
+          <div className="max-h-40 overflow-y-auto space-y-1 border-2 border-stone-200 rounded-xl p-2">
+            {filteredContacts.length === 0 ? (
+              <p className="text-xs text-stone-400 p-2">No enabled contacts</p>
+            ) : filteredContacts.map((c) => (
+              <label key={c.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white cursor-pointer">
+                <input type="checkbox"
+                  checked={(form.recipient_contact_ids || []).includes(c.id)}
+                  onChange={(e) => {
+                    const ids = form.recipient_contact_ids || [];
+                    update("recipient_contact_ids", e.target.checked ? [...ids, c.id] : ids.filter((x) => x !== c.id));
+                  }}
+                  className="w-3.5 h-3.5 rounded border-stone-300 text-saffron-600 focus:ring-saffron-500" />
+                <span className="text-sm text-stone-700">{c.name}</span>
+                <span className="text-xs text-stone-400">{c.email || "—"}</span>
+              </label>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="flex justify-end gap-2 pt-2">
+        <button onClick={onClose}
+          className="px-5 py-2.5 rounded-xl border-2 border-stone-200 text-stone-600 text-sm font-medium hover:bg-stone-50 transition-colors">
+          Cancel
+        </button>
+        <button onClick={onSave} disabled={saving || !form.name}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-saffron-500 to-saffron-600 text-white text-sm font-semibold shadow-lg shadow-saffron-500/20 hover:shadow-xl transition-all disabled:opacity-50">
+          {saving ? <Loader2 size={14} className="animate-spin" /> : <CheckCircle size={14} />}
+          Save Report
+        </button>
+      </div>
+    </div>
+  );
 }
-function thisMonth() {
-  return new Date().toISOString().slice(0, 7);
-}
-function thisYear() {
-  return String(new Date().getUTCFullYear());
+
+function ScheduledReportsTab() {
+  const { addToast } = useToast();
+  const [reports, setReports] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [editingReport, setEditingReport] = useState(null);
+  const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [saving, setSaving] = useState(false);
+  const [categories, setCategories] = useState([]);
+  const [contacts, setContacts] = useState([]);
+  const [preview, setPreview] = useState(null);
+  const [previewId, setPreviewId] = useState(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [sending, setSending] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    Promise.all([
+      api.get("/scheduled-reports"),
+      api.get("/categories"),
+      api.get("/contacts"),
+    ]).then(([sr, cat, con]) => {
+      setReports(sr.data.result || []);
+      setCategories(cat.data.result || []);
+      setContacts(con.data.result || []);
+    }).catch(() => {}).finally(() => setLoading(false));
+  }, []);
+
+  useEffect(load, [load]);
+
+  function openCreate() {
+    setEditingReport(null);
+    setForm({ ...EMPTY_FORM });
+    setShowForm(true);
+  }
+
+  function openEdit(r) {
+    setEditingReport(r);
+    setForm({
+      name: r.name || "",
+      filter_type: r.filter_type || "",
+      filter_mode: r.filter_mode || "",
+      filter_categories: r.filter_categories || [],
+      filter_from: r.filter_from || todayISO(),
+      filter_to: r.filter_to || todayISO(),
+      schedule_type: r.schedule_type || "weekly",
+      schedule_day: r.schedule_day ?? 1,
+      schedule_hour: r.schedule_hour ?? 8,
+      schedule_minute: r.schedule_minute ?? 0,
+      format: r.format || "excel",
+      delivery_email: r.delivery_email !== false,
+      delivery_telegram: r.delivery_telegram === true,
+      recipient_mode: r.recipient_mode || "subscribed",
+      recipient_contact_ids: r.recipient_contact_ids || [],
+    });
+    setShowForm(true);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      if (editingReport) {
+        await api.put(`/scheduled-reports/${editingReport.id}`, form);
+        addToast("Report schedule updated", "success");
+      } else {
+        await api.post("/scheduled-reports", form);
+        addToast("Report schedule created", "success");
+      }
+      setShowForm(false);
+      load();
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to save", "error");
+    }
+    setSaving(false);
+  }
+
+  async function handleDelete(id) {
+    try {
+      await api.delete(`/scheduled-reports/${id}`);
+      addToast("Schedule deleted", "success");
+      setConfirmDelete(null);
+      load();
+    } catch (err) {
+      addToast("Delete failed", "error");
+    }
+  }
+
+  async function handleToggle(id, enabled) {
+    try {
+      await api.put(`/scheduled-reports/${id}`, { enabled });
+      addToast(enabled ? "Schedule enabled" : "Schedule disabled", "success");
+      load();
+    } catch (err) {
+      addToast("Toggle failed", "error");
+    }
+  }
+
+  async function handlePreview(id) {
+    setPreviewId(id);
+    setLoadingPreview(true);
+    setPreview(null);
+    try {
+      const res = await api.post(`/scheduled-reports/${id}/preview`);
+      setPreview(res.data.result);
+    } catch (err) {
+      addToast("Preview failed", "error");
+    }
+    setLoadingPreview(false);
+  }
+
+  async function handleSendNow(id) {
+    setSending(id);
+    try {
+      const res = await api.post(`/scheduled-reports/${id}/send-now`);
+      const r = res.data.result;
+      addToast(`Report sent to ${r.sentCount} recipient(s) (${r.transactions} txns)`, r.failedCount === 0 ? "success" : "warning");
+      load();
+    } catch (err) {
+      addToast(err.response?.data?.message || "Send failed", "error");
+    }
+    setSending(null);
+  }
+
+  const formatLabel = (f) => ({ excel: "Excel", pdf: "PDF", summary: "Summary" }[f] || f);
+  const scheduleLabel = (r) => {
+    const base = { once: "Once", daily: "Daily", weekly: "Weekly", biweekly: "Bi-weekly", monthly: "Monthly" }[r.schedule_type] || r.schedule_type;
+    if (r.schedule_type === "weekly" || r.schedule_type === "biweekly") return `${base} · ${DAY_NAMES[r.schedule_day || 1]}`;
+    if (r.schedule_type === "monthly") return `${base} · Day ${r.schedule_day || 1}`;
+    return base;
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-stone-800">Scheduled Reports</h2>
+        <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={openCreate}
+          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-saffron-500 to-saffron-600 text-white text-sm font-semibold shadow-lg shadow-saffron-500/20 hover:shadow-xl transition-all">
+          <Plus size={15} /> Create Report
+        </motion.button>
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {[1, 2].map((i) => <div key={i} className="skeleton h-48 rounded-2xl" />)}
+        </div>
+      ) : reports.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-stone-200/80 p-12 text-center text-stone-400">
+          <CalendarClock size={40} className="mx-auto mb-3 opacity-40" />
+          <p className="font-medium">No scheduled reports yet</p>
+          <p className="text-sm mt-1">Create your first scheduled report to automate delivery</p>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {reports.map((r) => (
+            <motion.div key={r.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+              className={`bg-white rounded-2xl border shadow-sm overflow-hidden ${r.enabled ? "border-stone-200/80" : "border-stone-200/50 opacity-70"}`}>
+              <div className="p-5">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-bold text-stone-800 truncate">{r.name}</h3>
+                    <p className="text-xs text-stone-400 mt-0.5">{scheduleLabel(r)}</p>
+                  </div>
+                  <button onClick={() => handleToggle(r.id, !r.enabled)} className="shrink-0 ml-2">
+                    {r.enabled
+                      ? <ToggleRight size={24} className="text-saffron-500" />
+                      : <ToggleLeft size={24} className="text-stone-300" />}
+                  </button>
+                </div>
+
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {r.filter_type && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-600">
+                      {r.filter_type === "credit" ? "Credit" : "Debit"}
+                    </span>
+                  )}
+                  {r.filter_mode && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-600">
+                      {r.filter_mode === "cash" ? "Cash" : "Digital"}
+                    </span>
+                  )}
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-stone-100 text-stone-600">
+                    {formatLabel(r.format)}
+                  </span>
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-stone-100 text-stone-600">
+                    {r.delivery_email && <Mail size={10} />}
+                    {r.delivery_telegram && <MessageSquare size={10} />}
+                    {r.recipient_mode === "subscribed" ? "Subscribed" : `${r.recipient_contact_ids?.length || 0} contacts`}
+                  </span>
+                </div>
+
+                {r.last_run_at && (
+                  <p className="text-[10px] text-stone-400 mb-3">
+                    Last run: {new Date(r.last_run_at).toLocaleString("en-IN")} ·
+                    <span className={`ml-1 font-semibold ${r.last_status === "success" ? "text-emerald-600" : r.last_status === "failed" ? "text-rose-600" : "text-amber-600"}`}>
+                      {r.last_status || "—"}
+                    </span>
+                  </p>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button onClick={() => handlePreview(r.id)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-stone-200 text-xs font-medium text-stone-600 hover:bg-stone-50 transition-colors">
+                    <Eye size={12} /> Preview
+                  </button>
+                  <button onClick={() => handleSendNow(r.id)} disabled={sending === r.id}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-saffron-50 text-saffron-700 text-xs font-semibold hover:bg-saffron-100 transition-colors disabled:opacity-50">
+                    {sending === r.id ? <Loader2 size={12} className="animate-spin" /> : <Send size={12} />}
+                    Send Now
+                  </button>
+                  <button onClick={() => openEdit(r)}
+                    className="p-1.5 rounded-lg text-stone-400 hover:text-stone-600 hover:bg-stone-50 transition-colors">
+                    <Pencil size={13} />
+                  </button>
+                  <button onClick={() => setConfirmDelete(r.id)}
+                    className="p-1.5 rounded-lg text-stone-400 hover:text-rose-500 hover:bg-rose-50 transition-colors">
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Preview panel */}
+              <AnimatePresence>
+                {previewId === r.id && preview && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-t border-stone-100">
+                    <div className="p-4 bg-stone-50/50 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-xs font-bold text-stone-600 uppercase">Preview — {preview.period.start} to {preview.period.end}</h4>
+                        <button onClick={() => { setPreviewId(null); setPreview(null); }} className="text-stone-400 hover:text-stone-600">
+                          <X size={14} />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="bg-white rounded-xl p-3 border border-stone-200/80">
+                          <p className="text-[10px] text-stone-400 font-medium">Transactions</p>
+                          <p className="text-lg font-bold text-stone-800">{preview.count}</p>
+                        </div>
+                        <div className="bg-white rounded-xl p-3 border border-stone-200/80">
+                          <p className="text-[10px] text-stone-400 font-medium">Credit</p>
+                          <p className="text-lg font-bold text-emerald-600">{fmt(preview.summary.totalCredit)}</p>
+                        </div>
+                        <div className="bg-white rounded-xl p-3 border border-stone-200/80">
+                          <p className="text-[10px] text-stone-400 font-medium">Debit</p>
+                          <p className="text-lg font-bold text-rose-600">{fmt(preview.summary.totalDebit)}</p>
+                        </div>
+                        <div className="bg-white rounded-xl p-3 border border-stone-200/80">
+                          <p className="text-[10px] text-stone-400 font-medium">Recipients</p>
+                          <p className="text-lg font-bold text-stone-800">{preview.recipientCount}</p>
+                        </div>
+                      </div>
+                      {preview.sample?.length > 0 && (
+                        <div className="text-xs text-stone-500">
+                          Sample: {preview.sample.slice(0, 3).map((t) => `${t.party || "—"} · ₹${Number(t.amount).toLocaleString("en-IN")}`).join(" | ")}
+                          {preview.count > 3 && ` ... +${preview.count - 3} more`}
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                )}
+                {previewId === r.id && loadingPreview && (
+                  <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }} className="overflow-hidden border-t border-stone-100">
+                    <div className="p-6 flex items-center justify-center">
+                      <Loader2 size={20} className="animate-spin text-saffron-500" />
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
+      {/* Create/Edit Modal */}
+      <AnimatePresence>
+        {showForm && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) setShowForm(false); }}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-stone-100">
+                <h3 className="text-lg font-bold text-stone-800">{editingReport ? "Edit Report Schedule" : "Create Report Schedule"}</h3>
+                <button onClick={() => setShowForm(false)} className="p-1.5 rounded-lg text-stone-400 hover:text-stone-600 hover:bg-stone-50">
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="p-6">
+                <ScheduleForm form={form} setForm={setForm} categories={categories} contacts={contacts}
+                  onSave={handleSave} onClose={() => setShowForm(false)} saving={saving} />
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirm */}
+      <AnimatePresence>
+        {confirmDelete && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+            onClick={(e) => { if (e.target === e.currentTarget) setConfirmDelete(null); }}>
+            <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm text-center">
+              <Trash2 size={32} className="mx-auto mb-3 text-rose-400" />
+              <h3 className="text-lg font-bold text-stone-800">Delete Schedule?</h3>
+              <p className="text-sm text-stone-500 mt-1 mb-5">This will permanently remove this scheduled report.</p>
+              <div className="flex gap-2 justify-center">
+                <button onClick={() => setConfirmDelete(null)}
+                  className="px-5 py-2.5 rounded-xl border-2 border-stone-200 text-stone-600 text-sm font-medium hover:bg-stone-50">
+                  Cancel
+                </button>
+                <button onClick={() => handleDelete(confirmDelete)}
+                  className="px-5 py-2.5 rounded-xl bg-rose-500 text-white text-sm font-semibold hover:bg-rose-600 transition-colors">
+                  Delete
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
 }
 
 export default function Reports() {
@@ -88,6 +657,7 @@ export default function Reports() {
   const [loading, setLoading] = useState(false);
   const [exporting, setExporting] = useState(null);
   const [modal, setModal] = useState({ open: false, title: "", subtitle: "", transactions: null, loading: false });
+  const [activeTab, setActiveTab] = useState("analytics");
 
   const query = useMemo(() => {
     const q = { range };
@@ -108,7 +678,7 @@ export default function Reports() {
       .finally(() => setLoading(false));
   }
 
-  useEffect(load, [qs]);
+  useEffect(() => { if (activeTab === "analytics") load(); }, [qs, activeTab]);
 
   function openTxnModal(filterMode, title, subtitle) {
     setModal({ open: true, title, subtitle: `${subtitle} · ${data?.label || ""}`, transactions: null, loading: true });
@@ -116,11 +686,8 @@ export default function Reports() {
       .then((res) => {
         const all = res.data.result || [];
         let filtered = all;
-        if (filterMode === "cash" || filterMode === "digital") {
-          filtered = all.filter((t) => t.mode === filterMode);
-        } else if (filterMode === "credit" || filterMode === "debit") {
-          filtered = all.filter((t) => t.type === filterMode);
-        }
+        if (filterMode === "cash" || filterMode === "digital") filtered = all.filter((t) => t.mode === filterMode);
+        else if (filterMode === "credit" || filterMode === "debit") filtered = all.filter((t) => t.type === filterMode);
         setModal((m) => ({ ...m, transactions: filtered, loading: false }));
       })
       .catch(() => setModal((m) => ({ ...m, transactions: [], loading: false })));
@@ -134,15 +701,8 @@ export default function Reports() {
       const link = document.createElement("a");
       link.href = url;
       link.setAttribute("download", `report-${range}-${range === "monthly" ? month : range === "yearly" ? year : range === "daily" ? date : "custom"}.xlsx`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setExporting(null);
-    }
+      document.body.appendChild(link); link.click(); link.remove(); window.URL.revokeObjectURL(url);
+    } catch (err) { console.error(err); } finally { setExporting(null); }
   }
 
   async function exportPDF() {
@@ -153,16 +713,14 @@ export default function Reports() {
       const link = document.createElement("a");
       link.href = url;
       link.setAttribute("download", `report-${range}-${range === "monthly" ? month : range === "yearly" ? year : range === "daily" ? date : "custom"}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setExporting(null);
-    }
+      document.body.appendChild(link); link.click(); link.remove(); window.URL.revokeObjectURL(url);
+    } catch (err) { console.error(err); } finally { setExporting(null); }
   }
+
+  const tabs = [
+    { id: "analytics", label: "Analytics", icon: FileBarChart },
+    { id: "scheduled", label: "Scheduled Reports", icon: CalendarClock },
+  ];
 
   const ov = data?.overview || {};
 
@@ -171,215 +729,234 @@ export default function Reports() {
       <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
         className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <h1 className="text-3xl font-bold text-stone-900 tracking-tight">Reports</h1>
-        <div className="flex items-center gap-2">
-          <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={load}
-            className="p-2.5 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 transition-colors">
-            <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-          </motion.button>
-          <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={exportPDF} disabled={exporting === "pdf"}
-            className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 transition-colors disabled:opacity-50">
-            <Download size={15} /> {exporting === "pdf" ? "..." : "PDF"}
-          </motion.button>
-          <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={exportExcel} disabled={exporting === "excel"}
-            className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/20 hover:shadow-xl transition-all disabled:opacity-50">
-            <Download size={15} /> {exporting === "excel" ? "..." : "Excel"}
-          </motion.button>
-        </div>
+        {activeTab === "analytics" && (
+          <div className="flex items-center gap-2">
+            <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={load}
+              className="p-2.5 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 transition-colors">
+              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+            </motion.button>
+            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={exportPDF} disabled={exporting === "pdf"}
+              className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 transition-colors disabled:opacity-50">
+              <Download size={15} /> {exporting === "pdf" ? "..." : "PDF"}
+            </motion.button>
+            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={exportExcel} disabled={exporting === "excel"}
+              className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/20 hover:shadow-xl transition-all disabled:opacity-50">
+              <Download size={15} /> {exporting === "excel" ? "..." : "Excel"}
+            </motion.button>
+          </div>
+        )}
       </motion.div>
 
-      {/* Period selector */}
+      {/* Tabs */}
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
-        className="bg-white rounded-2xl border border-stone-200/80 shadow-sm p-5 mb-6">
-        <div className="flex items-center gap-2 mb-4">
-          <Calendar size={16} className="text-saffron-500" />
-          <span className="text-sm font-semibold text-stone-700">Select Period</span>
-          {data?.label && <span className="text-xs text-stone-400">({data.label})</span>}
-        </div>
-        <div className="flex flex-wrap gap-2 mb-4">
-          {[
-            { k: "daily", l: "Daily" },
-            { k: "monthly", l: "Monthly" },
-            { k: "yearly", l: "Yearly" },
-            { k: "custom", l: "Custom Range" },
-          ].map((o) => (
-            <button key={o.k} onClick={() => setRange(o.k)}
-              className={`px-4 py-2 rounded-xl text-sm font-medium border-2 transition-all ${
-                range === o.k
-                  ? "bg-saffron-600 text-white border-saffron-600 shadow-lg shadow-saffron-500/25"
-                  : "border-stone-200 text-stone-600 hover:border-saffron-300"
+        className="flex gap-1 mb-6 bg-stone-100 rounded-xl p-1 w-fit">
+        {tabs.map((tab) => {
+          const TabIcon = tab.icon;
+          return (
+            <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                activeTab === tab.id
+                  ? "bg-white text-stone-800 shadow-sm"
+                  : "text-stone-500 hover:text-stone-700"
               }`}>
-              {o.l}
+              <TabIcon size={15} />
+              {tab.label}
             </button>
-          ))}
-        </div>
-        <div className="flex flex-wrap gap-3 items-end">
-          {range === "daily" && (
-            <label className="flex flex-col gap-1 text-xs text-stone-500">
-              Date
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-                className="border-2 border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-800 focus:border-saffron-400 transition-colors" />
-            </label>
-          )}
-          {range === "monthly" && (
-            <label className="flex flex-col gap-1 text-xs text-stone-500">
-              Month
-              <input type="month" value={month} onChange={(e) => setMonth(e.target.value)}
-                className="border-2 border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-800 focus:border-saffron-400 transition-colors" />
-            </label>
-          )}
-          {range === "yearly" && (
-            <label className="flex flex-col gap-1 text-xs text-stone-500">
-              Year
-              <input type="number" min="2000" max="2100" value={year} onChange={(e) => setYear(e.target.value)}
-                className="border-2 border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-800 focus:border-saffron-400 transition-colors w-28" />
-            </label>
-          )}
-          {range === "custom" && (
+          );
+        })}
+      </motion.div>
+
+      {activeTab === "analytics" ? (
+        <>
+          {/* Period selector */}
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
+            className="bg-white rounded-2xl border border-stone-200/80 shadow-sm p-5 mb-6">
+            <div className="flex items-center gap-2 mb-4">
+              <Calendar size={16} className="text-saffron-500" />
+              <span className="text-sm font-semibold text-stone-700">Select Period</span>
+              {data?.label && <span className="text-xs text-stone-400">({data.label})</span>}
+            </div>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {[{ k: "daily", l: "Daily" }, { k: "monthly", l: "Monthly" }, { k: "yearly", l: "Yearly" }, { k: "custom", l: "Custom Range" }].map((o) => (
+                <button key={o.k} onClick={() => setRange(o.k)}
+                  className={`px-4 py-2 rounded-xl text-sm font-medium border-2 transition-all ${
+                    range === o.k
+                      ? "bg-saffron-600 text-white border-saffron-600 shadow-lg shadow-saffron-500/25"
+                      : "border-stone-200 text-stone-600 hover:border-saffron-300"
+                  }`}>
+                  {o.l}
+                </button>
+              ))}
+            </div>
+            <div className="flex flex-wrap gap-3 items-end">
+              {range === "daily" && (
+                <label className="flex flex-col gap-1 text-xs text-stone-500">
+                  Date
+                  <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
+                    className="border-2 border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-800 focus:border-saffron-400 transition-colors" />
+                </label>
+              )}
+              {range === "monthly" && (
+                <label className="flex flex-col gap-1 text-xs text-stone-500">
+                  Month
+                  <input type="month" value={month} onChange={(e) => setMonth(e.target.value)}
+                    className="border-2 border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-800 focus:border-saffron-400 transition-colors" />
+                </label>
+              )}
+              {range === "yearly" && (
+                <label className="flex flex-col gap-1 text-xs text-stone-500">
+                  Year
+                  <input type="number" min="2000" max="2100" value={year} onChange={(e) => setYear(e.target.value)}
+                    className="border-2 border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-800 focus:border-saffron-400 transition-colors w-28" />
+                </label>
+              )}
+              {range === "custom" && (
+                <>
+                  <label className="flex flex-col gap-1 text-xs text-stone-500">
+                    From
+                    <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
+                      className="border-2 border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-800 focus:border-saffron-400 transition-colors" />
+                  </label>
+                  <label className="flex flex-col gap-1 text-xs text-stone-500">
+                    To
+                    <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
+                      className="border-2 border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-800 focus:border-saffron-400 transition-colors" />
+                  </label>
+                </>
+              )}
+              <motion.button whileTap={{ scale: 0.97 }} onClick={load}
+                className="px-4 py-2.5 rounded-xl bg-stone-900 text-white text-sm font-medium hover:bg-stone-800 transition-colors">
+                Apply
+              </motion.button>
+            </div>
+          </motion.div>
+
+          {loading ? (
+            <div className="space-y-5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+                {[1,2,3,4].map(i => <div key={i} className="skeleton h-28 rounded-2xl" />)}
+              </div>
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                <div className="skeleton h-80 rounded-2xl" />
+                <div className="skeleton h-80 rounded-2xl" />
+              </div>
+            </div>
+          ) : !data || data.txn_count === 0 ? (
+            <div className="bg-white rounded-2xl border border-stone-200/80 p-12 text-center text-stone-400">
+              No transactions found for the selected period.
+            </div>
+          ) : (
             <>
-              <label className="flex flex-col gap-1 text-xs text-stone-500">
-                From
-                <input type="date" value={from} onChange={(e) => setFrom(e.target.value)}
-                  className="border-2 border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-800 focus:border-saffron-400 transition-colors" />
-              </label>
-              <label className="flex flex-col gap-1 text-xs text-stone-500">
-                To
-                <input type="date" value={to} onChange={(e) => setTo(e.target.value)}
-                  className="border-2 border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-800 focus:border-saffron-400 transition-colors" />
-              </label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+                <StatCard icon={TrendingUp} label="Total Income" value={fmtShort(ov.total_credit)} sub={`${data.txn_count} transactions`} color="#059669" delay={0}
+                  onClick={() => openTxnModal("credit", "Income Transactions", "All credit (in) for period")} />
+                <StatCard icon={TrendingDown} label="Total Expenses" value={fmtShort(ov.total_debit)} sub={`Net: ${fmtShort(ov.net_balance)}`} color="#e11d48" delay={1}
+                  onClick={() => openTxnModal("debit", "Expense Transactions", "All debit (out) for period")} />
+                <StatCard icon={Wallet} label="Cash in Hand" value={fmt(ov.cash_in_hand)} color="#10b981" delay={2}
+                  onClick={() => openTxnModal("cash", "Cash Transactions", "All cash-mode for period")} />
+                <StatCard icon={Landmark} label="Digital Balance" value={fmt(ov.digital_balance)} color="#6366f1" delay={3}
+                  onClick={() => openTxnModal("digital", "Digital Transactions", "All digital-mode for period")} />
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
+                {data.trend?.length > 0 && (
+                  <motion.div custom={4} variants={cardVariants} initial="hidden" animate="visible"
+                    className="lg:col-span-2 bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover-lift">
+                    <h2 className="text-sm font-semibold text-stone-700 mb-5 flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-saffron-500" />
+                      {range === "yearly" ? "Monthly Trend" : "Income vs Expenses Trend"}
+                    </h2>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <AreaChart data={data.trend}>
+                        <defs>
+                          <linearGradient id="rCredit" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
+                          </linearGradient>
+                          <linearGradient id="rDebit" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3} />
+                            <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                        <XAxis dataKey="period" tick={{ fontSize: 12, fill: "#94a3b8" }} />
+                        <YAxis tick={{ fontSize: 12, fill: "#94a3b8" }} tickFormatter={(v) => fmtShort(v)} />
+                        <Tooltip content={<CustomTooltip />} />
+                        <Legend />
+                        <Area type="monotone" dataKey="credit" name="Income" stroke="#10b981" fill="url(#rCredit)" strokeWidth={2.5} />
+                        <Area type="monotone" dataKey="debit" name="Expenses" stroke="#f43f5e" fill="url(#rDebit)" strokeWidth={2.5} />
+                      </AreaChart>
+                    </ResponsiveContainer>
+                  </motion.div>
+                )}
+
+                {data.category_breakdown?.length > 0 && (
+                  <motion.div custom={5} variants={cardVariants} initial="hidden" animate="visible"
+                    className="bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover-lift">
+                    <h2 className="text-sm font-semibold text-stone-700 mb-5">Expense Categories</h2>
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie data={data.category_breakdown} cx="50%" cy="50%" innerRadius={55} outerRadius={95}
+                          paddingAngle={3} dataKey="value" nameKey="name">
+                          {data.category_breakdown.map((_, i) => (
+                            <Cell key={i} fill={COLORS[i % COLORS.length]} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value) => fmt(value)} />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {data.category_breakdown.slice(0, 5).map((cat, i) => (
+                        <span key={i} className="inline-flex items-center gap-1.5 text-xs text-stone-600">
+                          <span className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                          {cat.name}
+                        </span>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </div>
+
+              {data.top_parties?.length > 0 && (
+                <motion.div custom={6} variants={cardVariants} initial="hidden" animate="visible"
+                  className="bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover-lift mb-8">
+                  <h2 className="text-sm font-semibold text-stone-700 mb-5">Top Parties by Volume</h2>
+                  <div className="space-y-3">
+                    {data.top_parties.slice(0, 8).map((party, i) => {
+                      const maxAmt = data.top_parties[0]?.amount || 1;
+                      const pct = (party.amount / maxAmt) * 100;
+                      return (
+                        <div key={i} className="space-y-1">
+                          <div className="flex justify-between text-sm">
+                            <span className="font-medium text-stone-700 truncate">{party.name}</span>
+                            <span className="text-stone-500 text-xs">{fmt(party.amount)}</span>
+                          </div>
+                          <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
+                            <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }}
+                              transition={{ delay: 0.3 + i * 0.1, duration: 0.6, ease: "easeOut" }}
+                              className="h-full rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </motion.div>
+              )}
             </>
           )}
-          <motion.button whileTap={{ scale: 0.97 }} onClick={load}
-            className="px-4 py-2.5 rounded-xl bg-stone-900 text-white text-sm font-medium hover:bg-stone-800 transition-colors">
-            Apply
-          </motion.button>
-        </div>
-      </motion.div>
 
-      {loading ? (
-        <div className="space-y-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {[1,2,3,4].map(i => <div key={i} className="skeleton h-28 rounded-2xl" />)}
-          </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-            <div className="skeleton h-80 rounded-2xl" />
-            <div className="skeleton h-80 rounded-2xl" />
-          </div>
-        </div>
-      ) : !data || data.txn_count === 0 ? (
-        <div className="bg-white rounded-2xl border border-stone-200/80 p-12 text-center text-stone-400">
-          No transactions found for the selected period.
-        </div>
-      ) : (
-        <>
-          {/* Stat cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-            <StatCard icon={TrendingUp} label="Total Income" value={fmtShort(ov.total_credit)} sub={`${data.txn_count} transactions`} color="#059669" delay={0}
-              onClick={() => openTxnModal("credit", "Income Transactions", "All credit (in) for period")} />
-            <StatCard icon={TrendingDown} label="Total Expenses" value={fmtShort(ov.total_debit)} sub={`Net: ${fmtShort(ov.net_balance)}`} color="#e11d48" delay={1}
-              onClick={() => openTxnModal("debit", "Expense Transactions", "All debit (out) for period")} />
-            <StatCard icon={Wallet} label="Cash in Hand" value={fmt(ov.cash_in_hand)} color="#10b981" delay={2}
-              onClick={() => openTxnModal("cash", "Cash Transactions", "All cash-mode for period")} />
-            <StatCard icon={Landmark} label="Digital Balance" value={fmt(ov.digital_balance)} color="#6366f1" delay={3}
-              onClick={() => openTxnModal("digital", "Digital Transactions", "All digital-mode for period")} />
-          </div>
-
-          {/* Trend + Category */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
-            {data.trend?.length > 0 && (
-              <motion.div custom={4} variants={cardVariants} initial="hidden" animate="visible"
-                className="lg:col-span-2 bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover-lift">
-                <h2 className="text-sm font-semibold text-stone-700 mb-5 flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-saffron-500" />
-                  {range === "yearly" ? "Monthly Trend" : "Income vs Expenses Trend"}
-                </h2>
-                <ResponsiveContainer width="100%" height={300}>
-                  <AreaChart data={data.trend}>
-                    <defs>
-                      <linearGradient id="rCredit" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#10b981" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#10b981" stopOpacity={0} />
-                      </linearGradient>
-                      <linearGradient id="rDebit" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#f43f5e" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#f43f5e" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                    <XAxis dataKey="period" tick={{ fontSize: 12, fill: "#94a3b8" }} />
-                    <YAxis tick={{ fontSize: 12, fill: "#94a3b8" }} tickFormatter={(v) => fmtShort(v)} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Legend />
-                    <Area type="monotone" dataKey="credit" name="Income" stroke="#10b981" fill="url(#rCredit)" strokeWidth={2.5} />
-                    <Area type="monotone" dataKey="debit" name="Expenses" stroke="#f43f5e" fill="url(#rDebit)" strokeWidth={2.5} />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </motion.div>
-            )}
-
-            {data.category_breakdown?.length > 0 && (
-              <motion.div custom={5} variants={cardVariants} initial="hidden" animate="visible"
-                className="bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover-lift">
-                <h2 className="text-sm font-semibold text-stone-700 mb-5">Expense Categories</h2>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie data={data.category_breakdown} cx="50%" cy="50%" innerRadius={55} outerRadius={95}
-                      paddingAngle={3} dataKey="value" nameKey="name">
-                      {data.category_breakdown.map((_, i) => (
-                        <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip formatter={(value) => fmt(value)} />
-                  </PieChart>
-                </ResponsiveContainer>
-                <div className="flex flex-wrap gap-2 mt-2">
-                  {data.category_breakdown.slice(0, 5).map((cat, i) => (
-                    <span key={i} className="inline-flex items-center gap-1.5 text-xs text-stone-600">
-                      <span className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                      {cat.name}
-                    </span>
-                  ))}
-                </div>
-              </motion.div>
-            )}
-          </div>
-
-          {/* Top parties */}
-          {data.top_parties?.length > 0 && (
-            <motion.div custom={6} variants={cardVariants} initial="hidden" animate="visible"
-              className="bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover-lift mb-8">
-              <h2 className="text-sm font-semibold text-stone-700 mb-5">Top Parties by Volume</h2>
-              <div className="space-y-3">
-                {data.top_parties.slice(0, 8).map((party, i) => {
-                  const maxAmt = data.top_parties[0]?.amount || 1;
-                  const pct = (party.amount / maxAmt) * 100;
-                  return (
-                    <div key={i} className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span className="font-medium text-stone-700 truncate">{party.name}</span>
-                        <span className="text-stone-500 text-xs">{fmt(party.amount)}</span>
-                      </div>
-                      <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
-                        <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }}
-                          transition={{ delay: 0.3 + i * 0.1, duration: 0.6, ease: "easeOut" }}
-                          className="h-full rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </motion.div>
-          )}
+          <TransactionListModal
+            open={modal.open}
+            onClose={() => setModal((m) => ({ ...m, open: false }))}
+            title={modal.title}
+            subtitle={modal.subtitle}
+            transactions={modal.transactions}
+            loading={modal.loading}
+          />
         </>
+      ) : (
+        <ScheduledReportsTab />
       )}
-
-      <TransactionListModal
-        open={modal.open}
-        onClose={() => setModal((m) => ({ ...m, open: false }))}
-        title={modal.title}
-        subtitle={modal.subtitle}
-        transactions={modal.transactions}
-        loading={modal.loading}
-      />
     </AppLayout>
   );
 }

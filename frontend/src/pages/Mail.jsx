@@ -5,7 +5,7 @@ import AppLayout from "../components/AppLayout";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 import {
-  Send, Paperclip, X, Users, Loader2, Mail as MailIcon, Search, ShieldAlert, File as FileIcon, ChevronDown, Inbox,
+  Send, Paperclip, X, Users, Loader2, Mail as MailIcon, Search, ShieldAlert, File as FileIcon, ChevronDown, Inbox, ArrowLeft,
 } from "lucide-react";
 
 function formatDate(d) {
@@ -148,6 +148,10 @@ export default function Mail() {
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
           className="bg-white rounded-2xl border border-stone-200/80 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-stone-100 flex items-center gap-2">
+            <button onClick={() => setShowSent(false)}
+              className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500 transition-colors">
+              <ArrowLeft size={16} />
+            </button>
             <Inbox size={16} className="text-stone-500" />
             <h2 className="text-sm font-semibold text-stone-700">Sent Mail</h2>
           </div>

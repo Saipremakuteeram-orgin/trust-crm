@@ -15,10 +15,12 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
-    if (error) return setError(error.message);
-    navigate("/dashboard");
+    if (signInError) return setError(signInError.message);
+    if (data?.session) {
+      navigate("/dashboard", { replace: true });
+    }
   }
 
   return (

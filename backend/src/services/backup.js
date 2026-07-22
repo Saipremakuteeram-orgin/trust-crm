@@ -126,6 +126,11 @@ async function runDailyBackup(triggerType = 'scheduled') {
     const tableCount = Object.values(tables).filter((rows) => rows.length > 0).length;
     const totalRows = Object.values(tables).reduce((sum, rows) => sum + rows.length, 0);
 
+    const snapshot = {};
+    for (const t of TABLES) {
+      snapshot[t.name] = (tables[t.name] || []).length;
+    }
+
     const workbook = buildBackupWorkbook(tables);
     const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
 
@@ -155,6 +160,7 @@ async function runDailyBackup(triggerType = 'scheduled') {
       file_name: fileName,
       telegram_sent: !!sent,
       duration_ms: durationMs,
+      snapshot,
     });
 
     console.log(`✅ Backup done: ${fileName} (${totalRows} rows, ${buffer.length} bytes, ${durationMs}ms)`);

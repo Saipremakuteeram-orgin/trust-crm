@@ -12,3 +12,6 @@ ALTER TABLE scheduled_reports ALTER COLUMN filter_mode TYPE TEXT[] USING (
   CASE WHEN filter_mode IS NULL OR filter_mode = '' THEN NULL
        ELSE ARRAY[filter_mode] END
 );
+
+-- Add group-based recipient support
+ALTER TABLE scheduled_reports ADD COLUMN IF NOT EXISTS recipient_group_ids UUID[];

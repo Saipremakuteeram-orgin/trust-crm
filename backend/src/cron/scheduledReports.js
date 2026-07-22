@@ -116,12 +116,29 @@ async function fetchFilteredTransactions(schedule) {
 }
 
 async function resolveRecipients(schedule) {
+  const contactMap = new Map();
+
   if (schedule.recipient_mode === 'selected' && schedule.recipient_contact_ids?.length > 0) {
     const { data } = await supabaseAdmin
       .from('contacts').select('id, name, email, telegram_chat_id, enabled')
       .in('id', schedule.recipient_contact_ids).eq('enabled', true);
-    return data || [];
+    for (const c of (data || [])) contactMap.set(c.id, c);
   }
+
+  if (schedule.recipient_mode === 'groups' && schedule.recipient_group_ids?.length > 0) {
+    const { data: members } = await supabaseAdmin
+      .from('contact_group_members').select('contact_id').in('group_id', schedule.recipient_group_ids);
+    const memberIds = (members || []).map((m) => m.contact_id);
+    if (memberIds.length > 0) {
+      const { data: groupContacts } = await supabaseAdmin
+        .from('contacts').select('id, name, email, telegram_chat_id, enabled')
+        .in('id', memberIds).eq('enabled', true);
+      for (const c of (groupContacts || [])) contactMap.set(c.id, c);
+    }
+  }
+
+  if (contactMap.size > 0) return Array.from(contactMap.values());
+
   const { data } = await supabaseAdmin
     .from('contacts').select('id, name, email, telegram_chat_id, enabled')
     .eq('enabled', true).eq('subscribe_monthly_report', true);

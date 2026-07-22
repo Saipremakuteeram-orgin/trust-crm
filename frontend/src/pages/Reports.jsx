@@ -98,7 +98,7 @@ const EMPTY_FORM = {
   filter_from: todayISO(), filter_to: todayISO(),
   schedule_type: "weekly", schedule_day: 1, schedule_hour: 8, schedule_minute: 0,
   format: "excel", delivery_email: true, delivery_telegram: false,
-  recipient_mode: "subscribed", recipient_contact_ids: [],
+  recipient_mode: "subscribed", recipient_contact_ids: [], recipient_group_ids: [],
 };
 
 function ScheduleForm({ form, setForm, categories, contacts, onSave, onClose, saving }) {
@@ -302,25 +302,70 @@ function ScheduleForm({ form, setForm, categories, contacts, onSave, onClose, sa
             className="w-full border-2 border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-saffron-400 transition-colors">
             <option value="subscribed">All Subscribed Contacts</option>
             <option value="selected">Select Specific Contacts</option>
+            <option value="groups">By Contact Group</option>
           </select>
         </div>
         {form.recipient_mode === "selected" && (
-          <div className="max-h-40 overflow-y-auto space-y-1 border-2 border-stone-200 rounded-xl p-2">
+          <div className="max-h-48 overflow-y-auto border-2 border-stone-200 rounded-xl">
             {filteredContacts.length === 0 ? (
-              <p className="text-xs text-stone-400 p-2">No enabled contacts</p>
-            ) : filteredContacts.map((c) => (
-              <label key={c.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-white cursor-pointer">
-                <input type="checkbox"
-                  checked={(form.recipient_contact_ids || []).includes(c.id)}
-                  onChange={(e) => {
-                    const ids = form.recipient_contact_ids || [];
-                    update("recipient_contact_ids", e.target.checked ? [...ids, c.id] : ids.filter((x) => x !== c.id));
-                  }}
-                  className="w-3.5 h-3.5 rounded border-stone-300 text-saffron-600 focus:ring-saffron-500" />
-                <span className="text-sm text-stone-700">{c.name}</span>
-                <span className="text-xs text-stone-400">{c.email || "—"}</span>
-              </label>
-            ))}
+              <p className="text-xs text-stone-400 p-3">No enabled contacts</p>
+            ) : (
+              <table className="w-full text-xs">
+                <thead className="bg-stone-50 sticky top-0">
+                  <tr>
+                    <th className="px-2 py-1.5 text-left font-semibold text-stone-500 w-8"></th>
+                    <th className="px-2 py-1.5 text-left font-semibold text-stone-500">Name</th>
+                    <th className="px-2 py-1.5 text-left font-semibold text-stone-500">Email</th>
+                    <th className="px-2 py-1.5 text-left font-semibold text-stone-500">Phone</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredContacts.map((c) => (
+                    <tr key={c.id} className="hover:bg-white cursor-pointer border-t border-stone-100"
+                      onClick={() => {
+                        const ids = form.recipient_contact_ids || [];
+                        update("recipient_contact_ids", ids.includes(c.id) ? ids.filter((x) => x !== c.id) : [...ids, c.id]);
+                      }}>
+                      <td className="px-2 py-1.5">
+                        <input type="checkbox" readOnly
+                          checked={(form.recipient_contact_ids || []).includes(c.id)}
+                          className="w-3.5 h-3.5 rounded border-stone-300 text-saffron-600 focus:ring-saffron-500" />
+                      </td>
+                      <td className="px-2 py-1.5 font-medium text-stone-700">{c.name}</td>
+                      <td className="px-2 py-1.5 text-stone-500">{c.email || "—"}</td>
+                      <td className="px-2 py-1.5 text-stone-500">{c.phone || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+        )}
+        {form.recipient_mode === "groups" && (
+          <div>
+            <label className="block text-xs text-stone-500 mb-1">Select Groups</label>
+            {groups.length === 0 ? (
+              <p className="text-xs text-stone-400">No groups created yet</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {groups.map((g) => (
+                  <button key={g.id} type="button"
+                    onClick={() => {
+                      const ids = form.recipient_group_ids || [];
+                      update("recipient_group_ids", ids.includes(g.id) ? ids.filter((x) => x !== g.id) : [...ids, g.id]);
+                    }}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                      (form.recipient_group_ids || []).includes(g.id)
+                        ? "bg-indigo-100 text-indigo-700 border-indigo-300"
+                        : "bg-white text-stone-500 border-stone-200 hover:border-indigo-300"
+                    }`}>
+                    <Users size={12} />
+                    {g.name}
+                    <span className="text-stone-400">({g.member_count || 0})</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -350,6 +395,7 @@ function ScheduledReportsTab() {
   const [saving, setSaving] = useState(false);
   const [categories, setCategories] = useState([]);
   const [contacts, setContacts] = useState([]);
+  const [groups, setGroups] = useState([]);
   const [preview, setPreview] = useState(null);
   const [previewId, setPreviewId] = useState(null);
   const [loadingPreview, setLoadingPreview] = useState(false);
@@ -362,10 +408,12 @@ function ScheduledReportsTab() {
       api.get("/scheduled-reports"),
       api.get("/categories"),
       api.get("/contacts"),
-    ]).then(([sr, cat, con]) => {
+      api.get("/groups"),
+    ]).then(([sr, cat, con, grp]) => {
       setReports(sr.data.result || []);
       setCategories(cat.data.result || []);
       setContacts(con.data.result || []);
+      setGroups(grp.data.result || []);
     }).catch(() => {}).finally(() => setLoading(false));
   }, []);
 
@@ -395,6 +443,7 @@ function ScheduledReportsTab() {
       delivery_telegram: r.delivery_telegram === true,
       recipient_mode: r.recipient_mode || "subscribed",
       recipient_contact_ids: r.recipient_contact_ids || [],
+      recipient_group_ids: r.recipient_group_ids || [],
     });
     setShowForm(true);
   }
@@ -527,7 +576,7 @@ function ScheduledReportsTab() {
                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-stone-100 text-stone-600">
                     {r.delivery_email && <Mail size={10} />}
                     {r.delivery_telegram && <MessageSquare size={10} />}
-                    {r.recipient_mode === "subscribed" ? "Subscribed" : `${r.recipient_contact_ids?.length || 0} contacts`}
+                    {r.recipient_mode === "subscribed" ? "Subscribed" : r.recipient_mode === "groups" ? `${r.recipient_group_ids?.length || 0} groups` : `${r.recipient_contact_ids?.length || 0} contacts`}
                   </span>
                 </div>
 

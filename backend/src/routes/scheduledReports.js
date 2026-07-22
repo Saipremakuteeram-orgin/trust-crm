@@ -29,7 +29,7 @@ router.post('/', async (req, res) => {
     const {
       name, filter_type, filter_mode, filter_categories, filter_from, filter_to,
       schedule_type, schedule_day, schedule_hour, schedule_minute,
-      format, delivery_email, delivery_telegram, recipient_mode, recipient_contact_ids,
+      format, delivery_email, delivery_telegram, recipient_mode, recipient_contact_ids, recipient_group_ids,
     } = req.body;
 
     if (!name || !schedule_type || !format) {
@@ -53,6 +53,7 @@ router.post('/', async (req, res) => {
       delivery_telegram: delivery_telegram === true,
       recipient_mode: recipient_mode || 'subscribed',
       recipient_contact_ids: recipient_contact_ids || null,
+      recipient_group_ids: recipient_group_ids || null,
       enabled: true,
     };
 
@@ -77,7 +78,7 @@ router.put('/:id', async (req, res) => {
     const updates = {};
     const fields = ['name', 'filter_type', 'filter_mode', 'filter_categories', 'filter_from', 'filter_to',
       'schedule_type', 'schedule_day', 'schedule_hour', 'schedule_minute',
-      'format', 'delivery_email', 'delivery_telegram', 'recipient_mode', 'recipient_contact_ids', 'enabled'];
+      'format', 'delivery_email', 'delivery_telegram', 'recipient_mode', 'recipient_contact_ids', 'recipient_group_ids', 'enabled'];
     for (const f of fields) {
       if (req.body[f] !== undefined) updates[f] = req.body[f];
     }

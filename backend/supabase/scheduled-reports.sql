@@ -22,8 +22,9 @@ CREATE TABLE IF NOT EXISTS scheduled_reports (
   format TEXT NOT NULL DEFAULT 'excel',  -- 'excel','pdf','summary'
   delivery_email BOOLEAN DEFAULT true,
   delivery_telegram BOOLEAN DEFAULT false,
-  recipient_mode TEXT NOT NULL DEFAULT 'subscribed',  -- 'subscribed' or 'selected'
+  recipient_mode TEXT NOT NULL DEFAULT 'subscribed',  -- 'subscribed', 'selected', 'groups'
   recipient_contact_ids UUID[],
+  recipient_group_ids UUID[],
 
   -- Status
   enabled BOOLEAN DEFAULT true,

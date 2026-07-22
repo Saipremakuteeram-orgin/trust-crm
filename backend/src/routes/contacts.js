@@ -9,6 +9,7 @@ router.use(requireAuth);
 router.get('/', async (req, res) => {
   const { data, error } = await supabaseAdmin.from('contacts').select('*').order('name');
   if (error) return res.status(400).json({ success: false, message: error.message });
+  res.set('Cache-Control', 'private, max-age=30');
   res.json({ success: true, result: data });
 });
 

@@ -116,9 +116,28 @@ export default function BackupLogs() {
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  const nowHour = new Date().getHours();
   const todayLogs = logs.filter((l) => l.backup_date === today);
   const todaySuccess = todayLogs.some((l) => l.status === "success");
+  const morningDone = todayLogs.some((l) => l.status === "success" && new Date(l.created_at).getHours() < 12);
+  const eveningDone = todayLogs.some((l) => l.status === "success" && new Date(l.created_at).getHours() >= 12);
   const latestSuccess = logs.find((l) => l.status === "success");
+
+  let todayStatusText = "Pending";
+  let todayStatusColor = "text-amber-700";
+  if (morningDone && eveningDone) {
+    todayStatusText = "Both Backups Done";
+    todayStatusColor = "text-emerald-700";
+  } else if (morningDone) {
+    todayStatusText = nowHour >= 12 ? "Evening Pending" : "Morning Done";
+    todayStatusColor = nowHour >= 12 ? "text-amber-700" : "text-emerald-700";
+  } else if (eveningDone) {
+    todayStatusText = "Evening Done";
+    todayStatusColor = "text-emerald-700";
+  } else if (todayLogs.some((l) => l.status === "failed")) {
+    todayStatusText = "Failed";
+    todayStatusColor = "text-rose-700";
+  }
 
   return (
     <AppLayout>
@@ -126,7 +145,7 @@ export default function BackupLogs() {
         className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-stone-900 tracking-tight">Backup & Restore</h1>
-          <p className="text-sm text-stone-500 mt-1">Daily backups, health monitoring, and transaction restore</p>
+          <p className="text-sm text-stone-500 mt-1">Twice-daily backups, health monitoring, and transaction restore</p>
         </div>
         <div className="flex items-center gap-2">
           <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handleRefresh}
@@ -148,8 +167,11 @@ export default function BackupLogs() {
             </div>
             <div>
               <p className="text-xs text-stone-500 font-medium">Today's Status</p>
-              <p className={`text-sm font-bold ${todaySuccess ? "text-emerald-700" : "text-amber-700"}`}>
-                {todaySuccess ? "Backup Complete" : "Pending / Failed"}
+              <p className={`text-sm font-bold ${todayStatusColor}`}>
+                {todayStatusText}
+              </p>
+              <p className="text-[10px] text-stone-400 mt-0.5">
+                Morning 06:00 · Evening 18:00 IST
               </p>
             </div>
           </div>
@@ -199,10 +221,10 @@ export default function BackupLogs() {
              </div>
              <div>
                <p className="text-xs text-stone-500 font-medium">Auto Backup Schedule</p>
-               <p className="text-sm font-bold text-stone-800">Daily 06:00 IST</p>
-               <p className="text-[10px] text-stone-400 mt-0.5">
-                 Recovery retries: 08:00, 12:00, 16:00, 20:00 IST
-               </p>
+           <p className="text-sm font-bold text-stone-800">Daily 06:00 & 18:00 IST</p>
+                <p className="text-[10px] text-stone-400 mt-0.5">
+                  Morning & Evening · Recovery retries: 08:00, 12:00, 16:00, 20:00 IST
+                </p>
              </div>
            </div>
          </motion.div>

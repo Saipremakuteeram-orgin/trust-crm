@@ -3,11 +3,14 @@ require('dotenv').config();
 
 const express = require('express');
 const cors = require('cors');
+const compression = require('compression');
 const { requireAuth, requireRole } = require('./middlewares/auth');
 
 const app = express();
+
+app.use(compression({ level: 6, threshold: 1024 }));
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '1mb' }));
 
 app.use('/api/transactions', require('./routes/transactions'));
 app.use('/api/contacts', require('./routes/contacts'));

@@ -36,6 +36,7 @@ router.get('/', async (req, res) => {
       member_count: (memberMap[g.id] || []).length,
     }));
 
+    res.set('Cache-Control', 'private, max-age=30');
     res.json({ success: true, result });
   } catch (err) {
     console.error('Groups list error:', err.message);

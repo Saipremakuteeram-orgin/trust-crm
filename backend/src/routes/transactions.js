@@ -14,6 +14,7 @@ router.get('/', async (req, res) => {
     .select('*, categories(name)')
     .order('txn_date', { ascending: false });
   if (error) return res.status(400).json({ success: false, message: error.message });
+  res.set('Cache-Control', 'private, max-age=10');
   res.json({ success: true, result: data });
 });
 
@@ -68,46 +69,48 @@ router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
     ipAddress: req.ip,
   });
 
-  // Fire notifications
-  let notificationStatus = 'sent';
-  const notifyIds = body.notify_contact_ids || [];
-  const notifyGroupIds = body.notify_group_ids || [];
-  const allNotifyIds = [...new Set([...notifyIds])];
+  // Respond immediately, send notifications in background
+  res.json({ success: true, result: { ...txn, notification_status: 'sending' } });
 
-  // Resolve group IDs to member contact IDs
-  if (notifyGroupIds.length > 0) {
-    try {
-      const { data: groupMembers } = await supabaseAdmin
-        .from('contact_group_members')
-        .select('contact_id')
-        .in('group_id', notifyGroupIds);
-      (groupMembers || []).forEach((m) => {
-        if (!allNotifyIds.includes(m.contact_id)) allNotifyIds.push(m.contact_id);
-      });
-    } catch (err) {
-      console.error('Group resolution error:', err.message);
+  // Fire-and-forget: resolve contacts and send notifications
+  setImmediate(async () => {
+    let notificationStatus = 'sent';
+    const notifyIds = body.notify_contact_ids || [];
+    const notifyGroupIds = body.notify_group_ids || [];
+    const allNotifyIds = [...new Set([...notifyIds])];
+
+    if (notifyGroupIds.length > 0) {
+      try {
+        const { data: groupMembers } = await supabaseAdmin
+          .from('contact_group_members')
+          .select('contact_id')
+          .in('group_id', notifyGroupIds);
+        (groupMembers || []).forEach((m) => {
+          if (!allNotifyIds.includes(m.contact_id)) allNotifyIds.push(m.contact_id);
+        });
+      } catch (err) {
+        console.error('Group resolution error:', err.message);
+      }
     }
-  }
 
-  if (allNotifyIds.length > 0) {
-    try {
-      const { data: contacts } = await supabaseAdmin
-        .from('contacts')
-        .select('*')
-        .in('id', allNotifyIds)
-        .eq('enabled', true);
-      const results = await notifyContactsOfTransaction(txn, contacts || []);
-      const anyFailed = results.some((r) => r.emailRes.ok === false || r.tgRes.ok === false);
-      notificationStatus = anyFailed ? 'partial' : 'sent';
-    } catch (err) {
-      console.error('Notification error:', err.message);
-      notificationStatus = 'failed';
+    if (allNotifyIds.length > 0) {
+      try {
+        const { data: contacts } = await supabaseAdmin
+          .from('contacts')
+          .select('*')
+          .in('id', allNotifyIds)
+          .eq('enabled', true);
+        const results = await notifyContactsOfTransaction(txn, contacts || []);
+        const anyFailed = results.some((r) => r.emailRes.ok === false || r.tgRes.ok === false);
+        notificationStatus = anyFailed ? 'partial' : 'sent';
+      } catch (err) {
+        console.error('Notification error:', err.message);
+        notificationStatus = 'failed';
+      }
     }
-  }
 
-  await supabaseAdmin.from('transactions').update({ notification_status: notificationStatus }).eq('id', txn.id);
-
-  res.json({ success: true, result: { ...txn, notification_status: notificationStatus } });
+    await supabaseAdmin.from('transactions').update({ notification_status: notificationStatus }).eq('id', txn.id);
+  });
 });
 
 // UPDATE

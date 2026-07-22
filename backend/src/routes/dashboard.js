@@ -11,6 +11,7 @@ router.get('/summary', async (req, res) => {
     supabaseAdmin.from('v_cash_summary').select('*').single(),
     supabaseAdmin.from('v_digital_summary').select('*').single(),
   ]);
+  res.set('Cache-Control', 'private, max-age=10');
   res.json({ success: true, result: { cash, digital } });
 });
 

@@ -14,6 +14,8 @@ const TABLES = [
   { name: 'activity_logs', label: 'Activity Logs' },
 ];
 
+const DATA_TABLES = ['transactions', 'contacts', 'categories', 'contact_groups'];
+
 async function createLog(log) {
   const { data, error } = await supabaseAdmin.from('backup_logs').insert(log).select().single();
   if (error) console.error('Failed to write backup log:', error.message);
@@ -128,7 +130,12 @@ async function runDailyBackup(triggerType = 'scheduled') {
 
     const snapshot = {};
     for (const t of TABLES) {
-      snapshot[t.name] = (tables[t.name] || []).length;
+      const rows = tables[t.name] || [];
+      if (DATA_TABLES.includes(t.name)) {
+        snapshot[t.name] = rows;
+      } else {
+        snapshot[t.name] = rows.length;
+      }
     }
 
     const workbook = buildBackupWorkbook(tables);

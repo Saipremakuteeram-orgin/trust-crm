@@ -4,7 +4,7 @@ import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
-import { RefreshCw, CheckCircle, XCircle, Clock, Upload, ShieldAlert, Loader2, Send, GitCompareArrows, Plus, Pencil, Trash2, ArrowRight, FileText, Sun, Moon } from "lucide-react";
+import { RefreshCw, CheckCircle, XCircle, Clock, Upload, ShieldAlert, Loader2, Send, GitCompareArrows, Plus, Pencil, Trash2, ArrowRight, FileText, Sun, Moon, ArrowDownCircle, Users, UsersRound, Tag, ChevronDown, ChevronRight } from "lucide-react";
 
 function formatDate(d) {
   if (!d) return "—";
@@ -53,9 +53,104 @@ const actionConfig = {
   delete: { icon: Trash2, color: "text-rose-600", bg: "bg-rose-50", ring: "ring-rose-200", label: "Deleted" },
 };
 
+function fmt(n) {
+  if (n == null) return "—";
+  return new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(n);
+}
+
+const entityIcons = {
+  transactions: ArrowDownCircle,
+  contacts: Users,
+  categories: Tag,
+  contact_groups: UsersRound,
+};
+
+const entityLabels = {
+  transactions: "Transactions",
+  contacts: "Contacts",
+  categories: "Categories",
+  contact_groups: "Groups",
+};
+
+const txnFields = [
+  { key: "type", label: "Type" },
+  { key: "mode", label: "Mode" },
+  { key: "amount", label: "Amount", fmt: (v) => fmt(v) },
+  { key: "party", label: "Party" },
+  { key: "txn_date", label: "Date" },
+  { key: "description", label: "Notes" },
+  { key: "digital_method", label: "Method" },
+  { key: "reference_no", label: "Ref #" },
+];
+
+const contactFields = [
+  { key: "name", label: "Name" },
+  { key: "email", label: "Email" },
+  { key: "phone", label: "Phone" },
+  { key: "telegram_chat_id", label: "Telegram" },
+  { key: "enabled", label: "Enabled" },
+];
+
+const categoryFields = [{ key: "name", label: "Name" }];
+
+const groupFields = [
+  { key: "name", label: "Name" },
+  { key: "description", label: "Description" },
+];
+
+const fieldsByEntity = {
+  transactions: txnFields,
+  contacts: contactFields,
+  categories: categoryFields,
+  contact_groups: groupFields,
+};
+
+function RowDataInline({ row, fields }) {
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+      {fields.map((f) => {
+        let val = row[f.key];
+        if (val == null || val === "") return null;
+        if (f.key === "amount") val = fmt(val);
+        else if (typeof val === "boolean") val = val ? "Yes" : "No";
+        else if (typeof val === "string" && val.length > 60) val = val.slice(0, 60) + "...";
+        return (
+          <span key={f.key} className="text-stone-600">
+            <span className="text-stone-400 font-medium">{f.label}:</span>{" "}
+            <span className="font-medium text-stone-700">{val}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function FieldDiff({ fields, before, after }) {
+  return (
+    <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+      {fields.map((f) => {
+        const bv = before[f.key];
+        const av = after[f.key];
+        const bvStr = bv == null ? "—" : (f.key === "amount" ? fmt(bv) : String(bv));
+        const avStr = av == null ? "—" : (f.key === "amount" ? fmt(av) : String(av));
+        if (bvStr === avStr) return null;
+        return (
+          <span key={f.key} className="inline-flex items-center gap-1">
+            <span className="text-stone-400 font-medium">{f.label}:</span>
+            <span className="text-rose-500 line-through">{bvStr}</span>
+            <ArrowRight size={10} className="text-stone-400" />
+            <span className="text-emerald-600 font-medium">{avStr}</span>
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function VersionLogTab() {
   const [versionLog, setVersionLog] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [expandedSections, setExpandedSections] = useState({});
 
   function loadVersionLog() {
     setLoading(true);
@@ -66,6 +161,10 @@ function VersionLogTab() {
   }
 
   useEffect(loadVersionLog, []);
+
+  function toggleSection(key) {
+    setExpandedSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
 
   if (loading) {
     return (
@@ -85,7 +184,7 @@ function VersionLogTab() {
     );
   }
 
-  const { summary, snapshots, changes } = versionLog;
+  const { summary, snapshots, diffs } = versionLog;
   const morningSnapshot = snapshots[0];
   const eveningSnapshot = snapshots[snapshots.length - 1];
 
@@ -133,101 +232,152 @@ function VersionLogTab() {
           <div className="flex items-center gap-3">
             <div className="p-2.5 rounded-xl bg-emerald-50"><Plus size={18} className="text-emerald-500" /></div>
             <div>
-              <p className="text-[10px] text-stone-500 font-medium uppercase tracking-wider">Adds / Edits / Deletes</p>
+              <p className="text-[10px] text-stone-500 font-medium uppercase tracking-wider">New / Modified / Deleted</p>
               <p className="text-sm font-bold text-stone-800">
-                <span className="text-emerald-600">+{summary.creates}</span>
+                <span className="text-emerald-600">+{summary.new_count}</span>
                 <span className="text-stone-400 mx-1">/</span>
-                <span className="text-amber-600">{summary.updates}</span>
+                <span className="text-amber-600">~{summary.modified_count}</span>
                 <span className="text-stone-400 mx-1">/</span>
-                <span className="text-rose-600">-{summary.deletes}</span>
+                <span className="text-rose-600">-{summary.deleted_count}</span>
               </p>
             </div>
           </div>
         </motion.div>
       </div>
 
-      {/* Entity Changes */}
-      {changes.length === 0 ? (
+      {/* Entity Diffs */}
+      {diffs.length === 0 ? (
         <div className="text-center py-10 text-stone-400">
           <CheckCircle size={32} className="mx-auto mb-2 opacity-40" />
           <p className="font-medium">No changes between backups</p>
           <p className="text-sm mt-1">Data remained the same from morning to evening</p>
         </div>
       ) : (
-        <div className="space-y-3">
-          {changes.map((ch, i) => {
-            const actionCounts = {
-              create: ch.creates.length,
-              update: ch.updates.length,
-              delete: ch.deletes.length,
-            };
+        <div className="space-y-4">
+          {diffs.map((diff, i) => {
+            const EntityIcon = entityIcons[diff.entity] || FileText;
+            const fields = fieldsByEntity[diff.entity] || [];
+            const hasNew = diff.new_rows.length > 0;
+            const hasModified = diff.modified_rows.length > 0;
+            const hasDeleted = diff.deleted_rows.length > 0;
+            const delta = diff.evening_count - diff.morning_count;
+
             return (
-              <motion.div key={ch.entity} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
+              <motion.div key={diff.entity} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 + i * 0.05 }}
                 className="bg-white rounded-2xl border border-stone-200/80 shadow-sm overflow-hidden">
-                <div className="px-5 py-3.5 border-b border-stone-100 flex items-center justify-between">
+
+                {/* Entity Header */}
+                <div className="px-5 py-4 border-b border-stone-100 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <h3 className="text-sm font-bold text-stone-800">{ch.label}</h3>
-                    {ch.counts.delta !== null && (
-                      <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                        ch.counts.delta > 0 ? "bg-emerald-50 text-emerald-700" :
-                        ch.counts.delta < 0 ? "bg-rose-50 text-rose-700" :
-                        "bg-stone-100 text-stone-500"
-                      }`}>
-                        {ch.counts.before} → {ch.counts.after} ({ch.counts.delta > 0 ? "+" : ""}{ch.counts.delta})
-                      </span>
-                    )}
+                    <EntityIcon size={18} className="text-royal-500" />
+                    <h3 className="text-sm font-bold text-stone-800">{diff.label}</h3>
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
+                      delta > 0 ? "bg-emerald-50 text-emerald-700" :
+                      delta < 0 ? "bg-rose-50 text-rose-700" :
+                      "bg-stone-100 text-stone-500"
+                    }`}>
+                      {diff.morning_count} → {diff.evening_count} ({delta > 0 ? "+" : ""}{delta})
+                    </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    {actionCounts.create > 0 && (
+                    {hasNew && (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">
-                        +{actionCounts.create}
+                        +{diff.new_rows.length} new
                       </span>
                     )}
-                    {actionCounts.update > 0 && (
+                    {hasModified && (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">
-                        ~{actionCounts.update}
+                        ~{diff.modified_rows.length} modified
                       </span>
                     )}
-                    {actionCounts.delete > 0 && (
+                    {hasDeleted && (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-rose-50 text-rose-600">
-                        -{actionCounts.delete}
+                        -{diff.deleted_rows.length} deleted
                       </span>
                     )}
                   </div>
                 </div>
 
-                <div className="divide-y divide-stone-50 max-h-60 overflow-y-auto">
-                  {[...ch.creates, ...ch.updates, ...ch.deletes]
-                    .sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-                    .map((entry) => {
-                      const isCreate = ch.creates.includes(entry);
-                      const isUpdate = ch.updates.includes(entry);
-                      const action = isCreate ? "create" : isUpdate ? "update" : "delete";
-                      const cfg = actionConfig[action];
-                      const ActionIcon = cfg.icon;
-                      return (
-                        <div key={entry.id} className="px-5 py-2.5 flex items-center gap-3 text-xs hover:bg-stone-50/50 transition-colors">
-                          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold ${cfg.bg} ${cfg.color} ring-1 ${cfg.ring}`}>
-                            <ActionIcon size={10} />
-                            {cfg.label}
-                          </span>
-                          <span className="text-stone-500">{formatTime(entry.created_at)}</span>
-                          <span className="text-stone-400">by</span>
-                          <span className="text-stone-600 font-medium">{entry.user_email || "System"}</span>
-                          {entry.details && Object.keys(entry.details).length > 0 && (
-                            <span className="text-stone-400 ml-auto truncate max-w-[200px]" title={JSON.stringify(entry.details)}>
-                              {action === "create" && entry.details.name && `"${entry.details.name}"`}
-                              {action === "create" && entry.details.amount && `₹${entry.details.amount}`}
-                              {action === "update" && entry.details.amount && `₹${entry.details.amount}`}
-                              {action === "update" && entry.details.name && `"${entry.details.name}"`}
-                              {action === "delete" && entry.entity_id?.slice(0, 8)}
-                            </span>
-                          )}
-                        </div>
-                      );
-                    })}
-                </div>
+                {/* New Rows */}
+                {hasNew && (
+                  <div className="border-b border-stone-50">
+                    <button onClick={() => toggleSection(`${diff.entity}-new`)}
+                      className="w-full px-5 py-3 flex items-center gap-2 text-xs font-semibold text-emerald-700 bg-emerald-50/40 hover:bg-emerald-50 transition-colors">
+                      {expandedSections[`${diff.entity}-new`] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      <Plus size={13} />
+                      {diff.new_rows.length} New {diff.label} Added
+                    </button>
+                    {expandedSections[`${diff.entity}-new`] && (
+                      <div className="divide-y divide-stone-50 max-h-80 overflow-y-auto">
+                        {diff.new_rows.map((row, ri) => (
+                          <div key={row.id || ri} className="px-5 py-3 hover:bg-stone-50/50 transition-colors">
+                            <div className="flex items-start gap-3">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold text-[10px] bg-emerald-50 text-emerald-600 ring-1 ring-emerald-200 shrink-0 mt-0.5">
+                                <Plus size={10} /> NEW
+                              </span>
+                              <RowDataInline row={row} fields={fields} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Modified Rows */}
+                {hasModified && (
+                  <div className="border-b border-stone-50">
+                    <button onClick={() => toggleSection(`${diff.entity}-mod`)}
+                      className="w-full px-5 py-3 flex items-center gap-2 text-xs font-semibold text-amber-700 bg-amber-50/40 hover:bg-amber-50 transition-colors">
+                      {expandedSections[`${diff.entity}-mod`] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      <Pencil size={13} />
+                      {diff.modified_rows.length} {diff.label} Modified
+                    </button>
+                    {expandedSections[`${diff.entity}-mod`] && (
+                      <div className="divide-y divide-stone-50 max-h-80 overflow-y-auto">
+                        {diff.modified_rows.map((entry, ri) => (
+                          <div key={entry.id || ri} className="px-5 py-3 hover:bg-stone-50/50 transition-colors">
+                            <div className="flex items-start gap-3">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold text-[10px] bg-amber-50 text-amber-600 ring-1 ring-amber-200 shrink-0 mt-0.5">
+                                <Pencil size={10} /> EDIT
+                              </span>
+                              <div className="space-y-1">
+                                <FieldDiff fields={fields} before={entry.before} after={entry.after} />
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Deleted Rows */}
+                {hasDeleted && (
+                  <div>
+                    <button onClick={() => toggleSection(`${diff.entity}-del`)}
+                      className="w-full px-5 py-3 flex items-center gap-2 text-xs font-semibold text-rose-700 bg-rose-50/40 hover:bg-rose-50 transition-colors">
+                      {expandedSections[`${diff.entity}-del`] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                      <Trash2 size={13} />
+                      {diff.deleted_rows.length} {diff.label} Deleted
+                    </button>
+                    {expandedSections[`${diff.entity}-del`] && (
+                      <div className="divide-y divide-stone-50 max-h-80 overflow-y-auto">
+                        {diff.deleted_rows.map((row, ri) => (
+                          <div key={row.id || ri} className="px-5 py-3 hover:bg-stone-50/50 transition-colors">
+                            <div className="flex items-start gap-3">
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold text-[10px] bg-rose-50 text-rose-600 ring-1 ring-rose-200 shrink-0 mt-0.5">
+                                <Trash2 size={10} /> DEL
+                              </span>
+                              <RowDataInline row={row} fields={fields} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </motion.div>
             );
           })}

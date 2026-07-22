@@ -194,7 +194,7 @@ router.post('/restore-excel', requireRole('admin'), async (req, res) => {
   }
 });
 
-// GET /api/backup/version-log — show changes between morning and evening backups
+// GET /api/backup/version-log — row-level diff between morning and evening backups
 router.get('/version-log', requireRole('admin'), async (req, res) => {
   try {
     const date = req.query.date || new Date().toISOString().slice(0, 10);
@@ -207,98 +207,109 @@ router.get('/version-log', requireRole('admin'), async (req, res) => {
       .order('created_at', { ascending: true });
 
     if (!dayLogs || dayLogs.length === 0) {
-      return res.json({
-        success: true,
-        result: { backups: [], changes: [], snapshots: [], summary: null },
-      });
+      return res.json({ success: true, result: { backups: [], diffs: [], summary: null } });
     }
 
     const snapshots = dayLogs.map((l) => ({
       id: l.id,
       time: l.created_at,
       trigger: l.trigger_type,
-      snapshot: l.snapshot,
       total_rows: l.total_rows,
+      file_name: l.file_name,
     }));
 
-    const changes = [];
+    const DATA_TABLES = ['transactions', 'contacts', 'categories', 'contact_groups'];
+    const entityLabels = {
+      transactions: 'Transactions',
+      contacts: 'Contacts',
+      categories: 'Categories',
+      contact_groups: 'Groups',
+    };
+
+    const diffs = [];
+    let totalNew = 0;
+    let totalModified = 0;
+    let totalDeleted = 0;
+
     if (dayLogs.length >= 2) {
-      const fromTime = dayLogs[0].created_at;
-      const toTime = dayLogs[dayLogs.length - 1].created_at;
-
-      const { data: logs } = await supabaseAdmin
-        .from('activity_logs')
-        .select('*')
-        .gte('created_at', fromTime)
-        .lte('created_at', toTime)
-        .order('created_at', { ascending: true });
-
-      const grouped = {};
-      (logs || []).forEach((log) => {
-        const key = log.entity;
-        if (!grouped[key]) grouped[key] = { create: [], update: [], delete: [] };
-        if (grouped[key][log.action]) {
-          grouped[key][log.action].push({
-            id: log.id,
-            user_email: log.user_email,
-            entity_id: log.entity_id,
-            details: log.details,
-            created_at: log.created_at,
-          });
-        }
-      });
-
       const fromSnap = dayLogs[0].snapshot || {};
       const toSnap = dayLogs[dayLogs.length - 1].snapshot || {};
 
-      const entityLabels = {
-        transaction: 'Transactions',
-        contact: 'Contacts',
-        category: 'Categories',
-        contact_group: 'Groups',
-        settings: 'Settings',
-        activity_log: 'Activity Logs',
-      };
+      for (const tableName of DATA_TABLES) {
+        const morningRows = Array.isArray(fromSnap[tableName]) ? fromSnap[tableName] : [];
+        const eveningRows = Array.isArray(toSnap[tableName]) ? toSnap[tableName] : [];
 
-      for (const [entity, logs] of Object.entries(grouped)) {
-        const before = fromSnap[entity + 's'] ?? fromSnap[entity] ?? null;
-        const after = toSnap[entity + 's'] ?? toSnap[entity] ?? null;
-        changes.push({
-          entity,
-          label: entityLabels[entity] || entity,
-          counts: { before, after, delta: before !== null && after !== null ? after - before : null },
-          creates: logs.create,
-          updates: logs.update,
-          deletes: logs.delete,
-          total_changes: logs.create.length + logs.update.length + logs.delete.length,
+        const morningMap = {};
+        morningRows.forEach((r) => { if (r && r.id) morningMap[r.id] = r; });
+        const eveningMap = {};
+        eveningRows.forEach((r) => { if (r && r.id) eveningMap[r.id] = r; });
+
+        const morningIds = new Set(Object.keys(morningMap));
+        const eveningIds = new Set(Object.keys(eveningMap));
+
+        const newRows = [];
+        eveningIds.forEach((id) => {
+          if (!morningIds.has(id)) newRows.push(eveningMap[id]);
         });
-      }
 
-      const totalCreates = Object.values(grouped).reduce((s, g) => s + g.create.length, 0);
-      const totalUpdates = Object.values(grouped).reduce((s, g) => s + g.update.length, 0);
-      const totalDeletes = Object.values(grouped).reduce((s, g) => s + g.delete.length, 0);
+        const deletedRows = [];
+        morningIds.forEach((id) => {
+          if (!eveningIds.has(id)) deletedRows.push(morningMap[id]);
+        });
+
+        const modifiedRows = [];
+        morningIds.forEach((id) => {
+          if (!eveningIds.has(id)) return;
+          const before = morningMap[id];
+          const after = eveningMap[id];
+          const changedFields = [];
+          const allKeys = new Set([...Object.keys(before), ...Object.keys(after)]);
+          for (const key of allKeys) {
+            if (key === 'created_at' || key === 'updated_at') continue;
+            const bv = JSON.stringify(before[key]);
+            const av = JSON.stringify(after[key]);
+            if (bv !== av) {
+              changedFields.push({ field: key, from: before[key], to: after[key] });
+            }
+          }
+          if (changedFields.length > 0) {
+            modifiedRows.push({ id, before, after, changedFields });
+          }
+        });
+
+        if (newRows.length > 0 || deletedRows.length > 0 || modifiedRows.length > 0) {
+          diffs.push({
+            entity: tableName,
+            label: entityLabels[tableName] || tableName,
+            morning_count: morningRows.length,
+            evening_count: eveningRows.length,
+            new_rows: newRows,
+            modified_rows: modifiedRows,
+            deleted_rows: deletedRows,
+          });
+          totalNew += newRows.length;
+          totalModified += modifiedRows.length;
+          totalDeleted += deletedRows.length;
+        }
+      }
 
       return res.json({
         success: true,
         result: {
           backups: snapshots,
-          changes,
-          snapshots,
+          diffs,
           summary: {
-            period: { from: fromTime, to: toTime },
-            total_changes: totalCreates + totalUpdates + totalDeletes,
-            creates: totalCreates,
-            updates: totalUpdates,
-            deletes: totalDeletes,
+            period: { from: dayLogs[0].created_at, to: dayLogs[dayLogs.length - 1].created_at },
+            total_changes: totalNew + totalModified + totalDeleted,
+            new_count: totalNew,
+            modified_count: totalModified,
+            deleted_count: totalDeleted,
           },
         },
       });
     }
 
-    res.json({
-      success: true,
-      result: { backups: snapshots, changes: [], snapshots, summary: null },
-    });
+    res.json({ success: true, result: { backups: snapshots, diffs: [], summary: null } });
   } catch (err) {
     console.error('Version log error:', err.message);
     res.status(500).json({ success: false, message: err.message });

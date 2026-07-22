@@ -272,4 +272,4 @@ function startScheduledReportsCron() {
   console.log('🕐 Scheduled reports cron started (every 5 minutes)');
 }
 
-module.exports = { startScheduledReportsCron, executeReport, computeNextRun, computeDateRange };
+module.exports = { startScheduledReportsCron, executeReport, computeNextRun, computeDateRange, fetchFilteredTransactions, resolveRecipients };

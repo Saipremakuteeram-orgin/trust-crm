@@ -39,9 +39,9 @@ router.post('/', async (req, res) => {
     const schedule = {
       name,
       created_by: req.user.id,
-      filter_type: filter_type || null,
-      filter_mode: filter_mode || null,
-      filter_categories: filter_categories || null,
+      filter_type: (Array.isArray(filter_type) && filter_type.length > 0) ? filter_type : null,
+      filter_mode: (Array.isArray(filter_mode) && filter_mode.length > 0) ? filter_mode : null,
+      filter_categories: (Array.isArray(filter_categories) && filter_categories.length > 0) ? filter_categories : null,
       filter_from: filter_from || null,
       filter_to: filter_to || null,
       schedule_type,
@@ -81,6 +81,9 @@ router.put('/:id', async (req, res) => {
     for (const f of fields) {
       if (req.body[f] !== undefined) updates[f] = req.body[f];
     }
+    if (updates.filter_type && (!Array.isArray(updates.filter_type) || updates.filter_type.length === 0)) updates.filter_type = null;
+    if (updates.filter_mode && (!Array.isArray(updates.filter_mode) || updates.filter_mode.length === 0)) updates.filter_mode = null;
+    if (updates.filter_categories && (!Array.isArray(updates.filter_categories) || updates.filter_categories.length === 0)) updates.filter_categories = null;
     updates.updated_at = new Date().toISOString();
     const existing = await supabaseAdmin.from('scheduled_reports').select('*').eq('id', id).single();
     const merged = { ...existing.data, ...updates };

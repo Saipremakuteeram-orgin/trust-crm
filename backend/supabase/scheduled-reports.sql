@@ -5,8 +5,8 @@ CREATE TABLE IF NOT EXISTS scheduled_reports (
   created_by UUID REFERENCES auth.users(id),
 
   -- Filters
-  filter_type TEXT,          -- null=all, 'credit', 'debit'
-  filter_mode TEXT,          -- null=all, 'cash', 'digital'
+  filter_type TEXT[],         -- null=all, ARRAY['credit'], ARRAY['debit'], ARRAY['credit','debit']
+  filter_mode TEXT[],         -- null=all, ARRAY['cash'], ARRAY['digital'], ARRAY['cash','digital']
   filter_categories UUID[],  -- null=all categories
   filter_from DATE,          -- custom date range (once-only)
   filter_to DATE,

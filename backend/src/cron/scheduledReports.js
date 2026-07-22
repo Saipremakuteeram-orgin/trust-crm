@@ -104,8 +104,8 @@ async function fetchFilteredTransactions(schedule) {
     .lte('txn_date', end)
     .order('txn_date', { ascending: false });
 
-  if (schedule.filter_type) query = query.eq('type', schedule.filter_type);
-  if (schedule.filter_mode) query = query.eq('mode', schedule.filter_mode);
+  if (schedule.filter_type && schedule.filter_type.length > 0) query = query.in('type', schedule.filter_type);
+  if (schedule.filter_mode && schedule.filter_mode.length > 0) query = query.in('mode', schedule.filter_mode);
   if (schedule.filter_categories && schedule.filter_categories.length > 0) {
     query = query.in('category_id', schedule.filter_categories);
   }

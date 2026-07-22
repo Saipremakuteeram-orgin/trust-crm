@@ -94,7 +94,7 @@ const FORMAT_OPTIONS = [
 ];
 
 const EMPTY_FORM = {
-  name: "", filter_type: "", filter_mode: "", filter_categories: [],
+  name: "", filter_type: [], filter_mode: [], filter_categories: [],
   filter_from: todayISO(), filter_to: todayISO(),
   schedule_type: "weekly", schedule_day: 1, schedule_hour: 8, schedule_minute: 0,
   format: "excel", delivery_email: true, delivery_telegram: false,
@@ -123,21 +123,43 @@ function ScheduleForm({ form, setForm, categories, contacts, onSave, onClose, sa
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="block text-xs text-stone-500 mb-1">Transaction Type</label>
-            <select value={form.filter_type} onChange={(e) => update("filter_type", e.target.value)}
-              className="w-full border-2 border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-saffron-400 transition-colors">
-              <option value="">All Types</option>
-              <option value="credit">Credit (Income)</option>
-              <option value="debit">Debit (Expense)</option>
-            </select>
+            <div className="flex flex-wrap gap-1.5">
+              {["credit", "debit"].map((t) => (
+                <button key={t} type="button"
+                  onClick={() => {
+                    const types = form.filter_type || [];
+                    update("filter_type", types.includes(t) ? types.filter((x) => x !== t) : [...types, t]);
+                  }}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                    (form.filter_type || []).includes(t)
+                      ? "bg-blue-100 text-blue-700 border-blue-300"
+                      : "bg-white text-stone-500 border-stone-200 hover:border-blue-300"
+                  }`}>
+                  {t === "credit" ? "Credit" : "Debit"}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-stone-400 mt-1">None = all types</p>
           </div>
           <div>
             <label className="block text-xs text-stone-500 mb-1">Payment Mode</label>
-            <select value={form.filter_mode} onChange={(e) => update("filter_mode", e.target.value)}
-              className="w-full border-2 border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-saffron-400 transition-colors">
-              <option value="">All Modes</option>
-              <option value="cash">Cash Only</option>
-              <option value="digital">Digital Only</option>
-            </select>
+            <div className="flex flex-wrap gap-1.5">
+              {["cash", "digital"].map((m) => (
+                <button key={m} type="button"
+                  onClick={() => {
+                    const modes = form.filter_mode || [];
+                    update("filter_mode", modes.includes(m) ? modes.filter((x) => x !== m) : [...modes, m]);
+                  }}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                    (form.filter_mode || []).includes(m)
+                      ? "bg-purple-100 text-purple-700 border-purple-300"
+                      : "bg-white text-stone-500 border-stone-200 hover:border-purple-300"
+                  }`}>
+                  {m === "cash" ? "Cash" : "Digital"}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-stone-400 mt-1">None = all modes</p>
           </div>
         </div>
         {categories.length > 0 && (
@@ -359,8 +381,8 @@ function ScheduledReportsTab() {
     setEditingReport(r);
     setForm({
       name: r.name || "",
-      filter_type: r.filter_type || "",
-      filter_mode: r.filter_mode || "",
+      filter_type: r.filter_type || [],
+      filter_mode: r.filter_mode || [],
       filter_categories: r.filter_categories || [],
       filter_from: r.filter_from || todayISO(),
       filter_to: r.filter_to || todayISO(),
@@ -489,16 +511,16 @@ function ScheduledReportsTab() {
                 </div>
 
                 <div className="flex flex-wrap gap-1.5 mb-3">
-                  {r.filter_type && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-600">
-                      {r.filter_type === "credit" ? "Credit" : "Debit"}
+                  {r.filter_type && r.filter_type.length > 0 && r.filter_type.map((t) => (
+                    <span key={t} className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-50 text-blue-600">
+                      {t === "credit" ? "Credit" : "Debit"}
                     </span>
-                  )}
-                  {r.filter_mode && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-600">
-                      {r.filter_mode === "cash" ? "Cash" : "Digital"}
+                  ))}
+                  {r.filter_mode && r.filter_mode.length > 0 && r.filter_mode.map((m) => (
+                    <span key={m} className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-purple-50 text-purple-600">
+                      {m === "cash" ? "Cash" : "Digital"}
                     </span>
-                  )}
+                  ))}
                   <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-stone-100 text-stone-600">
                     {formatLabel(r.format)}
                   </span>

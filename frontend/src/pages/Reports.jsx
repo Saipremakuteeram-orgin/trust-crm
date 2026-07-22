@@ -101,7 +101,7 @@ const EMPTY_FORM = {
   recipient_mode: "subscribed", recipient_contact_ids: [], recipient_group_ids: [],
 };
 
-function ScheduleForm({ form, setForm, categories, contacts, onSave, onClose, saving }) {
+function ScheduleForm({ form, setForm, categories, contacts, groups, onSave, onClose, saving }) {
   const update = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const filteredContacts = contacts.filter((c) => c.enabled);
@@ -679,7 +679,7 @@ function ScheduledReportsTab() {
                 </button>
               </div>
               <div className="p-6">
-                <ScheduleForm form={form} setForm={setForm} categories={categories} contacts={contacts}
+                <ScheduleForm form={form} setForm={setForm} categories={categories} contacts={contacts} groups={groups}
                   onSave={handleSave} onClose={() => setShowForm(false)} saving={saving} />
               </div>
             </motion.div>

@@ -1,0 +1,6 @@
+name,email,phone,telegram_chat_id,subscribe_monthly_report,notes
+Rama Rao,rama.rao@example.com,9876543210,,true,Monthly report subscriber
+Sita Devi,sita.devi@example.com,9876543211,@sita_tg,false,Contact via temple group
+Krishna Murthy,krishna.m@example.com,,@krishna_m,true,Donor since 2024
+Lakshmi Bai,lakshmi@example.com,9876543213,,false,Via community outreach
+Venkatesh Kumar,venkatesh@example.com,9876543214,@venkatesh_k,true,Board member contact

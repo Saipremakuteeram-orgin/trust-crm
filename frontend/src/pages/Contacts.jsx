@@ -1,8 +1,8 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
-import { Plus, X, Trash2, Pencil, Search, RefreshCw } from "lucide-react";
+import { Plus, X, Trash2, Pencil, Search, RefreshCw, Upload, Download, FileSpreadsheet, CheckCircle, AlertTriangle, ArrowRight } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 import useEscToClose from "../hooks/useEscToClose";
@@ -25,6 +25,24 @@ export default function Contacts() {
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
   useEscToClose(() => setOpen(false), open);
+
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkStep, setBulkStep] = useState(1);
+  const [bulkFile, setBulkFile] = useState(null);
+  const [bulkPreview, setBulkPreview] = useState(null);
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkResult, setBulkResult] = useState(null);
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef(null);
+  useEscToClose(() => { setBulkOpen(false); resetBulk(); }, bulkOpen);
+
+  function resetBulk() {
+    setBulkStep(1);
+    setBulkFile(null);
+    setBulkPreview(null);
+    setBulkLoading(false);
+    setBulkResult(null);
+  }
 
   function load() { api.get("/contacts").then((res) => setContacts(res.data.result)); }
   useEffect(load, []);
@@ -77,6 +95,61 @@ export default function Contacts() {
     }
   }
 
+  function handleFileDrop(e) {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer?.files?.[0] || e.target?.files?.[0];
+    if (!file) return;
+    if (!file.name.endsWith('.csv')) { addToast("Please upload a CSV file", "error"); return; }
+    setBulkFile(file);
+  }
+
+  async function handlePreview() {
+    if (!bulkFile) return;
+    setBulkLoading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', bulkFile);
+      const res = await api.post('/contacts/bulk/preview', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const rows = res.data.result.rows.map((r) => ({ ...r, action: r.isDuplicate ? 'skip' : 'import' }));
+      setBulkPreview({ ...res.data.result, rows });
+      setBulkStep(2);
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to parse CSV", "error");
+    }
+    setBulkLoading(false);
+  }
+
+  function setRowAction(idx, action) {
+    setBulkPreview((prev) => {
+      const rows = [...prev.rows];
+      rows[idx] = { ...rows[idx], action };
+      return { ...prev, rows };
+    });
+  }
+
+  function setAllDuplicatesAction(action) {
+    setBulkPreview((prev) => {
+      const rows = prev.rows.map((r) => r.isDuplicate ? { ...r, action } : r);
+      return { ...prev, rows };
+    });
+  }
+
+  async function handleBulkConfirm() {
+    setBulkLoading(true);
+    try {
+      const payload = { rows: bulkPreview.rows };
+      const res = await api.post('/contacts/bulk/confirm', payload);
+      setBulkResult(res.data.result);
+      setBulkStep(3);
+      addToast(`Imported ${res.data.result.imported}, updated ${res.data.result.updated}`, "success");
+      load();
+    } catch (err) {
+      addToast(err.response?.data?.message || "Bulk import failed", "error");
+    }
+    setBulkLoading(false);
+  }
+
   return (
     <AppLayout>
       <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
@@ -87,6 +160,18 @@ export default function Contacts() {
             <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={handleRefresh}
               className="p-2.5 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 transition-colors">
               <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+            </motion.button>
+          )}
+          {canAdd && (
+            <a href="/sample-contacts.csv" download
+              className="flex items-center gap-2 border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 text-sm font-medium px-4 py-2.5 rounded-xl transition-colors">
+              <Download size={15} /> Sample CSV
+            </a>
+          )}
+          {canAdd && (
+            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={() => { resetBulk(); setBulkOpen(true); }}
+              className="flex items-center gap-2 border border-saffron-200 bg-saffron-50 text-saffron-700 hover:bg-saffron-100 text-sm font-semibold px-4 py-2.5 rounded-xl transition-colors">
+              <Upload size={15} /> Bulk Upload
             </motion.button>
           )}
           {canAdd && (
@@ -194,6 +279,166 @@ export default function Contacts() {
                   {saving ? "Saving..." : editing ? "Update Contact" : "Save Contact"}
                 </motion.button>
               </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {bulkOpen && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+            <motion.div initial={{ opacity: 0, scale: 0.92, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 24 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl shadow-black/20 max-h-[90vh] flex flex-col">
+              <div className="flex justify-between items-center mb-5">
+                <div>
+                  <h2 className="text-lg font-bold text-stone-900">Bulk Upload Contacts</h2>
+                  <p className="text-xs text-stone-500 mt-0.5">Step {bulkStep} of 3</p>
+                </div>
+                <motion.button whileHover={{ scale: 1.1, rotate: 90 }} whileTap={{ scale: 0.9 }}
+                  onClick={() => { setBulkOpen(false); resetBulk(); }} className="p-1.5 rounded-lg hover:bg-stone-100 transition-colors"><X size={18} /></motion.button>
+              </div>
+
+              {bulkStep === 1 && (
+                <div className="flex-1 flex flex-col items-center justify-center gap-6 py-8">
+                  <div onDragOver={(e) => { e.preventDefault(); setDragOver(true); }} onDragLeave={() => setDragOver(false)}
+                    onDrop={handleFileDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`w-full max-w-sm border-2 border-dashed rounded-2xl p-10 text-center cursor-pointer transition-all ${dragOver ? 'border-saffron-400 bg-saffron-50' : 'border-stone-300 hover:border-saffron-300 hover:bg-stone-50'}`}>
+                    <input ref={fileInputRef} type="file" accept=".csv" className="hidden" onChange={handleFileDrop} />
+                    <FileSpreadsheet size={40} className={`mx-auto mb-3 ${dragOver ? 'text-saffron-500' : 'text-stone-400'}`} />
+                    <p className="text-sm font-medium text-stone-700">{bulkFile ? bulkFile.name : 'Drop CSV file here or click to browse'}</p>
+                    {bulkFile && <p className="text-xs text-stone-500 mt-1">{(bulkFile.size / 1024).toFixed(1)} KB</p>}
+                  </div>
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} disabled={!bulkFile || bulkLoading}
+                    onClick={handlePreview}
+                    className="flex items-center gap-2 bg-gradient-to-r from-saffron-500 to-saffron-600 hover:from-saffron-400 hover:to-saffron-500 text-white rounded-xl px-6 py-2.5 text-sm font-semibold shadow-lg shadow-saffron-500/25 transition-all disabled:opacity-50">
+                    {bulkLoading ? 'Parsing...' : 'Preview Contacts'} <ArrowRight size={16} />
+                  </motion.button>
+                </div>
+              )}
+
+              {bulkStep === 2 && bulkPreview && (
+                <div className="flex-1 flex flex-col min-h-0">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3 text-xs">
+                      <span className="font-medium text-stone-700">{bulkPreview.rows.length} rows found</span>
+                      {bulkPreview.rows.some((r) => r.isDuplicate) && (
+                        <span className="flex items-center gap-1 text-amber-600 bg-amber-50 px-2 py-1 rounded-full">
+                          <AlertTriangle size={12} />
+                          {bulkPreview.rows.filter((r) => r.isDuplicate).length} duplicates
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-stone-500">Duplicates:</span>
+                      <button onClick={() => setAllDuplicatesAction('skip')}
+                        className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors ${bulkPreview.rows.filter((r) => r.isDuplicate).every((r) => r.action === 'skip') ? 'bg-amber-100 text-amber-700' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'}`}>
+                        Skip All
+                      </button>
+                      <button onClick={() => setAllDuplicatesAction('overwrite')}
+                        className={`text-xs px-2.5 py-1 rounded-lg font-medium transition-colors ${bulkPreview.rows.filter((r) => r.isDuplicate).every((r) => r.action === 'overwrite') ? 'bg-amber-100 text-amber-700' : 'bg-stone-100 text-stone-600 hover:bg-stone-200'}`}>
+                        Overwrite All
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex-1 overflow-y-auto border border-stone-200 rounded-xl">
+                    <table className="w-full text-sm">
+                      <thead className="bg-stone-50 text-stone-500 text-left sticky top-0">
+                        <tr>
+                          <th className="px-3 py-2.5 font-semibold text-xs">#</th>
+                          <th className="px-3 py-2.5 font-semibold text-xs">Name</th>
+                          <th className="px-3 py-2.5 font-semibold text-xs">Email</th>
+                          <th className="px-3 py-2.5 font-semibold text-xs">Phone</th>
+                          <th className="px-3 py-2.5 font-semibold text-xs">Status</th>
+                          <th className="px-3 py-2.5 font-semibold text-xs">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bulkPreview.rows.map((r, i) => (
+                          <tr key={i} className={`border-t border-stone-100 ${r.isDuplicate ? 'bg-amber-50/50' : ''}`}>
+                            <td className="px-3 py-2.5 text-stone-400 text-xs">{r.row}</td>
+                            <td className="px-3 py-2.5 font-medium text-stone-800">{r.name}</td>
+                            <td className="px-3 py-2.5 text-stone-600">{r.email || '-'}</td>
+                            <td className="px-3 py-2.5 text-stone-600">{r.phone || '-'}</td>
+                            <td className="px-3 py-2.5">
+                              {r.isDuplicate ? (
+                                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">Duplicate</span>
+                              ) : (
+                                <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">New</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5">
+                              {r.isDuplicate ? (
+                                <select value={r.action} onChange={(e) => setRowAction(i, e.target.value)}
+                                  className="text-xs border border-stone-200 rounded-lg px-2 py-1 focus:border-saffron-400 bg-white">
+                                  <option value="skip">Skip</option>
+                                  <option value="overwrite">Overwrite</option>
+                                </select>
+                              ) : (
+                                <span className="text-xs text-emerald-600 font-medium">Will import</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-stone-100">
+                    <button onClick={() => { setBulkStep(1); setBulkPreview(null); setBulkFile(null); }}
+                      className="text-sm text-stone-500 hover:text-stone-700 transition-colors">Back</button>
+                    <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} disabled={bulkLoading}
+                      onClick={handleBulkConfirm}
+                      className="flex items-center gap-2 bg-gradient-to-r from-saffron-500 to-saffron-600 hover:from-saffron-400 hover:to-saffron-500 text-white rounded-xl px-6 py-2.5 text-sm font-semibold shadow-lg shadow-saffron-500/25 transition-all disabled:opacity-50">
+                      {bulkLoading ? 'Importing...' : `Import ${bulkPreview.rows.filter((r) => r.action !== 'skip').length} contacts`}
+                      <CheckCircle size={16} />
+                    </motion.button>
+                  </div>
+                </div>
+              )}
+
+              {bulkStep === 3 && bulkResult && (
+                <div className="flex-1 flex flex-col items-center justify-center gap-6 py-8">
+                  <div className="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center">
+                    <CheckCircle size={32} className="text-emerald-600" />
+                  </div>
+                  <div className="text-center">
+                    <h3 className="text-lg font-bold text-stone-900">Import Complete</h3>
+                    <p className="text-sm text-stone-500 mt-1">Your contacts have been processed</p>
+                  </div>
+                  <div className="flex items-center gap-6">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-emerald-600">{bulkResult.imported}</p>
+                      <p className="text-xs text-stone-500">Imported</p>
+                    </div>
+                    {bulkResult.updated > 0 && <div className="text-center">
+                      <p className="text-2xl font-bold text-royal-600">{bulkResult.updated}</p>
+                      <p className="text-xs text-stone-500">Updated</p>
+                    </div>}
+                    {bulkResult.skipped > 0 && <div className="text-center">
+                      <p className="text-2xl font-bold text-stone-400">{bulkResult.skipped}</p>
+                      <p className="text-xs text-stone-500">Skipped</p>
+                    </div>}
+                    {bulkResult.errors.length > 0 && <div className="text-center">
+                      <p className="text-2xl font-bold text-rose-500">{bulkResult.errors.length}</p>
+                      <p className="text-xs text-stone-500">Errors</p>
+                    </div>}
+                  </div>
+                  {bulkResult.errors.length > 0 && (
+                    <div className="w-full max-w-sm bg-rose-50 rounded-xl p-4 max-h-32 overflow-y-auto">
+                      {bulkResult.errors.map((e, i) => (
+                        <p key={i} className="text-xs text-rose-600">Row {e.row}: {e.reason}</p>
+                      ))}
+                    </div>
+                  )}
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+                    onClick={() => { setBulkOpen(false); resetBulk(); }}
+                    className="bg-gradient-to-r from-saffron-500 to-saffron-600 hover:from-saffron-400 hover:to-saffron-500 text-white rounded-xl px-6 py-2.5 text-sm font-semibold shadow-lg shadow-saffron-500/25 transition-all">
+                    Done
+                  </motion.button>
+                </div>
+              )}
             </motion.div>
           </motion.div>
         )}

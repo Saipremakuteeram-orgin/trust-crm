@@ -1,6 +1,7 @@
 const cron = require('node-cron');
 const supabaseAdmin = require('@/config/supabaseAdmin');
 const { sendEmail, sendTelegram, fmt } = require('@/services/notify');
+const { logActivity } = require('@/lib/logger');
 
 async function generateAndSendMonthlyReport() {
   const now = new Date();
@@ -62,6 +63,7 @@ async function generateAndSendMonthlyReport() {
   }
 
   console.log(`✅ Monthly report for ${monthLabel} sent to ${(recipients || []).length} recipient(s)`);
+  logActivity({ action: 'send_now', entity: 'scheduled_report', details: { name: `Monthly Report — ${monthLabel}`, recipientCount: (recipients || []).length, totalCredit, totalDebit, source: 'monthly_cron' } });
 }
 
 function startMonthlyReportCron() {

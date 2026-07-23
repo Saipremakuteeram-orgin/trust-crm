@@ -1,6 +1,7 @@
 const supabaseAdmin = require('@/config/supabaseAdmin');
 const { sendEmail, sendTelegram, fmt } = require('@/services/notify');
 const { safeErrorMessage } = require('@/lib/security');
+const { logActivity } = require('@/lib/logger');
 
 function computeNextRun(schedule) {
   const now = new Date();
@@ -267,6 +268,7 @@ async function processDueReports() {
         updated_at: new Date().toISOString(),
       }).eq('id', schedule.id);
       console.log(`✅ Scheduled report "${schedule.name}" sent to ${result.sentCount} recipient(s)`);
+      logActivity({ userId: schedule.created_by, action: 'send_now', entity: 'scheduled_report', entityId: schedule.id, details: { name: schedule.name, sentCount: result.sentCount, failedCount: result.failedCount, period: `${result.start} to ${result.end}`, source: 'cron' } });
     } catch (err) {
       console.error(`❌ Scheduled report "${schedule.name}" failed:`, safeErrorMessage(err));
       const nextRun = computeNextRun(schedule);
@@ -277,6 +279,7 @@ async function processDueReports() {
         next_run_at: nextRun,
         updated_at: new Date().toISOString(),
       }).eq('id', schedule.id);
+      logActivity({ userId: schedule.created_by, action: 'send_now', entity: 'scheduled_report', entityId: schedule.id, details: { name: schedule.name, error: safeErrorMessage(err), source: 'cron' } });
     }
   }
 }

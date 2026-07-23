@@ -15,7 +15,7 @@ router.get('/', async (req, res) => {
     .from('activity_logs')
     .select('*', { count: 'exact' });
 
-  if (req.profile?.role !== 'admin') {
+  if (req.profile?.role === 'viewer') {
     query = query.eq('user_id', req.user.id);
   }
 

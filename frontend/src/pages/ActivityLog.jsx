@@ -5,7 +5,7 @@ import AppLayout from "../components/AppLayout";
 import { useAuth } from "../lib/AuthContext";
 import {
   History, ChevronLeft, ChevronRight, Filter, RefreshCw,
-  ArrowDownCircle, Users, UserPlus, Shield, Settings, Tag
+  ArrowDownCircle, Users, UserPlus, Shield, Settings, Tag, CalendarClock
 } from "lucide-react";
 
 const entityIcons = {
@@ -14,6 +14,7 @@ const entityIcons = {
   user: UserPlus,
   category: Tag,
   settings: Settings,
+  scheduled_report: CalendarClock,
 };
 
 const entityColors = {
@@ -22,6 +23,7 @@ const entityColors = {
   user: "text-saffron-600 bg-saffron-50",
   category: "text-purple-600 bg-purple-50",
   settings: "text-stone-600 bg-stone-100",
+  scheduled_report: "text-indigo-600 bg-indigo-50",
 };
 
 const actionColors = {
@@ -32,6 +34,7 @@ const actionColors = {
   sync: "text-purple-700 bg-purple-50",
   change_role: "text-indigo-700 bg-indigo-50",
   reset_password: "text-orange-700 bg-orange-50",
+  send_now: "text-teal-700 bg-teal-50",
 };
 
 const actionLabels = {
@@ -42,6 +45,7 @@ const actionLabels = {
   sync: "Synced",
   change_role: "Role Changed",
   reset_password: "Password Reset",
+  send_now: "Report Sent",
 };
 
 function formatDetails(entity, details) {
@@ -76,6 +80,17 @@ function formatDetails(entity, details) {
   }
   if (entity === "settings") {
     return { text: details.key ? `${details.key}: ₹${Number(details.value).toLocaleString("en-IN")}` : null, reason: null };
+  }
+  if (entity === "scheduled_report") {
+    const parts = [];
+    if (details.name) parts.push(details.name);
+    if (details.sentCount !== undefined) parts.push(`Sent: ${details.sentCount}`);
+    if (details.failedCount !== undefined) parts.push(`Failed: ${details.failedCount}`);
+    if (details.recipientCount !== undefined) parts.push(`Recipients: ${details.recipientCount}`);
+    if (details.period) parts.push(details.period);
+    if (details.source) parts.push(`via ${details.source}`);
+    if (details.error) parts.push(`Error: ${details.error}`);
+    return { text: parts.join(" · ") || null, reason: null };
   }
   return { text: null, reason: null };
 }
@@ -153,7 +168,7 @@ export default function ActivityLog() {
           Filter:
         </div>
         <div className="flex gap-2 flex-wrap">
-          {[{ value: "", label: "All" }, { value: "transaction", label: "Transactions" }, { value: "contact", label: "Contacts" }, { value: "user", label: "Users" }, { value: "category", label: "Categories" }, { value: "settings", label: "Settings" }].map(({ value, label }) => (
+          {[{ value: "", label: "All" }, { value: "transaction", label: "Transactions" }, { value: "contact", label: "Contacts" }, { value: "user", label: "Users" }, { value: "category", label: "Categories" }, { value: "settings", label: "Settings" }, { value: "scheduled_report", label: "Reports" }].map(({ value, label }) => (
             <button key={value} onClick={() => setFilterEntity(value)}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${filterEntity === value ? "bg-saffron-500 text-white shadow-sm" : "bg-white text-stone-600 border border-stone-200 hover:bg-stone-50"}`}>
               {label}

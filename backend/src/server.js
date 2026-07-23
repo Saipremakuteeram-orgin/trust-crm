@@ -45,7 +45,9 @@ app.use('/api/scheduled-reports', require('./routes/scheduledReports'));
 
 app.post('/api/reports/monthly/send-now', requireAuth, sensitiveLimiter, requireRole('admin', 'accountant'), async (req, res) => {
   const { generateAndSendMonthlyReport } = require('./cron/monthlyReport');
+  const { logActivity } = require('./lib/logger');
   await generateAndSendMonthlyReport();
+  logActivity({ userId: req.user.id, userEmail: req.user.email, action: 'send_now', entity: 'scheduled_report', details: { name: 'Monthly Report (manual)', source: 'manual' }, ipAddress: req.ip });
   res.json({ success: true, message: 'Monthly report sent' });
 });
 

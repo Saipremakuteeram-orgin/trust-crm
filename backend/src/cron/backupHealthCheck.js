@@ -1,9 +1,9 @@
 const cron = require('node-cron');
-const { runDailyBackup, getBackupStatusToday } = require('@/services/backup');
+const { runDailyBackup, getBackupStatusToday, getIstDate } = require('@/services/backup');
 
 async function checkAndReinstate() {
   const logs = await getBackupStatusToday();
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getIstDate();
 
   const todaySuccess = logs?.some((l) => l.status === 'success');
   if (todaySuccess) {

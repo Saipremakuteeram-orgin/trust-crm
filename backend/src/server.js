@@ -1,6 +1,7 @@
 require('module-alias/register');
 require('dotenv').config();
 
+const http = require('http');
 const express = require('express');
 const cors = require('cors');
 const compression = require('compression');
@@ -71,3 +72,36 @@ startScheduledReportsCron();
 
 const { startRecurringTransactionsCron } = require('./cron/recurringTransactions');
 startRecurringTransactionsCron();
+
+// --- Keep-alive: prevent Render free tier from sleeping the service ---
+const KEEP_ALIVE_INTERVAL = 10 * 60 * 1000; // 10 minutes
+setInterval(() => {
+  const req = http.request(`http://localhost:${PORT}/health`, { method: 'GET', timeout: 5000 }, (res) => {
+    if (res.statusCode === 200) {
+      console.log(`[keep-alive] Ping successful (${new Date().toISOString()})`);
+    }
+  });
+  req.on('error', (err) => console.error('[keep-alive] Ping failed:', err.message));
+  req.on('timeout', () => { req.destroy(); console.error('[keep-alive] Ping timed out'); });
+  req.end();
+}, KEEP_ALIVE_INTERVAL);
+console.log(`Keep-alive self-ping enabled (every ${KEEP_ALIVE_INTERVAL / 1000}s)`);
+
+// --- Startup backup verification: warn if no successful backup today ---
+(async () => {
+  try {
+    const { getBackupStatusToday } = require('./services/backup');
+    const logs = await getBackupStatusToday();
+    const todaySuccess = logs?.some((l) => l.status === 'success');
+    const istNow = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
+    const istHour = new Date(istNow).getHours();
+
+    if (!todaySuccess && istHour >= 7) {
+      console.warn(`⚠️  STARTUP WARNING: No successful backup found for today. Last known backup may be stale.`);
+    } else if (todaySuccess) {
+      console.log(`✅ Startup check: Today's backup confirmed.`);
+    }
+  } catch (err) {
+    console.error('[startup] Backup verification failed:', err.message);
+  }
+})();

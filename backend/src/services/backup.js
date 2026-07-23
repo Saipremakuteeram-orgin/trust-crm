@@ -6,6 +6,10 @@ const FormData = require('form-data');
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const STORAGE_CHAT_ID = process.env.TELEGRAM_STORAGE_CHAT_ID;
 
+function getIstDate() {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
+}
+
 const TABLES = [
   { name: 'transactions', label: 'Transactions' },
   { name: 'contacts', label: 'Contacts' },
@@ -18,7 +22,7 @@ const DATA_TABLES = ['transactions', 'contacts', 'categories', 'contact_groups']
 
 async function createLog(log) {
   const { data, error } = await supabaseAdmin.from('backup_logs').insert(log).select().single();
-  if (error) console.error('Failed to write backup log:', error.message);
+  if (error) throw new Error('Failed to write backup log: ' + error.message);
   return data;
 }
 
@@ -118,7 +122,7 @@ async function runDailyBackup(triggerType = 'scheduled') {
   console.log(`📦 Starting backup (trigger: ${triggerType})...`);
 
   const log = await createLog({
-    backup_date: new Date().toISOString().slice(0, 10),
+    backup_date: getIstDate(),
     trigger_type: triggerType,
     status: 'running',
   });
@@ -187,7 +191,7 @@ async function runDailyBackup(triggerType = 'scheduled') {
 }
 
 async function getBackupStatusToday() {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = getIstDate();
   const { data, error } = await supabaseAdmin
     .from('backup_logs')
     .select('*')
@@ -210,4 +214,4 @@ async function getBackupLogs(limit = 30, offset = 0) {
   return data || [];
 }
 
-module.exports = { runDailyBackup, getBackupStatusToday, getBackupLogs, TABLES };
+module.exports = { runDailyBackup, getBackupStatusToday, getBackupLogs, getIstDate, TABLES };

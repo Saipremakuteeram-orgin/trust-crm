@@ -5,6 +5,7 @@ import AppLayout from "../components/AppLayout";
 import { Plus, X, Trash2, Pencil, Search, Users, UserPlus } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
+import useEscToClose from "../hooks/useEscToClose";
 
 const emptyForm = { name: "", description: "", member_ids: [] };
 
@@ -24,6 +25,8 @@ export default function Groups() {
   const [search, setSearch] = useState("");
   const [membersOpen, setMembersOpen] = useState(null);
   const [memberSearch, setMemberSearch] = useState("");
+  useEscToClose(() => setOpen(false), open);
+  useEscToClose(() => setMembersOpen(null), !!membersOpen);
 
   function load() {
     api.get("/groups").then((res) => setGroups(res.data.result));

@@ -6,6 +6,7 @@ import PasswordInput from "../components/PasswordInput";
 import { Shield, Trash2, ChevronDown, UserPlus, RefreshCw, X, KeyRound, Mail } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
+import useEscToClose from "../hooks/useEscToClose";
 import { ShieldAlert } from "lucide-react";
 
 const roleColors = {
@@ -26,6 +27,8 @@ export default function Users() {
   const [resetModal, setResetModal] = useState(null);
   const [resetPw, setResetPw] = useState("");
   const [resetting, setResetting] = useState(false);
+  useEscToClose(() => setShowAdd(false), showAdd);
+  useEscToClose(() => setResetModal(null), !!resetModal);
 
   if (profile && profile.role !== "admin") {
     return (

@@ -1,10 +1,12 @@
 import { motion, AnimatePresence } from "framer-motion";
 import { X } from "lucide-react";
+import useEscToClose from "../hooks/useEscToClose";
 
 const fmt = (n) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n || 0));
 
 export default function TransactionListModal({ open, onClose, title, subtitle, transactions, loading }) {
+  useEscToClose(onClose, open);
   return (
     <AnimatePresence>
       {open && (

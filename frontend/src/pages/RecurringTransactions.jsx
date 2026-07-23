@@ -4,6 +4,7 @@ import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
+import useEscToClose from "../hooks/useEscToClose";
 import { Plus, X, Trash2, Pencil, Play, Pause, PlayCircle, RefreshCw, Repeat } from "lucide-react";
 
 const fmt = (n) =>
@@ -56,6 +57,7 @@ export default function RecurringTransactions() {
   const [filterFreq, setFilterFreq] = useState("all");
   const [form, setForm] = useState({ ...emptyForm });
   const [refreshing, setRefreshing] = useState(false);
+  useEscToClose(() => setOpen(false), open);
 
   const load = useCallback(() => {
     setLoading(true);

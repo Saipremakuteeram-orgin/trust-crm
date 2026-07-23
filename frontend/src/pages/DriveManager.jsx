@@ -4,6 +4,7 @@ import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
+import useEscToClose from "../hooks/useEscToClose";
 import {
   FolderOpen, File, Upload, FolderPlus, Trash2, Pencil, Copy,
   ChevronRight, Home, Search, MoreVertical, X, Loader2, Download
@@ -48,6 +49,8 @@ export default function DriveManager() {
   const [renameOpen, setRenameOpen] = useState(null);
   const [renameName, setRenameName] = useState("");
   const [selected, setSelected] = useState([]);
+  useEscToClose(() => setNewFolderOpen(false), newFolderOpen);
+  useEscToClose(() => setRenameOpen(null), !!renameOpen);
 
   const loadFiles = useCallback(async (folder) => {
     setLoading(true);

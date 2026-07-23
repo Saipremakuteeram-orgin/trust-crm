@@ -5,6 +5,7 @@ import AppLayout from "../components/AppLayout";
 import { Plus, X, Trash2, Pencil, Search, RefreshCw } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
+import useEscToClose from "../hooks/useEscToClose";
 
 const emptyForm = { name: "", email: "", telegram_chat_id: "", phone: "", subscribe_monthly_report: false };
 
@@ -23,6 +24,7 @@ export default function Contacts() {
   const [form, setForm] = useState({ ...emptyForm });
   const [search, setSearch] = useState("");
   const [refreshing, setRefreshing] = useState(false);
+  useEscToClose(() => setOpen(false), open);
 
   function load() { api.get("/contacts").then((res) => setContacts(res.data.result)); }
   useEffect(load, []);

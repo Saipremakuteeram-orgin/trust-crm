@@ -4,6 +4,7 @@ import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
 import TransactionListModal from "../components/TransactionListModal";
 import { useToast } from "../components/Toast";
+import useEscToClose from "../hooks/useEscToClose";
 import {
   FileBarChart, Download, RefreshCw, Calendar, Wallet, Landmark, TrendingUp, TrendingDown,
   Clock, Send, Loader2, Plus, Pencil, Trash2, Eye, ToggleLeft, ToggleRight,
@@ -401,6 +402,8 @@ function ScheduledReportsTab() {
   const [loadingPreview, setLoadingPreview] = useState(false);
   const [sending, setSending] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  useEscToClose(() => setShowForm(false), showForm);
+  useEscToClose(() => setConfirmDelete(null), !!confirmDelete);
 
   const load = useCallback(() => {
     setLoading(true);

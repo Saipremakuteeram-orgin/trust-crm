@@ -5,6 +5,7 @@ import AppLayout from "../components/AppLayout";
 import { Plus, X, Trash2, Pencil, Search, Download, FileText, RefreshCw, Upload } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
+import useEscToClose from "../hooks/useEscToClose";
 
 const fmt = (n) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n || 0));
@@ -33,6 +34,7 @@ export default function Transactions() {
   const [search, setSearch] = useState("");
   const [filterType, setFilterType] = useState("all");
   const [filterMode, setFilterMode] = useState("all");
+  useEscToClose(() => setOpen(false), open);
   const [exporting, setExporting] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [restoring, setRestoring] = useState(false);

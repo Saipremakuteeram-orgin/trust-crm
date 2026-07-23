@@ -5,7 +5,7 @@ import AppLayout from "../components/AppLayout";
 import { useAuth } from "../lib/AuthContext";
 import {
   History, ChevronLeft, ChevronRight, Filter, RefreshCw,
-  ArrowDownCircle, Users, UserPlus, Shield, Settings, Tag, CalendarClock
+  ArrowDownCircle, Users, UserPlus, Shield, Settings, Tag, CalendarClock, Repeat
 } from "lucide-react";
 
 const entityIcons = {
@@ -15,6 +15,7 @@ const entityIcons = {
   category: Tag,
   settings: Settings,
   scheduled_report: CalendarClock,
+  recurring_transaction: Repeat,
 };
 
 const entityColors = {
@@ -24,6 +25,7 @@ const entityColors = {
   category: "text-purple-600 bg-purple-50",
   settings: "text-stone-600 bg-stone-100",
   scheduled_report: "text-indigo-600 bg-indigo-50",
+  recurring_transaction: "text-violet-600 bg-violet-50",
 };
 
 const actionColors = {
@@ -35,6 +37,10 @@ const actionColors = {
   change_role: "text-indigo-700 bg-indigo-50",
   reset_password: "text-orange-700 bg-orange-50",
   send_now: "text-teal-700 bg-teal-50",
+  generate: "text-violet-700 bg-violet-50",
+  enable: "text-emerald-700 bg-emerald-50",
+  disable: "text-stone-700 bg-stone-100",
+  run_now: "text-cyan-700 bg-cyan-50",
 };
 
 const actionLabels = {
@@ -46,6 +52,10 @@ const actionLabels = {
   change_role: "Role Changed",
   reset_password: "Password Reset",
   send_now: "Report Sent",
+  generate: "Auto-Generated",
+  enable: "Enabled",
+  disable: "Disabled",
+  run_now: "Run Now",
 };
 
 function formatDetails(entity, details) {
@@ -90,6 +100,15 @@ function formatDetails(entity, details) {
     if (details.period) parts.push(details.period);
     if (details.source) parts.push(`via ${details.source}`);
     if (details.error) parts.push(`Error: ${details.error}`);
+    return { text: parts.join(" · ") || null, reason: null };
+  }
+  if (entity === "recurring_transaction") {
+    const parts = [];
+    if (details.name) parts.push(details.name);
+    if (details.amount) parts.push(`₹${Number(details.amount).toLocaleString("en-IN")}`);
+    if (details.frequency) parts.push(details.frequency);
+    if (details.generated_txn_id) parts.push(`txn: ${details.generated_txn_id.slice(0, 8)}`);
+    if (details.source) parts.push(`via ${details.source}`);
     return { text: parts.join(" · ") || null, reason: null };
   }
   return { text: null, reason: null };
@@ -168,7 +187,7 @@ export default function ActivityLog() {
           Filter:
         </div>
         <div className="flex gap-2 flex-wrap">
-          {[{ value: "", label: "All" }, { value: "transaction", label: "Transactions" }, { value: "contact", label: "Contacts" }, { value: "user", label: "Users" }, { value: "category", label: "Categories" }, { value: "settings", label: "Settings" }, { value: "scheduled_report", label: "Reports" }].map(({ value, label }) => (
+          {[{ value: "", label: "All" }, { value: "transaction", label: "Transactions" }, { value: "contact", label: "Contacts" }, { value: "user", label: "Users" }, { value: "category", label: "Categories" }, { value: "settings", label: "Settings" }, { value: "scheduled_report", label: "Reports" }, { value: "recurring_transaction", label: "Recurring" }].map(({ value, label }) => (
             <button key={value} onClick={() => setFilterEntity(value)}
               className={`px-3 py-1.5 text-xs font-medium rounded-lg transition-all ${filterEntity === value ? "bg-saffron-500 text-white shadow-sm" : "bg-white text-stone-600 border border-stone-200 hover:bg-stone-50"}`}>
               {label}

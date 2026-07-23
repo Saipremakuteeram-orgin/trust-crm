@@ -39,7 +39,7 @@ function validateTxnBody(body, isUpdate) {
 router.get('/', async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('transactions')
-    .select('id, type, mode, amount, party, description, txn_date, category_id, reference_no, digital_method, notify_contact_ids, notify_group_ids, voucher_filed, notification_status, created_by, created_at, categories(name)')
+    .select('id, type, mode, amount, party, description, txn_date, category_id, reference_no, digital_method, notify_contact_ids, notify_group_ids, voucher_filed, notification_status, is_recurring, recurring_id, created_by, created_at, categories(name)')
     .order('txn_date', { ascending: false });
   if (error) return res.status(400).json({ success: false, message: 'Failed to fetch transactions' });
   res.set('Cache-Control', 'private, max-age=10');

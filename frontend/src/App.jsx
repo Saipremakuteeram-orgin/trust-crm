@@ -16,6 +16,7 @@ const BackupLogs = lazy(() => import("./pages/BackupLogs"));
 const Reports = lazy(() => import("./pages/Reports"));
 const FileSend = lazy(() => import("./pages/FileSend"));
 const Mail = lazy(() => import("./pages/Mail"));
+const RecurringTransactions = lazy(() => import("./pages/RecurringTransactions"));
 
 function PageLoader() {
   return (
@@ -59,6 +60,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/dashboard" element={<Protected><Dashboard /></Protected>} />
         <Route path="/transactions" element={<Protected><Transactions /></Protected>} />
+        <Route path="/recurring" element={<Protected><RecurringTransactions /></Protected>} />
         <Route path="/contacts" element={<Protected><Contacts /></Protected>} />
         <Route path="/groups" element={<Protected><Groups /></Protected>} />
         <Route path="/users" element={<Protected><AdminProtected><Users /></AdminProtected></Protected>} />

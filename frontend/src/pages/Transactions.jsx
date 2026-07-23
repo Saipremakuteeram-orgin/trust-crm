@@ -301,6 +301,9 @@ export default function Transactions() {
                     <span className={`text-xs font-semibold px-2.5 py-1 rounded-full ${
                       t.type === "credit" ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-rose-50 text-rose-700 ring-1 ring-rose-200"
                     }`}>{t.type === "credit" ? "Credit" : "Debit"}</span>
+                    {t.is_recurring && (
+                      <span className="ml-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full bg-royal-50 text-royal-600 ring-1 ring-royal-200 uppercase tracking-wider">Recurring</span>
+                    )}
                   </td>
                   <td className="px-5 py-3.5 text-stone-800 font-medium">{t.party || "-"}</td>
                   <td className={`px-5 py-3.5 font-bold ${t.type === "credit" ? "text-emerald-700" : "text-rose-700"}`}>{fmt(t.amount)}</td>

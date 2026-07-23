@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
 import TransactionListModal from "../components/TransactionListModal";
-import { Wallet, Landmark, TrendingUp, TrendingDown, Activity, Users, Pencil, Check, X, RefreshCw, Download } from "lucide-react";
+import { Wallet, Landmark, TrendingUp, TrendingDown, Activity, Users, Pencil, Check, X, RefreshCw, Download, Repeat } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 import {
@@ -83,6 +83,7 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [backingUp, setBackingUp] = useState(false);
   const [modal, setModal] = useState({ open: false, title: "", subtitle: "", transactions: null, loading: false });
+  const [recurring, setRecurring] = useState(null);
 
   function loadSummary() {
     api.get("/dashboard/summary").then((res) => setSummary(res.data.result));
@@ -91,12 +92,14 @@ export default function Dashboard() {
   useEffect(() => {
     loadSummary();
     api.get("/analytics").then((res) => setAnalytics(res.data.result)).catch(() => setAnalyticsError(true));
+    api.get("/dashboard/recurring-commitment").then((res) => setRecurring(res.data.result)).catch(() => {});
   }, []);
 
   function handleRefresh() {
     setRefreshing(true);
     loadSummary();
     api.get("/analytics").then((res) => setAnalytics(res.data.result)).catch(() => {});
+    api.get("/dashboard/recurring-commitment").then((res) => setRecurring(res.data.result)).catch(() => {});
     setTimeout(() => setRefreshing(false), 600);
   }
 
@@ -191,7 +194,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stat Cards */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 mb-8">
             <StatCard icon={Wallet} label="Cash in Hand" value={fmt(cash?.cash_in_hand)} color="#10b981" delay={0}
               onClick={() => openTxnModal("cash", "Cash Transactions", "All cash-mode transactions")} />
             <StatCard icon={Landmark} label="Digital Balance" value={fmt(digital?.digital_balance)} color="#6366f1" delay={1}
@@ -200,6 +203,8 @@ export default function Dashboard() {
               onClick={() => openTxnModal("credit", "Income Transactions", "All credit (in) transactions")} />
             <StatCard icon={TrendingDown} label="Total Expenses" value={fmtShort(ov.total_debit)} sub={`Net: ${fmtShort(ov.net_balance)}`} color="#e11d48" delay={3}
               onClick={() => openTxnModal("debit", "Expense Transactions", "All debit (out) transactions")} />
+            <StatCard icon={Repeat} label="Monthly Recurring" value={recurring ? fmtShort(recurring.net) : "—"} sub={`${recurring?.active_count || 0} active templates`} color="#8b5cf6" delay={4}
+              onClick={() => window.location.href = "/recurring"} />
           </div>
 
       {/* Cash Flow + Digital Flow Summary */}

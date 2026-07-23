@@ -25,7 +25,7 @@ router.get('/', async (req, res) => {
     const result = await getCached('analytics:overview', 15000, async () => {
       const { data: txns, error } = await supabaseAdmin
         .from('transactions')
-        .select('id, type, mode, amount, party, category_id, txn_date, created_at');
+        .select('id, type, mode, amount, party, category_id, txn_date, is_recurring, created_at');
 
       if (error) throw error;
 

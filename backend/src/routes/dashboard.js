@@ -41,4 +41,49 @@ router.patch('/opening-balance', requireRole('admin'), async (req, res) => {
   res.json({ success: true });
 });
 
+router.get('/recurring-commitment', async (req, res) => {
+  try {
+    const { data: templates, error } = await supabaseAdmin
+      .from('recurring_transactions')
+      .select('id, name, type, mode, amount, frequency, enabled')
+      .eq('enabled', true);
+    if (error) throw error;
+
+    function toMonthly(amount, frequency) {
+      const a = Number(amount);
+      switch (frequency) {
+        case 'daily': return a * 30;
+        case 'weekly': return a * 4.33;
+        case 'biweekly': return a * 2.17;
+        case 'monthly': return a;
+        case 'quarterly': return a / 3;
+        case 'yearly': return a / 12;
+        default: return a;
+      }
+    }
+
+    let monthlyCredit = 0;
+    let monthlyDebit = 0;
+    for (const t of (templates || [])) {
+      const monthly = toMonthly(t.amount, t.frequency);
+      if (t.type === 'credit') monthlyCredit += monthly;
+      else monthlyDebit += monthly;
+    }
+
+    res.set('Cache-Control', 'private, max-age=30');
+    res.json({
+      success: true,
+      result: {
+        monthly_credit: Math.round(monthlyCredit * 100) / 100,
+        monthly_debit: Math.round(monthlyDebit * 100) / 100,
+        net: Math.round((monthlyCredit - monthlyDebit) * 100) / 100,
+        active_count: (templates || []).length,
+      },
+    });
+  } catch (err) {
+    console.error('Recurring commitment error:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to compute recurring commitment' });
+  }
+});
+
 module.exports = router;

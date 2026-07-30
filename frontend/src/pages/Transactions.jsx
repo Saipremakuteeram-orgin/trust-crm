@@ -417,13 +417,14 @@ export default function Transactions() {
                             className="text-rose-600 hover:text-rose-800 text-sm font-medium px-2 py-0.5 rounded hover:bg-rose-50 transition-colors">Remove</button>
                         )}
                       </div>
+                    ) : canEdit ? (
+                      <button onClick={() => openReceiptUpload(t)}
+                        className="text-saffron-600 hover:text-saffron-800 text-sm font-medium px-3 py-1 rounded-lg border border-saffron-200 bg-saffron-50 hover:bg-saffron-100 transition-colors">
+                        <Upload size={12} className="inline-block mr-1" /> Upload
+                      </button>
                     ) : (
-                      canEdit && (
-                        <button onClick={() => openReceiptUpload(t)}
-                          className="text-saffron-600 hover:text-saffron-800 text-sm font-medium px-3 py-1 rounded-lg border border-saffron-200 bg-saffron-50 hover:bg-saffron-100 transition-colors">
-                          <Upload size={12} className="inline-block mr-1" /> Upload
-                        </button>
-                      )}
+                      <span className="text-xs text-stone-300">—</span>
+                    )}
                   </td>
                   {(canEdit || canDelete) && (
                     <td className="px-5 py-3.5 text-right">

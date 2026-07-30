@@ -117,6 +117,38 @@ async function sendMessageToTelegram(text) {
   }
 }
 
+async function uploadFileToTelegram(buffer, fileName) {
+  if (!BOT_TOKEN || !STORAGE_CHAT_ID) throw new Error('Telegram not configured');
+  try {
+    const form = new FormData();
+    form.append('chat_id', STORAGE_CHAT_ID);
+    form.append('document', buffer, { filename: fileName });
+    const resp = await axios.post(
+      `https://api.telegram.org/bot${BOT_TOKEN}/sendDocument`,
+      form,
+      { headers: form.getHeaders(), timeout: 60000 }
+    );
+    const doc = resp.data?.result?.document;
+    return doc ? { file_id: doc.file_id, file_unique_id: doc.file_unique_id, file_name: doc.file_name, file_size: doc.file_size, message_id: resp.data.result.message_id } : null;
+  } catch (err) {
+    console.error('Telegram upload failed:', err.message);
+    throw new Error('Failed to upload to Telegram: ' + err.message);
+  }
+}
+
+async function getTelegramFileUrl(fileId) {
+  if (!BOT_TOKEN) throw new Error('Telegram not configured');
+  try {
+    const resp = await axios.get(`https://api.telegram.org/bot${BOT_TOKEN}/getFile?file_id=${fileId}`);
+    const filePath = resp.data?.result?.file_path;
+    if (!filePath) throw new Error('File not found');
+    return `https://api.telegram.org/file/bot${BOT_TOKEN}/${filePath}`;
+  } catch (err) {
+    console.error('Telegram getFile failed:', err.message);
+    throw new Error('Failed to get Telegram file URL: ' + err.message);
+  }
+}
+
 async function runDailyBackup(triggerType = 'scheduled') {
   const startTime = Date.now();
   console.log(`📦 Starting backup (trigger: ${triggerType})...`);
@@ -214,4 +246,4 @@ async function getBackupLogs(limit = 30, offset = 0) {
   return data || [];
 }
 
-module.exports = { runDailyBackup, getBackupStatusToday, getBackupLogs, getIstDate, TABLES };
+module.exports = { runDailyBackup, getBackupStatusToday, getBackupLogs, getIstDate, TABLES, uploadFileToTelegram, getTelegramFileUrl };

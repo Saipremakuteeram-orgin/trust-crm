@@ -11,7 +11,7 @@ const { requireAuth, requireRole } = require('./middlewares/auth');
 
 const app = express();
 
-const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'https://crm.saidharmasamrakshanapremakuteeram.qzz.io,https://trust-crm.vercel.app').split(',').map((s) => s.trim());
+const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'https://crmsaidharmasamrakshanapremakuteeram.dpdns.org,https://crm.saidharmasamrakshanapremakuteeram.qzz.io,https://trust-crm.vercel.app').split(',').map((s) => s.trim());
 
 app.use(compression({ level: 6, threshold: 1024 }));
 app.use(helmet({ contentSecurityPolicy: false }));

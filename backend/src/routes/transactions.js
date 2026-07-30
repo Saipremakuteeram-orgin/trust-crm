@@ -1,11 +1,18 @@
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
 const supabaseAdmin = require('@/config/supabaseAdmin');
 const { requireAuth, requireRole } = require('@/middlewares/auth');
 const { notifyContactsOfTransaction } = require('@/services/notify');
 const { logActivity } = require('@/lib/logger');
+const { uploadFileToTelegram, getTelegramFileUrl } = require('@/services/backup');
 
 router.use(requireAuth);
+
+const RECEIPT_UPLOAD = multer({ 
+  storage: multer.memoryStorage(), 
+  limits: { fileSize: 20 * 1024 * 1024, files: 1 } // 20MB limit
+});
 
 const VALID_TYPES = ['credit', 'debit'];
 const VALID_MODES = ['cash', 'digital'];
@@ -39,7 +46,7 @@ function validateTxnBody(body, isUpdate) {
 router.get('/', async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('transactions')
-    .select('id, type, mode, amount, party, description, txn_date, category_id, reference_no, digital_method, notify_contact_ids, notify_group_ids, voucher_filed, notification_status, is_recurring, recurring_id, created_by, created_at, categories(name)')
+    .select('id, type, mode, amount, party, description, txn_date, category_id, reference_no, digital_method, notify_contact_ids, notify_group_ids, voucher_filed, notification_status, is_recurring, recurring_id, created_by, created_at, categories(name), receipt_file_id, receipt_file_name, receipt_file_size, receipt_mime_type')
     .order('txn_date', { ascending: false });
   if (error) return res.status(400).json({ success: false, message: 'Failed to fetch transactions' });
   res.set('Cache-Control', 'private, max-age=10');
@@ -198,6 +205,117 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
   const { error } = await supabaseAdmin.from('transactions').delete().eq('id', req.params.id);
   if (error) return res.status(400).json({ success: false, message: 'Failed to delete transaction' });
   res.json({ success: true });
+});
+
+// UPLOAD RECEIPT
+router.post('/:id/receipt', requireRole('admin', 'accountant'), RECEIPT_UPLOAD.single('file'), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: 'No file uploaded' });
+
+    const { data: txn, error: txnError } = await supabaseAdmin
+      .from('transactions')
+      .select('id, type, mode, amount, party')
+      .eq('id', req.params.id)
+      .single();
+    if (txnError || !txn) return res.status(404).json({ success: false, message: 'Transaction not found' });
+
+    const telegramResult = await uploadFileToTelegram(req.file.buffer, req.file.originalname);
+    if (!telegramResult) return res.status(500).json({ success: false, message: 'Failed to upload to Telegram' });
+
+    const updates = {
+      receipt_file_id: telegramResult.file_id,
+      receipt_file_name: telegramResult.file_name || req.file.originalname,
+      receipt_file_size: telegramResult.file_size || req.file.size,
+      receipt_mime_type: req.file.mimetype,
+    };
+
+    const { data, error } = await supabaseAdmin
+      .from('transactions')
+      .update(updates)
+      .eq('id', req.params.id)
+      .select()
+      .single();
+    if (error) return res.status(400).json({ success: false, message: 'Failed to save receipt metadata' });
+
+    logActivity({
+      userId: req.user.id,
+      userEmail: req.user.email,
+      action: 'upload',
+      entity: 'receipt',
+      entityId: req.params.id,
+      details: { file_name: updates.receipt_file_name, file_size: updates.receipt_file_size },
+      ipAddress: req.ip,
+    });
+
+    res.json({ success: true, result: data });
+  } catch (err) {
+    console.error('Receipt upload error:', err.message);
+    res.status(500).json({ success: false, message: err.message || 'Upload failed' });
+  }
+});
+
+// DOWNLOAD RECEIPT
+router.get('/:id/receipt', async (req, res) => {
+  try {
+    const { data: txn, error } = await supabaseAdmin
+      .from('transactions')
+      .select('id, receipt_file_id, receipt_file_name, receipt_mime_type, type, mode, amount, party')
+      .eq('id', req.params.id)
+      .single();
+    if (error || !txn) return res.status(404).json({ success: false, message: 'Transaction not found' });
+    if (!txn.receipt_file_id) return res.status(404).json({ success: false, message: 'No receipt attached' });
+
+    const fileUrl = await getTelegramFileUrl(txn.receipt_file_id);
+    const response = await fetch(fileUrl);
+    if (!response.ok) return res.status(500).json({ success: false, message: 'Failed to fetch from Telegram' });
+
+    res.setHeader('Content-Type', txn.receipt_mime_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${txn.receipt_file_name || 'receipt'}"`);
+    res.setHeader('Cache-Control', 'private, max-age=3600');
+
+    // Stream the file
+    const buffer = await response.arrayBuffer();
+    res.send(Buffer.from(buffer));
+  } catch (err) {
+    console.error('Receipt download error:', err.message);
+    res.status(500).json({ success: false, message: err.message || 'Download failed' });
+  }
+});
+
+// DELETE RECEIPT
+router.delete('/:id/receipt', requireRole('admin', 'accountant'), async (req, res) => {
+  try {
+    const { data: txn, error: fetchError } = await supabaseAdmin
+      .from('transactions')
+      .select('id, receipt_file_id, receipt_file_name')
+      .eq('id', req.params.id)
+      .single();
+    if (fetchError || !txn) return res.status(404).json({ success: false, message: 'Transaction not found' });
+    if (!txn.receipt_file_id) return res.status(404).json({ success: false, message: 'No receipt to remove' });
+
+    const { data, error } = await supabaseAdmin
+      .from('transactions')
+      .update({ receipt_file_id: null, receipt_file_name: null, receipt_file_size: null, receipt_mime_type: null })
+      .eq('id', req.params.id)
+      .select()
+      .single();
+    if (error) return res.status(400).json({ success: false, message: 'Failed to remove receipt' });
+
+    logActivity({
+      userId: req.user.id,
+      userEmail: req.user.email,
+      action: 'delete',
+      entity: 'receipt',
+      entityId: req.params.id,
+      details: { file_name: txn.receipt_file_name },
+      ipAddress: req.ip,
+    });
+
+    res.json({ success: true, result: data });
+  } catch (err) {
+    console.error('Receipt delete error:', err.message);
+    res.status(500).json({ success: false, message: err.message || 'Delete failed' });
+  }
 });
 
 module.exports = router;

@@ -1,8 +1,8 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
-import { Plus, X, Trash2, Pencil, Search, Download, FileText, RefreshCw, Upload } from "lucide-react";
+import { Plus, X, Trash2, Pencil, Search, Download, FileText, RefreshCw, Upload, File, Eye, Paperclip } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 import useEscToClose from "../hooks/useEscToClose";
@@ -38,6 +38,14 @@ export default function Transactions() {
   const [exporting, setExporting] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [restoring, setRestoring] = useState(false);
+
+  // Receipt upload states
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [receiptTxn, setReceiptTxn] = useState(null);
+  const [receiptFile, setReceiptFile] = useState(null);
+  const [receiptUploading, setReceiptUploading] = useState(false);
+  const fileInputRef = useRef(null);
+  useEscToClose(() => { setReceiptOpen(false); setReceiptTxn(null); setReceiptFile(null); }, receiptOpen);
 
   function load() {
     api.get("/transactions").then((res) => setTxns(res.data.result));
@@ -146,6 +154,65 @@ export default function Transactions() {
       load();
     } catch (err) {
       addToast("Failed to delete transaction", "error");
+    }
+  }
+
+  function openReceiptUpload(txn) {
+    setReceiptTxn(txn);
+    setReceiptFile(null);
+    setReceiptOpen(true);
+  }
+
+  function handleReceiptFile(e) {
+    const file = e.target.files?.[0] || e.dataTransfer?.files?.[0];
+    if (!file) return;
+    if (file.size > 20 * 1024 * 1024) { addToast("File must be under 20MB", "error"); return; }
+    setReceiptFile(file);
+  }
+
+  async function handleReceiptUpload(e) {
+    e.preventDefault();
+    if (!receiptFile || !receiptTxn) return;
+    setReceiptUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append('file', receiptFile);
+      await api.post(`/transactions/${receiptTxn.id}/receipt`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      addToast("Receipt uploaded successfully", "success");
+      setReceiptOpen(false);
+      setReceiptTxn(null);
+      setReceiptFile(null);
+      load();
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to upload receipt", "error");
+    }
+    setReceiptUploading(false);
+  }
+
+  async function handleReceiptDownload(txn) {
+    try {
+      const res = await api.get(`/transactions/${txn.id}/receipt`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', txn.receipt_file_name || 'receipt');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to download receipt", "error");
+    }
+  }
+
+  async function handleReceiptRemove(txn) {
+    if (!window.confirm("Remove receipt from this transaction?")) return;
+    try {
+      await api.delete(`/transactions/${txn.id}/receipt`);
+      addToast("Receipt removed", "success");
+      load();
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to remove receipt", "error");
     }
   }
 
@@ -290,6 +357,7 @@ export default function Transactions() {
               <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Category</th>
               <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Voucher</th>
               <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Notified</th>
+              <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Receipt</th>
               {(canEdit || canDelete) && <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider text-right">Actions</th>}
             </tr>
           </thead>
@@ -335,6 +403,27 @@ export default function Transactions() {
                       t.notification_status === "partial" ? "bg-amber-50 text-amber-600" :
                       t.notification_status === "failed" ? "bg-rose-50 text-rose-600" : "bg-stone-100 text-stone-500"
                     }`}>{t.notification_status}</span>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    {t.receipt_file_id ? (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-600">Attached</span>
+                        {canEdit && (
+                          <button onClick={() => handleReceiptDownload(t)}
+                            className="text-royal-600 hover:text-royal-800 text-sm font-medium px-2 py-0.5 rounded hover:bg-royal-50 transition-colors">Download</button>
+                        )}
+                        {canEdit && (
+                          <button onClick={() => handleReceiptRemove(t)}
+                            className="text-rose-600 hover:text-rose-800 text-sm font-medium px-2 py-0.5 rounded hover:bg-rose-50 transition-colors">Remove</button>
+                        )}
+                      </div>
+                    ) : (
+                      canEdit && (
+                        <button onClick={() => openReceiptUpload(t)}
+                          className="text-saffron-600 hover:text-saffron-800 text-sm font-medium px-3 py-1 rounded-lg border border-saffron-200 bg-saffron-50 hover:bg-saffron-100 transition-colors">
+                          <Upload size={12} className="inline-block mr-1" /> Upload
+                        </button>
+                      )}
                   </td>
                   {(canEdit || canDelete) && (
                     <td className="px-5 py-3.5 text-right">
@@ -527,6 +616,65 @@ export default function Transactions() {
                   className="w-full bg-gradient-to-r from-saffron-500 to-saffron-600 hover:from-saffron-400 hover:to-saffron-500 text-white rounded-xl py-2.5 text-sm font-semibold shadow-lg shadow-saffron-500/25 transition-all disabled:opacity-50">
                   {saving ? "Saving..." : editing ? "Update Transaction" : "Save Transaction"}
                 </motion.button>
+              </form>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {receiptOpen && receiptTxn && (
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+            <motion.div initial={{ opacity: 0, scale: 0.92, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.92, y: 24 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+              className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl shadow-black/20">
+              <div className="flex justify-between items-center mb-5">
+                <h2 className="text-lg font-bold text-stone-900">Upload Receipt</h2>
+                <motion.button whileHover={{ scale: 1.1, rotate: 90 }} whileTap={{ scale: 0.9 }}
+                  onClick={() => { setReceiptOpen(false); setReceiptTxn(null); setReceiptFile(null); }} className="p-1.5 rounded-lg hover:bg-stone-100 transition-colors"><X size={18} /></motion.button>
+              </div>
+              <p className="text-sm text-stone-500 mb-4">Transaction: {receiptTxn.type === 'credit' ? 'Credit' : 'Debit'} - {fmt(receiptTxn.amount)} - {receiptTxn.party || '-'}</p>
+              <form onSubmit={handleReceiptUpload} className="space-y-4">
+                <div
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                  onDrop={(e) => { e.preventDefault(); e.stopPropagation(); handleReceiptFile(e); }}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${receiptFile ? 'border-emerald-400 bg-emerald-50' : 'border-stone-300 hover:border-saffron-300 hover:bg-stone-50'}`}>
+                  <input ref={fileInputRef} type="file" accept="image/*,application/pdf" className="hidden" onChange={handleReceiptFile} disabled={receiptUploading} />
+                  <Upload size={40} className={`mx-auto mb-3 ${receiptFile ? 'text-emerald-500' : 'text-stone-400'}`} />
+                  <p className="text-sm font-medium text-stone-700">
+                    {receiptFile ? receiptFile.name : 'Drop receipt file here or click to browse'}
+                  </p>
+                  {receiptFile && <p className="text-xs text-stone-500 mt-1">{(receiptFile.size / 1024).toFixed(1)} KB</p>}
+                </div>
+                {receiptFile && (
+                  <div className="flex items-center gap-3 p-3 bg-stone-50 rounded-xl">
+                    <div className="w-10 h-10 rounded-lg bg-white border border-stone-200 flex items-center justify-center flex-shrink-0">
+                      {receiptFile.type.startsWith('image/') ? (
+                        <img src={URL.createObjectURL(receiptFile)} alt="Preview" className="w-full h-full object-cover rounded" />
+                      ) : (
+                        <span className="text-2xl">📄</span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-stone-800 truncate">{receiptFile.name}</p>
+                      <p className="text-xs text-stone-500">{(receiptFile.size / 1024).toFixed(1)} KB · {receiptFile.type || 'Unknown type'}</p>
+                    </div>
+                    <button type="button" onClick={() => setReceiptFile(null)} className="text-stone-400 hover:text-rose-600 p-1 rounded hover:bg-stone-200 transition-colors">
+                      <X size={16} />
+                    </button>
+                  </div>
+                )}
+                <div className="flex gap-2 pt-2">
+                  <button type="button" onClick={() => { setReceiptOpen(false); setReceiptTxn(null); setReceiptFile(null); }}
+                    className="flex-1 border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 rounded-xl py-2.5 text-sm font-semibold transition-colors">Cancel</button>
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} disabled={!receiptFile || receiptUploading} type="submit"
+                    className="flex-1 bg-gradient-to-r from-saffron-500 to-saffron-600 hover:from-saffron-400 hover:to-saffron-500 text-white rounded-xl py-2.5 text-sm font-semibold shadow-lg shadow-saffron-500/25 transition-all disabled:opacity-50">
+                    {receiptUploading ? 'Uploading...' : 'Upload Receipt'}
+                  </motion.button>
+                </div>
               </form>
             </motion.div>
           </motion.div>

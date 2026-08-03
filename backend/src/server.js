@@ -44,6 +44,7 @@ app.use('/api/mail', sensitiveLimiter, require('./routes/mail'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/scheduled-reports', require('./routes/scheduledReports'));
 app.use('/api/recurring-transactions', require('./routes/recurringTransactions'));
+app.use('/api/functions', require('./routes/functions'));
 
 app.post('/api/reports/monthly/send-now', requireAuth, sensitiveLimiter, requireRole('admin', 'accountant'), async (req, res) => {
   const { generateAndSendMonthlyReport } = require('./cron/monthlyReport');

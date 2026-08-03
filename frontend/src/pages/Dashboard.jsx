@@ -3,9 +3,10 @@ import { motion } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
 import TransactionListModal from "../components/TransactionListModal";
-import { Wallet, Landmark, TrendingUp, TrendingDown, Activity, Users, Pencil, Check, X, RefreshCw, Download, Repeat } from "lucide-react";
+import { Wallet, Landmark, TrendingUp, TrendingDown, Activity, Users, Pencil, Check, X, RefreshCw, Download, Repeat, PartyPopper, AlertTriangle } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
+import { useNavigate } from "react-router-dom";
 import {
   AreaChart, Area, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -76,6 +77,7 @@ export default function Dashboard() {
   const [analyticsError, setAnalyticsError] = useState(false);
   const { profile } = useAuth();
   const { addToast } = useToast();
+  const navigate = useNavigate();
   const isAdmin = profile?.role === "admin";
   const canAdd = isAdmin || profile?.role === "accountant";
   const [editing, setEditing] = useState(null);
@@ -84,6 +86,7 @@ export default function Dashboard() {
   const [backingUp, setBackingUp] = useState(false);
   const [modal, setModal] = useState({ open: false, title: "", subtitle: "", transactions: null, loading: false });
   const [recurring, setRecurring] = useState(null);
+  const [functions, setFunctions] = useState([]);
 
   function loadSummary() {
     api.get("/dashboard/summary").then((res) => setSummary(res.data.result));
@@ -93,6 +96,7 @@ export default function Dashboard() {
     loadSummary();
     api.get("/analytics").then((res) => setAnalytics(res.data.result)).catch(() => setAnalyticsError(true));
     api.get("/dashboard/recurring-commitment").then((res) => setRecurring(res.data.result)).catch(() => {});
+    api.get("/functions").then((res) => setFunctions(res.data.result || [])).catch(() => setFunctions([]));
   }, []);
 
   function handleRefresh() {
@@ -100,6 +104,7 @@ export default function Dashboard() {
     loadSummary();
     api.get("/analytics").then((res) => setAnalytics(res.data.result)).catch(() => {});
     api.get("/dashboard/recurring-commitment").then((res) => setRecurring(res.data.result)).catch(() => {});
+    api.get("/functions").then((res) => setFunctions(res.data.result || [])).catch(() => {});
     setTimeout(() => setRefreshing(false), 600);
   }
 
@@ -204,8 +209,57 @@ export default function Dashboard() {
             <StatCard icon={TrendingDown} label="Total Expenses" value={fmtShort(ov.total_debit)} sub={`Net: ${fmtShort(ov.net_balance)}`} color="#e11d48" delay={3}
               onClick={() => openTxnModal("debit", "Expense Transactions", "All debit (out) transactions")} />
             <StatCard icon={Repeat} label="Monthly Recurring" value={recurring ? fmtShort(recurring.net) : "—"} sub={`${recurring?.active_count || 0} active templates`} color="#8b5cf6" delay={4}
-              onClick={() => window.location.href = "/recurring"} />
+              onClick={() => navigate("/recurring")} />
           </div>
+
+      {/* Function Budgets Summary */}
+      {functions.length > 0 && (
+        <div className="mb-8">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-sm font-semibold text-stone-700 flex items-center gap-2">
+              <PartyPopper size={16} className="text-saffron-500" />
+              Function Budgets
+            </h2>
+            <button onClick={() => navigate("/functions")}
+              className="text-xs font-semibold text-saffron-600 hover:text-saffron-700 transition-colors">
+              View all →
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            {functions.filter((f) => f.status === "active").slice(0, 4).map((fn) => {
+              const spent = Number(fn.spent_total) || 0;
+              const budget = Number(fn.budget_total) || 0;
+              const pct = budget > 0 ? (spent / budget) * 100 : 0;
+              const over = spent > budget;
+              return (
+                <motion.div key={fn.id} custom={13} variants={cardVariants} initial="hidden" animate="visible"
+                  onClick={() => navigate(`/functions/${fn.id}`)}
+                  className="bg-white rounded-2xl border border-stone-200/80 p-5 shadow-sm hover-lift cursor-pointer">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-semibold text-stone-800 truncate">{fn.name}</span>
+                    {over && <AlertTriangle size={14} className="text-rose-500 shrink-0" />}
+                  </div>
+                  <div className="flex justify-between text-xs text-stone-500 mb-1.5">
+                    <span>Spent</span>
+                    <span className="font-semibold text-stone-700">{fmtShort(spent)} / {fmtShort(budget)}</span>
+                  </div>
+                  <div className="h-2 bg-stone-100 rounded-full overflow-hidden">
+                    <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(pct, 100)}%` }}
+                      transition={{ duration: 0.8, ease: "easeOut" }}
+                      className={`h-full rounded-full ${over ? "bg-rose-500" : pct > 80 ? "bg-amber-500" : "bg-emerald-500"}`} />
+                  </div>
+                  <div className="flex justify-between text-[11px] mt-1.5">
+                    <span className={over ? "text-rose-600 font-semibold" : "text-stone-400"}>
+                      {over ? `Over by ${fmtShort(spent - budget)}` : `${pct.toFixed(0)}% used`}
+                    </span>
+                    <span className="text-stone-400">{fmtShort(Math.max(budget - spent, 0))} left</span>
+                  </div>
+                </motion.div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Cash Flow + Digital Flow Summary */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-8">

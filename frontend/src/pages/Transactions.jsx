@@ -5,6 +5,7 @@ import AppLayout from "../components/AppLayout";
 import { Plus, X, Trash2, Pencil, Search, Download, FileText, RefreshCw, Upload, File, Eye, Paperclip } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
+import { useNavigate } from "react-router-dom";
 import useEscToClose from "../hooks/useEscToClose";
 
 const fmt = (n) =>
@@ -14,11 +15,13 @@ const emptyForm = {
   type: "credit", mode: "cash", digital_method: "upi", amount: "",
   party: "", description: "", txn_date: new Date().toISOString().slice(0, 10),
   notify_contact_ids: [], notify_group_ids: [], category_id: "", voucher_filed: null, edit_reason: "",
+  function_id: "", function_category_id: "",
 };
 
 export default function Transactions() {
   const { profile } = useAuth();
   const { addToast } = useToast();
+  const navigate = useNavigate();
   const role = profile?.role || "viewer";
   const canAdd = role === "admin" || role === "accountant";
   const canDelete = role === "admin";
@@ -27,6 +30,8 @@ export default function Transactions() {
   const [contacts, setContacts] = useState([]);
   const [groups, setGroups] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [functions, setFunctions] = useState([]);
+  const [functionCategories, setFunctionCategories] = useState([]);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -52,6 +57,7 @@ export default function Transactions() {
     api.get("/contacts").then((res) => setContacts(res.data.result));
     api.get("/groups").then((res) => setGroups(res.data.result)).catch(() => {});
     api.get("/categories").then((res) => setCategories(res.data.result)).catch(() => {});
+    api.get("/functions").then((res) => setFunctions(res.data.result || [])).catch(() => setFunctions([]));
   }
   useEffect(load, []);
 
@@ -100,7 +106,17 @@ export default function Transactions() {
     }
   }
 
-  function openAdd() { setEditing(null); setForm({ ...emptyForm }); setOpen(true); }
+  function openAdd() { setEditing(null); setForm({ ...emptyForm }); setFunctionCategories([]); setOpen(true); }
+
+  function handleFunctionChange(fid) {
+    setForm((f) => ({ ...f, function_id: fid, function_category_id: "" }));
+    setFunctionCategories([]);
+    if (fid) {
+      api.get(`/functions/${fid}`)
+        .then((res) => setFunctionCategories(res.data.result?.categories || []))
+        .catch(() => setFunctionCategories([]));
+    }
+  }
 
   function openEdit(txn) {
     setEditing(txn);
@@ -112,7 +128,15 @@ export default function Transactions() {
       category_id: txn.category_id || "",
       voucher_filed: txn.mode === "cash" ? !!txn.voucher_filed : null,
       edit_reason: "",
+      function_id: txn.function_id || "",
+      function_category_id: txn.function_category_id || "",
     });
+    setFunctionCategories([]);
+    if (txn.function_id) {
+      api.get(`/functions/${txn.function_id}`)
+        .then((res) => setFunctionCategories(res.data.result?.categories || []))
+        .catch(() => setFunctionCategories([]));
+    }
     setOpen(true);
   }
 
@@ -131,6 +155,8 @@ export default function Transactions() {
       const payload = { ...form, amount: Number(form.amount) };
       if (payload.mode !== "cash") delete payload.voucher_filed;
       if (!editing) delete payload.edit_reason;
+      if (!payload.function_id) { delete payload.function_id; delete payload.function_category_id; }
+      if (!payload.function_category_id) delete payload.function_category_id;
       if (editing) {
         await api.patch("/transactions/" + editing.id, payload);
         addToast("Transaction updated successfully", "success");
@@ -355,6 +381,7 @@ export default function Transactions() {
               <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Amount</th>
               <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Mode</th>
               <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Category</th>
+              <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Function</th>
               <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Voucher</th>
               <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Notified</th>
               <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Receipt</th>
@@ -383,6 +410,16 @@ export default function Transactions() {
                     }`}>{t.mode === "cash" ? "Cash" : t.digital_method?.toUpperCase() || "Digital"}</span>
                   </td>
                   <td className="px-5 py-3.5 text-stone-500 text-xs">{t.categories?.name || "-"}</td>
+                  <td className="px-5 py-3.5">
+                    {t.functions?.name ? (
+                      <button onClick={() => t.function_id && navigate(`/functions/${t.function_id}`)}
+                        className="text-xs font-semibold px-2 py-1 rounded-full bg-saffron-50 text-saffron-700 ring-1 ring-saffron-200 cursor-pointer hover:bg-saffron-100 hover:ring-saffron-300 transition-colors" title="View function budget">
+                        {t.functions.name}
+                      </button>
+                    ) : (
+                      <span className="text-xs text-stone-300">—</span>
+                    )}
+                  </td>
                   <td className="px-5 py-3.5">
                     {t.mode === "cash" ? (
                       <button onClick={() => handleToggleVoucher(t)}
@@ -450,7 +487,7 @@ export default function Transactions() {
               ))}
             </AnimatePresence>
             {filtered.length === 0 && (
-              <tr><td colSpan={9} className="px-5 py-12 text-center text-stone-400">
+              <tr><td colSpan={10} className="px-5 py-12 text-center text-stone-400">
                 <div className="flex flex-col items-center gap-2">
                   <div className="w-12 h-12 rounded-full bg-stone-100 flex items-center justify-center text-stone-300">
                     <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" /></svg>
@@ -496,6 +533,39 @@ export default function Transactions() {
                   <option value="">Select Category (optional)</option>
                   {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
+
+                <AnimatePresence>
+                  {form.type === "debit" && (
+                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                      exit={{ opacity: 0, height: 0 }} className="space-y-2">
+                      <div className="text-sm font-semibold text-stone-700 mb-1">Function Budget (optional)</div>
+                      <select value={form.function_id} onChange={(e) => handleFunctionChange(e.target.value)}
+                        className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
+                        <option value="">Not linked to any function</option>
+                        {functions.filter((f) => f.status === "active").map((f) => (
+                          <option key={f.id} value={f.id}>
+                            {f.name} — {f.remaining_total < 0 ? `Over by ${fmt(Math.abs(f.remaining_total))}` : `${fmt(f.remaining_total)} left`}
+                          </option>
+                        ))}
+                      </select>
+                      <AnimatePresence>
+                        {form.function_id && functionCategories.length > 0 && (
+                          <motion.select initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }} value={form.function_category_id}
+                            onChange={(e) => setForm({ ...form, function_category_id: e.target.value })}
+                            className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
+                            <option value="">Category within function (optional)</option>
+                            {functionCategories.map((fc) => (
+                              <option key={fc.id} value={fc.id}>
+                                {fc.category_name} — {fmt(Number(fc.budget_amount) - Number(fc.spent_total))} left
+                              </option>
+                            ))}
+                          </motion.select>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
 
                 <div className="flex gap-2">
                   <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={() => setForm({ ...form, mode: "cash" })}

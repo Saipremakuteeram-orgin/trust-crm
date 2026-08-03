@@ -19,6 +19,35 @@ const VALID_MODES = ['cash', 'digital'];
 const MAX_AMOUNT = 100000000;
 const MAX_FIELD_LEN = 2000;
 
+async function validateFunctionLink(functionId, functionCategoryId, type, mode, amount) {
+  if (!functionId && !functionCategoryId) return null;
+  if (functionCategoryId && !functionId) {
+    return 'function_id is required when function_category_id is set';
+  }
+  if (type !== 'debit') return null;
+
+  try {
+    if (functionId) {
+      const { data: fn, error } = await supabaseAdmin.from('functions').select('id, budget_total, budget_cash, budget_digital, status').eq('id', functionId).single();
+      if (error || !fn) return 'Linked function not found';
+      if (fn.status !== 'active') return 'Cannot link transaction to a non-active function';
+      if (fn.budget_total > 0 && Number(amount) > fn.budget_total) {
+        // Allow overspend but return warning via a flag - handled by caller
+        return null;
+      }
+    }
+    if (functionCategoryId) {
+      const { data: fc, error } = await supabaseAdmin.from('function_categories').select('id, function_id').eq('id', functionCategoryId).single();
+      if (error || !fc) return 'Linked function category not found';
+      if (fc.function_id !== functionId) return 'Function category does not belong to the linked function';
+    }
+    return null;
+  } catch (err) {
+    console.error('Function link validation error:', err.message);
+    return 'Failed to validate function link';
+  }
+}
+
 function validateTxnBody(body, isUpdate) {
   if (!isUpdate) {
     if (!body.amount || typeof body.amount !== 'number' || body.amount <= 0 || body.amount > MAX_AMOUNT) {
@@ -46,7 +75,7 @@ function validateTxnBody(body, isUpdate) {
 router.get('/', async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('transactions')
-    .select('id, type, mode, amount, party, description, txn_date, category_id, reference_no, digital_method, notify_contact_ids, notify_group_ids, voucher_filed, notification_status, is_recurring, recurring_id, created_by, created_at, categories(name), receipt_file_id, receipt_file_name, receipt_file_size, receipt_mime_type')
+    .select('id, type, mode, amount, party, description, txn_date, category_id, reference_no, digital_method, notify_contact_ids, notify_group_ids, voucher_filed, notification_status, is_recurring, recurring_id, created_by, created_at, function_id, function_category_id, categories(name), functions(name), receipt_file_id, receipt_file_name, receipt_file_size, receipt_mime_type')
     .order('txn_date', { ascending: false });
   if (error) return res.status(400).json({ success: false, message: 'Failed to fetch transactions' });
   res.set('Cache-Control', 'private, max-age=10');
@@ -63,6 +92,9 @@ router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
     return res.status(400).json({ success: false, message: 'Voucher filed status is required for cash transactions' });
   }
 
+  const functionErr = await validateFunctionLink(body.function_id, body.function_category_id, body.type, body.mode, body.amount);
+  if (functionErr) return res.status(400).json({ success: false, message: functionErr });
+
   const insertData = {
     type: body.type,
     mode: body.mode,
@@ -76,6 +108,8 @@ router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
     notify_contact_ids: body.notify_contact_ids,
     created_by: req.user.id,
   };
+  if (body.function_id) insertData.function_id = body.function_id;
+  if (body.function_category_id) insertData.function_category_id = body.function_category_id;
   if (body.mode === 'cash') {
     insertData.voucher_filed = !!body.voucher_filed;
   }
@@ -144,7 +178,7 @@ router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
 
 // UPDATE
 router.patch('/:id', requireRole('admin', 'accountant'), async (req, res) => {
-  const allowed = ['type', 'mode', 'amount', 'category_id', 'description', 'txn_date', 'party', 'notify_contact_ids', 'notify_group_ids', 'voucher_filed'];
+  const allowed = ['type', 'mode', 'amount', 'category_id', 'description', 'txn_date', 'party', 'notify_contact_ids', 'notify_group_ids', 'voucher_filed', 'function_id', 'function_category_id'];
   const updates = {};
   for (const key of allowed) {
     if (req.body[key] !== undefined) updates[key] = req.body[key];
@@ -155,6 +189,17 @@ router.patch('/:id', requireRole('admin', 'accountant'), async (req, res) => {
 
   const validationErr = validateTxnBody(updates, true);
   if (validationErr) return res.status(400).json({ success: false, message: validationErr });
+
+  if (updates.function_id !== undefined || updates.function_category_id !== undefined) {
+    const fnErr = await validateFunctionLink(
+      updates.function_id !== undefined ? updates.function_id : null,
+      updates.function_category_id !== undefined ? updates.function_category_id : null,
+      updates.type || 'debit',
+      updates.mode || 'cash',
+      updates.amount
+    );
+    if (fnErr) return res.status(400).json({ success: false, message: fnErr });
+  }
 
   if (updates.mode === 'digital' && updates.voucher_filed !== undefined) {
     delete updates.voucher_filed;

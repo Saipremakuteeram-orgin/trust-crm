@@ -11,6 +11,11 @@ import useEscToClose from "../hooks/useEscToClose";
 const fmt = (n) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n || 0));
 
+const catRemaining = (fc) => {
+  if (fc.remaining_total !== undefined && fc.remaining_total !== null) return Number(fc.remaining_total);
+  return Number(fc.budget_amount || 0) - Number(fc.spent_total || 0);
+};
+
 const emptyForm = {
   type: "credit", mode: "cash", digital_method: "upi", amount: "",
   party: "", description: "", txn_date: new Date().toISOString().slice(0, 10),
@@ -32,6 +37,9 @@ export default function Transactions() {
   const [categories, setCategories] = useState([]);
   const [functions, setFunctions] = useState([]);
   const [functionCategories, setFunctionCategories] = useState([]);
+  const [functionsLoading, setFunctionsLoading] = useState(false);
+  const [functionsError, setFunctionsError] = useState("");
+  const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -57,7 +65,12 @@ export default function Transactions() {
     api.get("/contacts").then((res) => setContacts(res.data.result));
     api.get("/groups").then((res) => setGroups(res.data.result)).catch(() => {});
     api.get("/categories").then((res) => setCategories(res.data.result)).catch(() => {});
-    api.get("/functions").then((res) => setFunctions(res.data.result || [])).catch(() => setFunctions([]));
+    setFunctionsLoading(true);
+    setFunctionsError("");
+    api.get("/functions")
+      .then((res) => setFunctions(res.data.result || []))
+      .catch(() => { setFunctions([]); setFunctionsError("Failed to load functions"); })
+      .finally(() => setFunctionsLoading(false));
   }
   useEffect(load, []);
 
@@ -106,16 +119,21 @@ export default function Transactions() {
     }
   }
 
-  function openAdd() { setEditing(null); setForm({ ...emptyForm }); setFunctionCategories([]); setOpen(true); }
+  function loadFunctionCategories(fid) {
+    setFunctionCategories([]);
+    if (!fid) { setCategoriesLoading(false); return; }
+    setCategoriesLoading(true);
+    api.get(`/functions/${fid}`)
+      .then((res) => setFunctionCategories(res.data.result?.categories || []))
+      .catch(() => setFunctionCategories([]))
+      .finally(() => setCategoriesLoading(false));
+  }
+
+  function openAdd() { setEditing(null); setForm({ ...emptyForm }); loadFunctionCategories(""); setOpen(true); }
 
   function handleFunctionChange(fid) {
     setForm((f) => ({ ...f, function_id: fid, function_category_id: "" }));
-    setFunctionCategories([]);
-    if (fid) {
-      api.get(`/functions/${fid}`)
-        .then((res) => setFunctionCategories(res.data.result?.categories || []))
-        .catch(() => setFunctionCategories([]));
-    }
+    loadFunctionCategories(fid);
   }
 
   function openEdit(txn) {
@@ -131,12 +149,7 @@ export default function Transactions() {
       function_id: txn.function_id || "",
       function_category_id: txn.function_category_id || "",
     });
-    setFunctionCategories([]);
-    if (txn.function_id) {
-      api.get(`/functions/${txn.function_id}`)
-        .then((res) => setFunctionCategories(res.data.result?.categories || []))
-        .catch(() => setFunctionCategories([]));
-    }
+    loadFunctionCategories(txn.function_id || "");
     setOpen(true);
   }
 
@@ -528,41 +541,100 @@ export default function Transactions() {
                   onChange={(e) => setForm({ ...form, party: e.target.value })}
                   className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
 
-                <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}
-                  className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
-                  <option value="">Select Category (optional)</option>
-                  {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
+                <div>
+                  <div className="text-sm font-semibold text-stone-700 mb-1 flex items-center justify-between">
+                    <span>Reporting Category (Global)</span>
+                    <span className="text-[11px] font-medium text-stone-400">for reports only</span>
+                  </div>
+                  <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}
+                    className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
+                    <option value="">Select Category (optional)</option>
+                    {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
 
                 <AnimatePresence>
                   {form.type === "debit" && (
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
                       exit={{ opacity: 0, height: 0 }} className="space-y-2">
-                      <div className="text-sm font-semibold text-stone-700 mb-1">Function Budget (optional)</div>
-                      <select value={form.function_id} onChange={(e) => handleFunctionChange(e.target.value)}
-                        className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
-                        <option value="">Not linked to any function</option>
-                        {functions.filter((f) => f.status === "active").map((f) => (
-                          <option key={f.id} value={f.id}>
-                            {f.name} — {f.remaining_total < 0 ? `Over by ${fmt(Math.abs(f.remaining_total))}` : `${fmt(f.remaining_total)} left`}
-                          </option>
-                        ))}
-                      </select>
-                      <AnimatePresence>
-                        {form.function_id && functionCategories.length > 0 && (
-                          <motion.select initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
-                            exit={{ opacity: 0, height: 0 }} value={form.function_category_id}
-                            onChange={(e) => setForm({ ...form, function_category_id: e.target.value })}
-                            className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
-                            <option value="">Category within function (optional)</option>
-                            {functionCategories.map((fc) => (
-                              <option key={fc.id} value={fc.id}>
-                                {fc.category_name} — {fmt(Number(fc.budget_amount) - Number(fc.spent_total))} left
+                      <div className="text-sm font-semibold text-stone-700 mb-1 flex items-center justify-between">
+                        <span>Budget Tracking (Function)</span>
+                        <span className="text-[11px] font-medium text-stone-400">deducts from function budget</span>
+                      </div>
+
+                      {functionsLoading ? (
+                        <div className="flex items-center gap-2 text-sm text-stone-400 px-1 py-1">
+                          <RefreshCw size={15} className="animate-spin" /> Loading functions…
+                        </div>
+                      ) : functionsError ? (
+                        <div className="text-sm text-rose-500 px-1 py-1">{functionsError}</div>
+                      ) : (
+                        <select value={form.function_id} onChange={(e) => handleFunctionChange(e.target.value)}
+                          className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
+                          <option value="">Not linked to any function</option>
+                          {functions.filter((f) => f.status === "active").map((f) => {
+                            const over = Number(f.remaining_total) < 0;
+                            return (
+                              <option key={f.id} value={f.id}>
+                                {f.name} — {over ? `Over by ${fmt(Math.abs(f.remaining_total))}` : `${fmt(f.remaining_total)} left`}
                               </option>
-                            ))}
-                          </motion.select>
+                            );
+                          })}
+                        </select>
+                      )}
+                      {!functionsLoading && !functionsError && functions.filter((f) => f.status === "active").length === 0 && (
+                        <p className="text-xs text-stone-400 px-1">No active functions. Create one in Functions &amp; Budget first.</p>
+                      )}
+
+                      <AnimatePresence>
+                        {form.function_id && (
+                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }} className="space-y-1">
+                            {categoriesLoading ? (
+                              <div className="flex items-center gap-2 text-sm text-stone-400 px-2 py-1">
+                                <RefreshCw size={14} className="animate-spin" /> Loading categories…
+                              </div>
+                            ) : functionCategories.length > 0 ? (
+                              <select value={form.function_category_id}
+                                onChange={(e) => setForm({ ...form, function_category_id: e.target.value })}
+                                className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
+                                <option value="">Category within function (optional)</option>
+                                {functionCategories.map((fc) => {
+                                  const rem = catRemaining(fc);
+                                  const over = rem < 0;
+                                  return (
+                                    <option key={fc.id} value={fc.id}>
+                                      {fc.category_name} — {over ? `Over by ${fmt(Math.abs(rem))}` : `${fmt(rem)} left`}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            ) : (
+                              <p className="text-xs text-stone-400 px-1">No budget categories defined for this function yet.</p>
+                            )}
+                          </motion.div>
                         )}
                       </AnimatePresence>
+
+                      {(() => {
+                        const selFn = functions.find((f) => f.id === form.function_id);
+                        const fnOver = selFn && Number(selFn.remaining_total) < 0;
+                        const selFc = functionCategories.find((fc) => fc.id === form.function_category_id);
+                        const fcOver = selFc && catRemaining(selFc) < 0;
+                        if (!fnOver && !fcOver) return null;
+                        return (
+                          <div className="rounded-xl border-2 border-amber-200 bg-amber-50 px-3 py-2 flex items-start gap-2">
+                            <span className="text-amber-600 mt-0.5">⚠</span>
+                            <p className="text-xs text-amber-700">
+                              {fnOver && fcOver
+                                ? `This function is over budget by ${fmt(Math.abs(selFn.remaining_total))} and this category is over by ${fmt(Math.abs(catRemaining(selFc)))}. The transaction will still be recorded.`
+                                : fnOver
+                                  ? `This function is over budget by ${fmt(Math.abs(selFn.remaining_total))}. The transaction will still be recorded.`
+                                  : `This category is over budget by ${fmt(Math.abs(catRemaining(selFc)))}. The transaction will still be recorded.`}
+                            </p>
+                          </div>
+                        );
+                      })()}
                     </motion.div>
                   )}
                 </AnimatePresence>

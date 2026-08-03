@@ -166,6 +166,7 @@ export default function Transactions() {
     setSaving(true);
     try {
       const payload = { ...form, amount: Number(form.amount) };
+      if (payload.function_id === "_link_") payload.function_id = "";
       if (payload.mode !== "cash") delete payload.voucher_filed;
       if (!editing) delete payload.edit_reason;
       if (!payload.function_id) { delete payload.function_id; delete payload.function_category_id; }
@@ -541,55 +542,59 @@ export default function Transactions() {
                   onChange={(e) => setForm({ ...form, party: e.target.value })}
                   className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
 
-                <div>
-                  <div className="text-sm font-semibold text-stone-700 mb-1 flex items-center justify-between">
-                    <span>Reporting Category (Global)</span>
-                    <span className="text-[11px] font-medium text-stone-400">for reports only</span>
+                <div className="rounded-xl border-2 border-saffron-100 bg-saffron-50/40 p-3 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-semibold text-stone-700">Function Budget</span>
+                    <span className="text-[11px] font-medium text-stone-400">optional</span>
                   </div>
-                  <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}
-                    className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
-                    <option value="">Select Category (optional)</option>
-                    {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
+                  <div className="flex gap-2">
+                    <motion.button whileTap={{ scale: 0.95 }} type="button"
+                      onClick={() => setForm({ ...form, function_id: "", function_category_id: "" })}
+                      className={`flex-1 py-2 rounded-xl text-xs font-semibold border-2 transition-all ${
+                        !form.function_id
+                          ? "bg-stone-200 text-stone-700 border-stone-300"
+                          : "border-stone-200 text-stone-500 hover:border-stone-300"
+                      }`}>Not linked</motion.button>
+                    <motion.button whileTap={{ scale: 0.95 }} type="button"
+                      onClick={() => setForm({ ...form, function_id: form.function_id || "_link_" })}
+                      className={`flex-1 py-2 rounded-xl text-xs font-semibold border-2 transition-all ${
+                        form.function_id
+                          ? "bg-saffron-600 text-white border-saffron-600 shadow-lg shadow-saffron-500/25"
+                          : "border-stone-200 text-stone-500 hover:border-saffron-300"
+                      }`}>Link to a function</motion.button>
+                  </div>
 
-                <AnimatePresence>
-                  {form.type === "debit" && (
-                    <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
-                      exit={{ opacity: 0, height: 0 }} className="space-y-2">
-                      <div className="text-sm font-semibold text-stone-700 mb-1 flex items-center justify-between">
-                        <span>Budget Tracking (Function)</span>
-                        <span className="text-[11px] font-medium text-stone-400">deducts from function budget</span>
-                      </div>
+                  <AnimatePresence>
+                    {form.function_id && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }} className="space-y-2">
+                        {functionsLoading ? (
+                          <div className="flex items-center gap-2 text-sm text-stone-400 px-1 py-1">
+                            <RefreshCw size={15} className="animate-spin" /> Loading functions…
+                          </div>
+                        ) : functionsError ? (
+                          <div className="text-sm text-rose-500 px-1 py-1">{functionsError}</div>
+                        ) : (
+                          <select value={form.function_id === "_link_" ? "" : form.function_id}
+                            onChange={(e) => handleFunctionChange(e.target.value)}
+                            className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
+                            <option value="">Select a function…</option>
+                            {functions.filter((f) => f.status === "active").map((f) => {
+                              const over = Number(f.remaining_total) < 0;
+                              return (
+                                <option key={f.id} value={f.id}>
+                                  {f.name} — {over ? `Over by ${fmt(Math.abs(f.remaining_total))}` : `${fmt(f.remaining_total)} left`}
+                                </option>
+                              );
+                            })}
+                          </select>
+                        )}
+                        {!functionsLoading && !functionsError && functions.filter((f) => f.status === "active").length === 0 && (
+                          <p className="text-xs text-stone-400 px-1">No active functions. Create one in Functions &amp; Budget first.</p>
+                        )}
 
-                      {functionsLoading ? (
-                        <div className="flex items-center gap-2 text-sm text-stone-400 px-1 py-1">
-                          <RefreshCw size={15} className="animate-spin" /> Loading functions…
-                        </div>
-                      ) : functionsError ? (
-                        <div className="text-sm text-rose-500 px-1 py-1">{functionsError}</div>
-                      ) : (
-                        <select value={form.function_id} onChange={(e) => handleFunctionChange(e.target.value)}
-                          className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
-                          <option value="">Not linked to any function</option>
-                          {functions.filter((f) => f.status === "active").map((f) => {
-                            const over = Number(f.remaining_total) < 0;
-                            return (
-                              <option key={f.id} value={f.id}>
-                                {f.name} — {over ? `Over by ${fmt(Math.abs(f.remaining_total))}` : `${fmt(f.remaining_total)} left`}
-                              </option>
-                            );
-                          })}
-                        </select>
-                      )}
-                      {!functionsLoading && !functionsError && functions.filter((f) => f.status === "active").length === 0 && (
-                        <p className="text-xs text-stone-400 px-1">No active functions. Create one in Functions &amp; Budget first.</p>
-                      )}
-
-                      <AnimatePresence>
-                        {form.function_id && (
-                          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
-                            exit={{ opacity: 0, height: 0 }} className="space-y-1">
+                        {form.function_id && form.function_id !== "_link_" && (
+                          <>
                             {categoriesLoading ? (
                               <div className="flex items-center gap-2 text-sm text-stone-400 px-2 py-1">
                                 <RefreshCw size={14} className="animate-spin" /> Loading categories…
@@ -612,32 +617,41 @@ export default function Transactions() {
                             ) : (
                               <p className="text-xs text-stone-400 px-1">No budget categories defined for this function yet.</p>
                             )}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
 
-                      {(() => {
-                        const selFn = functions.find((f) => f.id === form.function_id);
-                        const fnOver = selFn && Number(selFn.remaining_total) < 0;
-                        const selFc = functionCategories.find((fc) => fc.id === form.function_category_id);
-                        const fcOver = selFc && catRemaining(selFc) < 0;
-                        if (!fnOver && !fcOver) return null;
-                        return (
-                          <div className="rounded-xl border-2 border-amber-200 bg-amber-50 px-3 py-2 flex items-start gap-2">
-                            <span className="text-amber-600 mt-0.5">⚠</span>
-                            <p className="text-xs text-amber-700">
-                              {fnOver && fcOver
-                                ? `This function is over budget by ${fmt(Math.abs(selFn.remaining_total))} and this category is over by ${fmt(Math.abs(catRemaining(selFc)))}. The transaction will still be recorded.`
-                                : fnOver
-                                  ? `This function is over budget by ${fmt(Math.abs(selFn.remaining_total))}. The transaction will still be recorded.`
-                                  : `This category is over budget by ${fmt(Math.abs(catRemaining(selFc)))}. The transaction will still be recorded.`}
-                            </p>
-                          </div>
-                        );
-                      })()}
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+                            {(() => {
+                              const selFn = functions.find((f) => f.id === form.function_id);
+                              const fnOver = selFn && Number(selFn.remaining_total) < 0;
+                              const selFc = functionCategories.find((fc) => fc.id === form.function_category_id);
+                              const fcOver = selFc && catRemaining(selFc) < 0;
+                              if (!fnOver && !fcOver) return null;
+                              return (
+                                <div className="rounded-xl border-2 border-amber-200 bg-amber-50 px-3 py-2 flex items-start gap-2">
+                                  <span className="text-amber-600 mt-0.5">⚠</span>
+                                  <p className="text-xs text-amber-700">
+                                    {fnOver && fcOver
+                                      ? `This function is over budget by ${fmt(Math.abs(selFn.remaining_total))} and this category is over by ${fmt(Math.abs(catRemaining(selFc)))}. The transaction will still be recorded.`
+                                      : fnOver
+                                        ? `This function is over budget by ${fmt(Math.abs(selFn.remaining_total))}. The transaction will still be recorded.`
+                                        : `This category is over budget by ${fmt(Math.abs(catRemaining(selFc)))}. The transaction will still be recorded.`}
+                                  </p>
+                                </div>
+                              );
+                            })()}
+                          </>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <div>
+                  <div className="text-sm font-semibold text-stone-700 mb-1">Category</div>
+                  <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}
+                    className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
+                    <option value="">Select Category (optional)</option>
+                    {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
 
                 <div className="flex gap-2">
                   <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={() => setForm({ ...form, mode: "cash" })}

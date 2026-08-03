@@ -73,10 +73,33 @@ function validateTxnBody(body, isUpdate) {
 
 // LIST
 router.get('/', async (req, res) => {
-  const { data, error } = await supabaseAdmin
-    .from('transactions')
-    .select('id, type, mode, amount, party, description, txn_date, category_id, reference_no, digital_method, notify_contact_ids, notify_group_ids, voucher_filed, notification_status, is_recurring, recurring_id, created_by, created_at, function_id, function_category_id, categories(name), functions(name), receipt_file_id, receipt_file_name, receipt_file_size, receipt_mime_type')
-    .order('txn_date', { ascending: false });
+  const baseSelect =
+    'id, type, mode, amount, party, description, txn_date, category_id, reference_no, notification_status, is_recurring, created_by, created_at, voucher_filed, digital_method, notify_contact_ids, notify_group_ids, receipt_file_id, receipt_file_name, receipt_file_size, receipt_mime_type, categories(name)';
+
+  // With function columns/joins (requires the functions migration).
+  const functionSelect =
+    baseSelect +
+    ', function_id, function_category_id, functions(name)';
+
+  async function run(select) {
+    const { data, error } = await supabaseAdmin
+      .from('transactions')
+      .select(select)
+      .order('txn_date', { ascending: false });
+    return { data, error };
+  }
+
+  let { data, error } = await run(functionSelect);
+  // If the functions migration hasn't been applied (missing column/table/join),
+  // fall back to the base query so the page still works.
+  if (error) {
+    if (
+      (error.message && /function_id|function_categories|functions|42P01|42703/.test(error.message)) ||
+      (error.code && ['42P01', '42703'].includes(error.code))
+    ) {
+      ({ data, error } = await run(baseSelect));
+    }
+  }
   if (error) return res.status(400).json({ success: false, message: 'Failed to fetch transactions' });
   res.set('Cache-Control', 'private, max-age=10');
   res.json({ success: true, result: data });

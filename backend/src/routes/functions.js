@@ -16,13 +16,10 @@ function validateBudget(body) {
   if (isNaN(total) || total < 0 || total > MAX_AMOUNT) return 'Invalid budget total';
   if (isNaN(cash) || cash < 0 || cash > MAX_AMOUNT) return 'Invalid cash budget';
   if (isNaN(digital) || digital < 0 || digital > MAX_AMOUNT) return 'Invalid digital budget';
-  if (body.budget_cash !== undefined && body.budget_digital !== undefined) {
-    if (Math.abs(cash + digital - total) > 0.01) {
-      return 'budget_cash + budget_digital must equal budget_total';
-    }
-  }
-  if (body.budget_cash !== undefined && body.budget_total === undefined && cash > 0) {
-    if (digital === 0 && cash !== total) return 'budget_total must be provided';
+  // Only enforce the sum rule when a real cash/digital split is provided.
+  // A total-only budget (cash/digital both 0) is valid and tracked against total.
+  if ((cash > 0 || digital > 0) && Math.abs(cash + digital - total) > 0.01) {
+    return 'budget_cash + budget_digital must equal budget_total';
   }
   return null;
 }
@@ -104,7 +101,12 @@ router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
   };
 
   const { data, error } = await supabaseAdmin.from('functions').insert(insertData).select().single();
-  if (error) return res.status(400).json({ success: false, message: error.message });
+  if (error) {
+    if (error.message?.includes('does not exist') || error.code === '42P01') {
+      return res.status(500).json({ success: false, message: 'Functions table not found. Run the migration SQL (backend/src/migrations/001_create_functions.sql) in Supabase SQL Editor first.' });
+    }
+    return res.status(400).json({ success: false, message: error.message });
+  }
 
   logActivity({
     userId: req.user.id,

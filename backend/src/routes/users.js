@@ -200,18 +200,50 @@ router.delete('/:id', requireRole('admin'), async (req, res) => {
     return res.status(400).json({ success: false, message: 'Cannot delete your own account' });
   }
 
+  const userId = req.params.id;
+
+  // Detach dependent FK rows so the auth user can be removed (best-effort; some
+  // tables may not exist in every environment). Deletes the user's activity log
+  // rows and nulls out ownership on records they created.
+  const detach = [
+    { table: 'activity_logs', column: 'user_id', action: 'delete' },
+    { table: 'contacts', column: 'created_by', action: 'null' },
+    { table: 'contact_groups', column: 'created_by', action: 'null' },
+    { table: 'categories', column: 'created_by', action: 'null' },
+    { table: 'transactions', column: 'created_by', action: 'null' },
+    { table: 'recurring_transactions', column: 'created_by', action: 'null' },
+    { table: 'mail_logs', column: 'sender_id', action: 'null' },
+    { table: 'file_send_logs', column: 'sender_id', action: 'null' },
+    { table: 'functions', column: 'created_by', action: 'null' },
+    { table: 'scheduled_reports', column: 'created_by', action: 'null' },
+  ];
+  await Promise.all(detach.map(async ({ table, column, action }) => {
+    try {
+      if (action === 'delete') {
+        await supabaseAdmin.from(table).delete().eq(column, userId);
+      } else {
+        await supabaseAdmin.from(table).update({ [column]: null }).eq(column, userId);
+      }
+    } catch (e) {
+      // ignore — table or column may not exist in this environment
+    }
+  }));
+
   logActivity({
     userId: req.user.id,
     userEmail: req.user.email,
     action: 'delete',
     entity: 'user',
-    entityId: req.params.id,
+    entityId: userId,
     details: {},
     ipAddress: req.ip,
   });
 
-  const { error } = await supabaseAdmin.auth.admin.deleteUser(req.params.id);
-  if (error) return res.status(400).json({ success: false, message: 'Failed to delete user' });
+  const { error } = await supabaseAdmin.auth.admin.deleteUser(userId);
+  if (error) {
+    console.error('[deleteUser] failed:', error.status, error.message);
+    return res.status(400).json({ success: false, message: 'Failed to delete user' });
+  }
   res.json({ success: true });
 });
 

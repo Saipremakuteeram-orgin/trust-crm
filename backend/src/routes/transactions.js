@@ -73,13 +73,17 @@ function validateTxnBody(body, isUpdate) {
 
 // LIST
 router.get('/', async (req, res) => {
-  const baseSelect =
-    'id, type, mode, amount, party, description, txn_date, category_id, reference_no, notification_status, is_recurring, created_by, created_at, voucher_filed, digital_method, notify_contact_ids, notify_group_ids, receipt_file_id, receipt_file_name, receipt_file_size, receipt_mime_type, categories(name)';
+  // Core columns that exist in every database version. Receipt and function
+  // columns are appended only to the primary query so the page still works if
+  // a newer migration hasn't been applied to the database yet.
+  const coreSelect =
+    'id, type, mode, amount, party, description, txn_date, category_id, reference_no, notification_status, is_recurring, created_by, created_at, voucher_filed, digital_method, notify_contact_ids, notify_group_ids, categories(name)';
 
-  // With function columns/joins (requires the functions migration).
-  const functionSelect =
-    baseSelect +
-    ', function_id, function_category_id, functions(name)';
+  // Full query: includes receipt file columns and function columns/joins
+  // (requires the functions + receipt migrations).
+  const fullSelect =
+    coreSelect +
+    ', receipt_file_id, receipt_file_name, receipt_file_size, receipt_mime_type, function_id, function_category_id, functions(name)';
 
   async function run(select) {
     const { data, error } = await supabaseAdmin
@@ -89,15 +93,15 @@ router.get('/', async (req, res) => {
     return { data, error };
   }
 
-  let { data, error } = await run(functionSelect);
-  // If the functions migration hasn't been applied (missing column/table/join),
-  // fall back to the base query so the page still works.
+  let { data, error } = await run(fullSelect);
+  // If the migrations haven't been applied (missing column/table/join),
+  // fall back to the core query so the page still works.
   if (error) {
     if (
-      (error.message && /function_id|function_categories|functions|42P01|42703/.test(error.message)) ||
+      (error.message && /function_id|function_categories|functions|receipt_file|42P01|42703/.test(error.message)) ||
       (error.code && ['42P01', '42703'].includes(error.code))
     ) {
-      ({ data, error } = await run(baseSelect));
+      ({ data, error } = await run(coreSelect));
     }
   }
   if (error) return res.status(400).json({ success: false, message: 'Failed to fetch transactions' });

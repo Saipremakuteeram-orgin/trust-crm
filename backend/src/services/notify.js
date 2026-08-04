@@ -32,7 +32,66 @@ function getResendFrom() {
   return process.env.MAIL_FROM || process.env.SMTP_USER || 'onboarding@resend.dev';
 }
 
-async function sendViaResend({ to, subject, html, attachments }) {
+// --- Branded email wrapper (logo, address, auto-generated disclaimer) ---
+const LOGO_URL = process.env.TRUST_LOGO_URL || 'https://crmsaidharmasamrakshanapremakuteeram.dpdns.org/logo.jpg';
+const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'xx@gmail.com';
+const CONTACT_PHONE = process.env.CONTACT_PHONE || '+91 XXXXXXXXXX';
+
+// Provide at least a plain-text version for deliverability/spam reasons.
+// Strips all tags from the HTML content so text clients get readable text.
+function htmlToText(html) {
+  return String(html || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n\n')
+    .replace(/<\/tr>/gi, '\n')
+    .replace(/<\/td>/gi, '\t')
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function buildBrandedHtml(contentHtml) {
+  return `
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f4f4;padding:24px 0;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="background:#ffffff;border:1px solid #e0e0e0;border-radius:8px;overflow:hidden;">
+            <tr>
+              <td style="padding:32px 32px 8px 32px;font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#333;line-height:1.6;">
+                ${contentHtml}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px 32px 32px 32px;">
+                <hr style="border:0;border-top:1px solid #e0e0e0;margin:30px 0;">
+                <div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#555;text-align:center;line-height:1.7;">
+                  <img src="cid:trust-logo" alt="Sri Sai Dharma Samrakshana Prema Kuteeram" width="120" style="margin-bottom:12px;">
+                  <h3 style="margin:0;color:#0b3c6d;font-size:20px;">Sri Sai Dharma Samrakshana Prema Kuteeram</h3>
+                  <div style="font-size:14px;color:#666;">Public Charitable Trust</div>
+                  <p style="margin:12px 0;font-style:italic;color:#8a6d1d;">&quot;Serving Humanity with Selfless Love and Selfless Service.&quot;</p>
+                  <p style="margin:16px 0;color:#777;">This is an automatically generated email. Please do not reply to this email.</p>
+                  <p style="margin:8px 0;"><strong>Contact Email:</strong> <a href="mailto:${CONTACT_EMAIL}" style="color:#0b3c6d;">${CONTACT_EMAIL}</a></p>
+                  <p style="margin:8px 0;"><strong>Phone:</strong> ${CONTACT_PHONE}</p>
+                  <p style="margin:12px 0;"><strong>Registered Office</strong><br>No.104, Mettu Street,<br>Karur &#8211; 639001,<br>Tamil Nadu, India.</p>
+                  <p style="margin-top:18px;font-size:12px;color:#999;">&copy; ${new Date().getFullYear()} Sri Sai Dharma Samrakshana Prema Kuteeram. All Rights Reserved.</p>
+                </div>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>`;
+}
+
+function buildBrandedText(contentText) {
+  return `${contentText}\n\n---\nSri Sai Dharma Samrakshana Prema Kuteeram\nPublic Charitable Trust\n"Serving Humanity with Selfless Love and Selfless Service."\n\nThis is an automatically generated email. Please do not reply to this email.\nContact Email: ${CONTACT_EMAIL}\nPhone: ${CONTACT_PHONE}\n\nRegistered Office:\nNo.104, Mettu Street,\nKarur - 639001,\nTamil Nadu, India.\n\n\u00a9 ${new Date().getFullYear()} Sri Sai Dharma Samrakshana Prema Kuteeram. All Rights Reserved.`;
+}
+
+async function sendViaResend({ to, subject, html, text, attachments }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return null; // signal "not configured"
   const from = getResendFrom();
@@ -42,10 +101,14 @@ async function sendViaResend({ to, subject, html, attachments }) {
     subject,
     html,
   };
+  if (text) payload.text = text;
   if (attachments && attachments.length > 0) {
     payload.attachments = attachments.map((a) => {
-      const content = Buffer.isBuffer(a.content) ? a.content.toString('base64') : String(a.content || '');
-      return { filename: a.filename || 'attachment', content };
+      const out = { filename: a.filename || 'attachment' };
+      if (a.path) out.path = a.path;
+      if (a.content !== undefined) out.content = Buffer.isBuffer(a.content) ? a.content.toString('base64') : String(a.content);
+      if (a.cid || a.contentId) out.content_id = a.cid || a.contentId;
+      return out;
     });
   }
   try {
@@ -61,9 +124,17 @@ async function sendViaResend({ to, subject, html, attachments }) {
   }
 }
 
-async function sendEmail({ to, subject, html, attachments }) {
+async function sendEmail({ to, subject, html, text, attachments }) {
+  // Wrap in the branded template (logo, address, auto-generated disclaimer) and
+  // attach the trust logo inline so it displays even when remote images are blocked.
+  const contentHtml = String(html || '');
+  const brandedHtml = buildBrandedHtml(contentHtml);
+  const brandedText = text || htmlToText(contentHtml);
+  const allAttachments = Array.isArray(attachments) ? [...attachments] : [];
+  if (LOGO_URL) allAttachments.push({ filename: 'logo.jpg', path: LOGO_URL, cid: 'trust-logo' });
+
   // Prefer Resend (HTTPS/443) — works on hosts that block outbound SMTP (e.g. Render).
-  const resendResult = await sendViaResend({ to, subject, html, attachments });
+  const resendResult = await sendViaResend({ to, subject, html: brandedHtml, text: brandedText, attachments: allAttachments });
   if (resendResult) return resendResult; // configured (success or hard fail)
 
   // Fallback to Gmail SMTP (works locally / on SMTP-allowed hosts).
@@ -74,8 +145,8 @@ async function sendEmail({ to, subject, html, attachments }) {
   const t = getTransporter();
   if (!t || !to) return { ok: false, reason: 'no-transporter-or-recipient' };
   try {
-    const mailOptions = { from: `"Trust CRM" <${process.env.SMTP_USER}>`, to, subject, html };
-    if (attachments && attachments.length > 0) mailOptions.attachments = attachments;
+    const mailOptions = { from: `"Trust CRM" <${process.env.SMTP_USER}>`, to, subject, html: brandedHtml, text: brandedText };
+    if (allAttachments.length > 0) mailOptions.attachments = allAttachments;
     await t.sendMail(mailOptions);
     return { ok: true };
   } catch (err) {

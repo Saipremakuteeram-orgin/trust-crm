@@ -146,7 +146,9 @@ router.post('/send', requireAuth, requireRole('admin', 'accountant'), upload.arr
     if (!mailRes.ok) {
       return res.status(502).json({
         success: false,
-        message: 'Email delivery failed. Please try again later.',
+        message: errorMessage && errorMessage !== 'Email delivery failed'
+          ? `Email delivery failed: ${errorMessage}`
+          : 'Email delivery failed. Please try again later.',
       });
     }
     return res.json({ success: true, result: { subject, recipients: validRecipients, status, attachments: attachmentNames.length } });

@@ -44,12 +44,8 @@ async function sendViaResend({ to, subject, html, attachments }) {
   };
   if (attachments && attachments.length > 0) {
     payload.attachments = attachments.map((a) => {
-      const content = a.content && typeof a.content === 'string'
-        ? a.content
-        : (a.content && a.content.toString ? Buffer.from(a.content).toString('base64') : '');
-      // Resend needs base64 string for buffer content
-      const isBase64 = typeof a.content !== 'string';
-      return { filename: a.filename, content: isBase64 ? Buffer.from(a.content).toString('base64') : a.content };
+      const content = Buffer.isBuffer(a.content) ? a.content.toString('base64') : String(a.content || '');
+      return { filename: a.filename || 'attachment', content };
     });
   }
   try {

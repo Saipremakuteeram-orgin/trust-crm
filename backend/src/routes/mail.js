@@ -47,31 +47,22 @@ router.post('/send', requireAuth, requireRole('admin', 'accountant'), upload.arr
   const attachmentNames = files.map((f) => f.originalname);
 
   try {
-    // Upload attachments to Telegram storage to obtain file_ids (streamed later, no disk)
-    const telegramFileIds = [];
+    // Persist attachments to Supabase storage + Telegram (for backup/records)
     for (const f of files) {
       try {
         const storagePath = `mail/${Date.now()}-${f.originalname}`;
         await storage.uploadFile(storagePath, f.buffer, f.mimetype);
-        const tg = await storage.sendFileToTelegram(storagePath, f.originalname, `📎 ${subject || 'Mail attachment'}`);
-        if (tg?.document?.file_id) telegramFileIds.push({ name: f.originalname, fileId: tg.document.file_id });
+        await storage.sendFileToTelegram(storagePath, f.originalname, `📎 ${subject || 'Mail attachment'}`);
       } catch (err) {
         console.error('[mail] attachment upload failed:', err.message);
       }
     }
 
-    // Build nodemailer attachments, streamed from Telegram file_id when available
-    const attachments = [];
-    for (const f of files) {
-      const ref = telegramFileIds.find((t) => t.name === f.originalname);
-      if (ref) {
-        const fetched = await storage.getTelegramFileStream(ref.fileId);
-        if (fetched) attachments.push({ filename: f.originalname, content: fetched.stream });
-      }
-      if (!attachments.find((a) => a.filename === f.originalname)) {
-        attachments.push({ filename: f.originalname, content: f.buffer });
-      }
-    }
+    // Build attachment list from the in-memory multer buffers.
+    // (Streams from Telegram are not used here: Resend requires base64 content
+    // and nodemailer accepts Buffers, so the original upload buffer is simplest
+    // and avoids a fragile re-download round-trip.)
+    const attachments = files.map((f) => ({ filename: f.originalname, content: f.buffer }));
 
     const mailRes = await sendEmail({
       to: validRecipients.join(','),
@@ -154,7 +145,7 @@ router.post('/send', requireAuth, requireRole('admin', 'accountant'), upload.arr
     return res.json({ success: true, result: { subject, recipients: validRecipients, status, attachments: attachmentNames.length } });
   } catch (err) {
     console.error('[mail] send failed:', safeErrorMessage(err));
-    return res.status(500).json({ success: false, message: 'Failed to send email' });
+    return res.status(500).json({ success: false, message: `Failed to send email: ${safeErrorMessage(err)}` });
   }
 });
 

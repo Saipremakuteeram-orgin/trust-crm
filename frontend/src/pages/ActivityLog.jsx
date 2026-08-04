@@ -59,7 +59,7 @@ const actionLabels = {
 };
 
 function formatDetails(entity, details) {
-  if (!details || Object.keys(details).length === 0) return null;
+  if (!details || typeof details !== "object" || Object.keys(details).length === 0) return { text: null, reason: null };
 
   if (entity === "transaction") {
     const parts = [];

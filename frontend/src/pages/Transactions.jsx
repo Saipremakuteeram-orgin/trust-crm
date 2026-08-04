@@ -595,6 +595,10 @@ export default function Transactions() {
 
                         {form.function_id && form.function_id !== "_link_" && (
                           <>
+                            <div className="flex items-center justify-between px-1 pt-1">
+                              <span className="text-xs font-medium text-stone-500">Sub-category (optional)</span>
+                              <span className="text-[10px] text-stone-400">Skip to use the main budget only</span>
+                            </div>
                             {categoriesLoading ? (
                               <div className="flex items-center gap-2 text-sm text-stone-400 px-2 py-1">
                                 <RefreshCw size={14} className="animate-spin" /> Loading categories…
@@ -603,7 +607,7 @@ export default function Transactions() {
                               <select value={form.function_category_id}
                                 onChange={(e) => setForm({ ...form, function_category_id: e.target.value })}
                                 className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
-                                <option value="">Category within function (optional)</option>
+                                <option value="">Select a sub-category…</option>
                                 {functionCategories.map((fc) => {
                                   const rem = catRemaining(fc);
                                   const over = rem < 0;
@@ -615,7 +619,7 @@ export default function Transactions() {
                                 })}
                               </select>
                             ) : (
-                              <p className="text-xs text-stone-400 px-1">No budget categories defined for this function yet.</p>
+                              <p className="text-xs text-stone-400 px-1">No sub-categories — the whole amount will count against the main function budget.</p>
                             )}
 
                             {(() => {

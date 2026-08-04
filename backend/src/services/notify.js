@@ -25,10 +25,17 @@ function getTransporter() {
   return transporter;
 }
 
+function getResendFrom() {
+  const email = process.env.RESEND_FROM_EMAIL;
+  const name = process.env.RESEND_FROM_NAME;
+  if (email) return name ? `"${name}" <${email}>` : email;
+  return process.env.MAIL_FROM || process.env.SMTP_USER || 'onboarding@resend.dev';
+}
+
 async function sendViaResend({ to, subject, html, attachments }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return null; // signal "not configured"
-  const from = process.env.MAIL_FROM || process.env.SMTP_USER || 'onboarding@resend.dev';
+  const from = getResendFrom();
   const payload = {
     from,
     to: Array.isArray(to) ? to : String(to).split(',').map((s) => s.trim()),

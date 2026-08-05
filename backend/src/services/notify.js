@@ -54,7 +54,7 @@ function htmlToText(html) {
     .trim();
 }
 
-function buildBrandedHtml(contentHtml) {
+function buildBrandedHtml(contentHtml, fromEmail) {
   return `
     <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f4f4f4;padding:24px 0;">
       <tr>
@@ -69,11 +69,12 @@ function buildBrandedHtml(contentHtml) {
               <td style="padding:8px 32px 32px 32px;">
                 <hr style="border:0;border-top:1px solid #e0e0e0;margin:30px 0;">
                 <div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#555;text-align:center;line-height:1.7;">
-                  <img src="cid:trust-logo" alt="Sri Sai Dharma Samrakshana Prema Kuteeram" width="120" style="margin-bottom:12px;">
+                  <img src="${LOGO_URL}" alt="Sri Sai Dharma Samrakshana Prema Kuteeram" width="120" style="margin-bottom:12px;">
                   <h3 style="margin:0;color:#0b3c6d;font-size:20px;">Sri Sai Dharma Samrakshana Prema Kuteeram</h3>
                   <div style="font-size:14px;color:#666;">Public Charitable Trust</div>
                   <p style="margin:12px 0;font-style:italic;color:#8a6d1d;">&quot;Serving Humanity with Selfless Love and Selfless Service.&quot;</p>
                   <p style="margin:16px 0;color:#777;">This is an automatically generated email. Please do not reply to this email.</p>
+                  ${fromEmail ? `<p style="margin:8px 0;"><strong>From:</strong> ${fromEmail}</p>` : ''}
                   <p style="margin:8px 0;"><strong>Contact Email:</strong> <a href="mailto:${CONTACT_EMAIL}" style="color:#0b3c6d;">${CONTACT_EMAIL}</a></p>
                   <p style="margin:8px 0;"><strong>Phone:</strong> ${CONTACT_PHONE}</p>
                   <p style="margin:12px 0;"><strong>Registered Office</strong><br>No.104, Mettu Street,<br>Karur &#8211; 639001,<br>Tamil Nadu, India.</p>
@@ -87,16 +88,16 @@ function buildBrandedHtml(contentHtml) {
     </table>`;
 }
 
-function buildBrandedText(contentText) {
-  return `${contentText}\n\n---\nSri Sai Dharma Samrakshana Prema Kuteeram\nPublic Charitable Trust\n"Serving Humanity with Selfless Love and Selfless Service."\n\nThis is an automatically generated email. Please do not reply to this email.\nContact Email: ${CONTACT_EMAIL}\nPhone: ${CONTACT_PHONE}\n\nRegistered Office:\nNo.104, Mettu Street,\nKarur - 639001,\nTamil Nadu, India.\n\n\u00a9 ${new Date().getFullYear()} Sri Sai Dharma Samrakshana Prema Kuteeram. All Rights Reserved.`;
+function buildBrandedText(contentText, fromEmail) {
+  return `${contentText}\n\n---\nSri Sai Dharma Samrakshana Prema Kuteeram\nPublic Charitable Trust\n"Serving Humanity with Selfless Love and Selfless Service."\n\nThis is an automatically generated email. Please do not reply to this email.\n${fromEmail ? `From: ${fromEmail}\n` : ''}Contact Email: ${CONTACT_EMAIL}\nPhone: ${CONTACT_PHONE}\n\nRegistered Office:\nNo.104, Mettu Street,\nKarur - 639001,\nTamil Nadu, India.\n\n\u00a9 ${new Date().getFullYear()} Sri Sai Dharma Samrakshana Prema Kuteeram. All Rights Reserved.`;
 }
 
-async function sendViaResend({ to, subject, html, text, attachments }) {
+async function sendViaResend({ to, subject, html, text, attachments, from }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return null; // signal "not configured"
-  const from = getResendFrom();
+  const resolvedFrom = from || getResendFrom();
   const payload = {
-    from,
+    from: resolvedFrom,
     to: Array.isArray(to) ? to : String(to).split(',').map((s) => s.trim()),
     subject,
     html,
@@ -125,16 +126,17 @@ async function sendViaResend({ to, subject, html, text, attachments }) {
 }
 
 async function sendEmail({ to, subject, html, text, attachments }) {
-  // Wrap in the branded template (logo, address, auto-generated disclaimer) and
-  // attach the trust logo inline so it displays even when remote images are blocked.
+  // Wrap in the branded template (logo, address, auto-generated disclaimer). The
+  // logo is loaded from LOGO_URL directly in the footer HTML, so it never shows
+  // up as a separate attachment.
   const contentHtml = String(html || '');
-  const brandedHtml = buildBrandedHtml(contentHtml);
+  const from = getResendFrom();
+  const brandedHtml = buildBrandedHtml(contentHtml, from);
   const brandedText = text || htmlToText(contentHtml);
   const allAttachments = Array.isArray(attachments) ? [...attachments] : [];
-  if (LOGO_URL) allAttachments.push({ filename: 'logo.jpg', path: LOGO_URL, cid: 'trust-logo' });
 
   // Prefer Resend (HTTPS/443) — works on hosts that block outbound SMTP (e.g. Render).
-  const resendResult = await sendViaResend({ to, subject, html: brandedHtml, text: brandedText, attachments: allAttachments });
+  const resendResult = await sendViaResend({ to, subject, from, html: brandedHtml, text: brandedText, attachments: allAttachments });
   if (resendResult) return resendResult; // configured (success or hard fail)
 
   // Fallback to Gmail SMTP (works locally / on SMTP-allowed hosts).
@@ -206,4 +208,4 @@ async function notifyContactsOfTransaction(txn, contacts) {
   );
 }
 
-module.exports = { sendEmail, sendTelegram, notifyContactsOfTransaction, fmt, getTransporter };
+module.exports = { sendEmail, sendTelegram, notifyContactsOfTransaction, fmt, getTransporter, buildBrandedHtml, buildBrandedText };

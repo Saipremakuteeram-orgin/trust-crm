@@ -1,5 +1,7 @@
 const nodemailer = require('nodemailer');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
 let transporter = null;
 function getTransporter() {
@@ -33,10 +35,23 @@ function getResendFrom() {
 }
 
 // --- Branded email wrapper (logo, address, auto-generated disclaimer) ---
-// The footer logo is served from a hosted URL (a small 120x120 JPEG on the app
-// domain). Base64 data-URI images are stripped by Gmail/Outlook, so a real
-// hosted URL is the most reliable way to make the logo render in email clients.
-const LOGO_SRC = process.env.TRUST_LOGO_URL || 'https://crmsaidharmasamrakshanapremakuteeram.dpdns.org/logo-footer.jpg';
+// The footer logo is sent as an inline CID attachment (cid:logo-footer), which
+// Gmail/Outlook render inline automatically. Remote-hosted URLs and base64
+// data URIs both fail to display reliably in Gmail (blocked proxy / stripped).
+// If the logo file is missing, TRUST_LOGO_URL or the hosted fallback is used.
+const LOGO_FILE = path.join(__dirname, '../../assets/logo-footer.jpg');
+const LOGO_ATTACHMENT = (() => {
+  try {
+    if (fs.existsSync(LOGO_FILE)) {
+      const content = fs.readFileSync(LOGO_FILE);
+      return { filename: 'logo-footer.jpg', content, cid: 'logo-footer', contentId: 'logo-footer', disposition: 'inline' };
+    }
+  } catch (err) {
+    console.warn('⚠️  Footer logo load failed:', err.message);
+  }
+  return null;
+})();
+const LOGO_SRC = process.env.TRUST_LOGO_URL || (LOGO_ATTACHMENT ? 'cid:logo-footer' : 'https://crmsaidharmasamrakshanapremakuteeram.dpdns.org/logo-footer.jpg');
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'xx@gmail.com';
 const CONTACT_PHONE = process.env.CONTACT_PHONE || '+91 XXXXXXXXXX';
 
@@ -129,13 +144,14 @@ async function sendViaResend({ to, subject, html, text, attachments, from }) {
 }
 
 async function sendEmail({ to, subject, html, text, attachments }) {
-  // Wrap in the branded template (logo, address, auto-generated disclaimer). The
-  // footer logo is referenced from a hosted URL so it renders in email clients.
+  // Wrap in the branded template (logo, address, auto-generated disclaimer).
+  // The footer logo is attached inline (cid:logo-footer) so clients render it.
   const contentHtml = String(html || '');
   const from = getResendFrom();
   const brandedHtml = buildBrandedHtml(contentHtml, from);
   const brandedText = text || buildBrandedText(htmlToText(contentHtml), from);
   const allAttachments = Array.isArray(attachments) ? [...attachments] : [];
+  if (LOGO_ATTACHMENT) allAttachments.unshift(LOGO_ATTACHMENT);
 
   // Prefer Resend (HTTPS/443) — works on hosts that block outbound SMTP (e.g. Render).
   const resendResult = await sendViaResend({ to, subject, from, html: brandedHtml, text: brandedText, attachments: allAttachments });
@@ -210,4 +226,4 @@ async function notifyContactsOfTransaction(txn, contacts) {
   );
 }
 
-module.exports = { sendEmail, sendTelegram, notifyContactsOfTransaction, fmt, getTransporter, buildBrandedHtml, buildBrandedText };
+module.exports = { sendEmail, sendTelegram, notifyContactsOfTransaction, fmt, getTransporter, buildBrandedHtml, buildBrandedText, LOGO_ATTACHMENT, LOGO_SRC };

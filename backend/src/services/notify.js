@@ -1,5 +1,7 @@
 const nodemailer = require('nodemailer');
 const axios = require('axios');
+const fs = require('fs');
+const path = require('path');
 
 let transporter = null;
 function getTransporter() {
@@ -34,6 +36,20 @@ function getResendFrom() {
 
 // --- Branded email wrapper (logo, address, auto-generated disclaimer) ---
 const LOGO_URL = process.env.TRUST_LOGO_URL || 'https://crmsaidharmasamrakshanapremakuteeram.dpdns.org/logo.jpg';
+// Embed a small (120x120) copy of the logo as a data URI so it always renders in
+// the footer — no remote-image blocking and never shows up as an attachment.
+// Falls back to the hosted LOGO_URL only if the local file is missing.
+let LOGO_SRC = LOGO_URL;
+try {
+  const logoFile = path.join(__dirname, '../../assets/logo-footer.jpg');
+  if (fs.existsSync(logoFile)) {
+    LOGO_SRC = `data:image/jpeg;base64,${fs.readFileSync(logoFile).toString('base64')}`;
+  } else {
+    console.warn('⚠️  Footer logo file missing — falling back to hosted LOGO_URL');
+  }
+} catch (err) {
+  console.warn('⚠️  Footer logo load failed — falling back to hosted LOGO_URL:', err.message);
+}
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'xx@gmail.com';
 const CONTACT_PHONE = process.env.CONTACT_PHONE || '+91 XXXXXXXXXX';
 
@@ -69,7 +85,7 @@ function buildBrandedHtml(contentHtml, fromEmail) {
               <td style="padding:8px 32px 32px 32px;">
                 <hr style="border:0;border-top:1px solid #e0e0e0;margin:30px 0;">
                 <div style="font-family:Arial,Helvetica,sans-serif;font-size:13px;color:#555;text-align:center;line-height:1.7;">
-                  <img src="${LOGO_URL}" alt="Sri Sai Dharma Samrakshana Prema Kuteeram" width="120" style="margin-bottom:12px;">
+                  <img src="${LOGO_SRC}" alt="Sri Sai Dharma Samrakshana Prema Kuteeram" width="120" style="margin-bottom:12px;">
                   <h3 style="margin:0;color:#0b3c6d;font-size:20px;">Sri Sai Dharma Samrakshana Prema Kuteeram</h3>
                   <div style="font-size:14px;color:#666;">Public Charitable Trust</div>
                   <p style="margin:12px 0;font-style:italic;color:#8a6d1d;">&quot;Serving Humanity with Selfless Love and Selfless Service.&quot;</p>
@@ -127,8 +143,8 @@ async function sendViaResend({ to, subject, html, text, attachments, from }) {
 
 async function sendEmail({ to, subject, html, text, attachments }) {
   // Wrap in the branded template (logo, address, auto-generated disclaimer). The
-  // logo is loaded from LOGO_URL directly in the footer HTML, so it never shows
-  // up as a separate attachment.
+  // logo is embedded directly in the footer HTML (base64 data URI), so it always
+  // renders and never shows up as a separate attachment.
   const contentHtml = String(html || '');
   const from = getResendFrom();
   const brandedHtml = buildBrandedHtml(contentHtml, from);

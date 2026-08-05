@@ -176,6 +176,7 @@ export default function Mail() {
                             <span className="text-[10px] text-stone-400 flex items-center gap-1"><Paperclip size={11} />{log.attachment_names.length}</span>
                           )}
                         </div>
+                        <p className="text-xs text-stone-500 mt-1 truncate">From: {log.sender_email || "—"}</p>
                         <p className="text-xs text-stone-500 mt-1 truncate">To: {recips.map((r) => r.email).join(", ") || "—"}</p>
                         {log.body_text && <p className="text-xs text-stone-400 mt-1 line-clamp-2">{log.body_text}</p>}
                       </div>

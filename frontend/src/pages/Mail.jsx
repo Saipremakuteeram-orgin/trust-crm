@@ -22,7 +22,7 @@ const statusConfig = {
 };
 
 export default function Mail() {
-  const { profile } = useAuth();
+  const { session, profile } = useAuth();
   const { addToast } = useToast();
   const role = profile?.role || "viewer";
   const canEdit = role === "admin" || role === "accountant";
@@ -176,7 +176,7 @@ export default function Mail() {
                             <span className="text-[10px] text-stone-400 flex items-center gap-1"><Paperclip size={11} />{log.attachment_names.length}</span>
                           )}
                         </div>
-                        <p className="text-xs text-stone-500 mt-1 truncate">From: {log.sender_email || "—"}</p>
+                        <p className="text-xs text-stone-500 mt-1 truncate">From: {log.sender_email || session?.user?.email || "—"}</p>
                         <p className="text-xs text-stone-500 mt-1 truncate">To: {recips.map((r) => r.email).join(", ") || "—"}</p>
                         {log.body_text && <p className="text-xs text-stone-400 mt-1 line-clamp-2">{log.body_text}</p>}
                       </div>
@@ -302,7 +302,7 @@ export default function Mail() {
 
           {/* Send bar */}
           <div className="flex items-center justify-between px-5 py-4 border-t border-stone-100 bg-stone-50/60">
-            <span className="text-xs text-stone-400">From: {profile?.email}</span>
+            <span className="text-xs text-stone-400">From: {session?.user?.email || profile?.email || "—"}</span>
             <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={handleSend} disabled={sending}
               className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-gradient-to-r from-saffron-500 to-saffron-600 text-white text-sm font-semibold shadow-lg shadow-saffron-500/20 hover:shadow-xl transition-all disabled:opacity-50">
               {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}

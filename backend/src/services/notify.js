@@ -1,7 +1,5 @@
 const nodemailer = require('nodemailer');
 const axios = require('axios');
-const fs = require('fs');
-const path = require('path');
 
 let transporter = null;
 function getTransporter() {
@@ -35,21 +33,10 @@ function getResendFrom() {
 }
 
 // --- Branded email wrapper (logo, address, auto-generated disclaimer) ---
-const LOGO_URL = process.env.TRUST_LOGO_URL || 'https://crmsaidharmasamrakshanapremakuteeram.dpdns.org/logo.jpg';
-// Embed a small (120x120) copy of the logo as a data URI so it always renders in
-// the footer — no remote-image blocking and never shows up as an attachment.
-// Falls back to the hosted LOGO_URL only if the local file is missing.
-let LOGO_SRC = LOGO_URL;
-try {
-  const logoFile = path.join(__dirname, '../../assets/logo-footer.jpg');
-  if (fs.existsSync(logoFile)) {
-    LOGO_SRC = `data:image/jpeg;base64,${fs.readFileSync(logoFile).toString('base64')}`;
-  } else {
-    console.warn('⚠️  Footer logo file missing — falling back to hosted LOGO_URL');
-  }
-} catch (err) {
-  console.warn('⚠️  Footer logo load failed — falling back to hosted LOGO_URL:', err.message);
-}
+// The footer logo is served from a hosted URL (a small 120x120 JPEG on the app
+// domain). Base64 data-URI images are stripped by Gmail/Outlook, so a real
+// hosted URL is the most reliable way to make the logo render in email clients.
+const LOGO_SRC = process.env.TRUST_LOGO_URL || 'https://crmsaidharmasamrakshanapremakuteeram.dpdns.org/logo-footer.jpg';
 const CONTACT_EMAIL = process.env.CONTACT_EMAIL || 'xx@gmail.com';
 const CONTACT_PHONE = process.env.CONTACT_PHONE || '+91 XXXXXXXXXX';
 
@@ -143,12 +130,11 @@ async function sendViaResend({ to, subject, html, text, attachments, from }) {
 
 async function sendEmail({ to, subject, html, text, attachments }) {
   // Wrap in the branded template (logo, address, auto-generated disclaimer). The
-  // logo is embedded directly in the footer HTML (base64 data URI), so it always
-  // renders and never shows up as a separate attachment.
+  // footer logo is referenced from a hosted URL so it renders in email clients.
   const contentHtml = String(html || '');
   const from = getResendFrom();
   const brandedHtml = buildBrandedHtml(contentHtml, from);
-  const brandedText = text || htmlToText(contentHtml);
+  const brandedText = text || buildBrandedText(htmlToText(contentHtml), from);
   const allAttachments = Array.isArray(attachments) ? [...attachments] : [];
 
   // Prefer Resend (HTTPS/443) — works on hosts that block outbound SMTP (e.g. Render).

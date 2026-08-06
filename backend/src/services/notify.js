@@ -34,6 +34,11 @@ function getResendFrom() {
   return process.env.MAIL_FROM || process.env.SMTP_USER || 'onboarding@resend.dev';
 }
 
+// Replies to automated mail land in the enquiry inbox (info@...).
+function getReplyTo() {
+  return process.env.CONTACT_EMAIL || process.env.RESEND_FROM_EMAIL || process.env.SMTP_USER || '';
+}
+
 // --- Branded email wrapper (logo, address, auto-generated disclaimer) ---
 // The footer logo is sent as an inline CID attachment (cid:logo-footer), which
 // Gmail/Outlook render inline automatically. Remote-hosted URLs and base64
@@ -110,7 +115,7 @@ function buildBrandedText(contentText, fromEmail) {
   return `${contentText}\n\n---\nSri Sai Dharma Samrakshana Prema Kuteeram\nPublic Charitable Trust\n"Serving Humanity with Selfless Love and Selfless Service."\n\nThis is an automatically generated email. Please do not reply to this email.\n${fromEmail ? `From: ${fromEmail}\n` : ''}Contact Email: ${CONTACT_EMAIL}\nPhone: ${CONTACT_PHONE}\n\nRegistered Office:\nNo.104, Mettu Street,\nKarur - 639001,\nTamil Nadu, India.\n\n\u00a9 ${new Date().getFullYear()} Sri Sai Dharma Samrakshana Prema Kuteeram. All Rights Reserved.`;
 }
 
-async function sendViaResend({ to, subject, html, text, attachments, from }) {
+async function sendViaResend({ to, subject, html, text, attachments, from, replyTo }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return null; // signal "not configured"
   const resolvedFrom = from || getResendFrom();
@@ -121,6 +126,7 @@ async function sendViaResend({ to, subject, html, text, attachments, from }) {
     html,
   };
   if (text) payload.text = text;
+  if (replyTo) payload.reply_to = replyTo;
   if (attachments && attachments.length > 0) {
     payload.attachments = attachments.map((a) => {
       const out = { filename: a.filename || 'attachment' };
@@ -143,18 +149,19 @@ async function sendViaResend({ to, subject, html, text, attachments, from }) {
   }
 }
 
-async function sendEmail({ to, subject, html, text, attachments }) {
+async function sendEmail({ to, subject, html, text, attachments, replyTo }) {
   // Wrap in the branded template (logo, address, auto-generated disclaimer).
   // The footer logo is attached inline (cid:logo-footer) so clients render it.
   const contentHtml = String(html || '');
   const from = getResendFrom();
+  const resolvedReplyTo = replyTo || getReplyTo() || undefined;
   const brandedHtml = buildBrandedHtml(contentHtml, from);
   const brandedText = text || buildBrandedText(htmlToText(contentHtml), from);
   const allAttachments = Array.isArray(attachments) ? [...attachments] : [];
   if (LOGO_ATTACHMENT) allAttachments.unshift(LOGO_ATTACHMENT);
 
   // Prefer Resend (HTTPS/443) — works on hosts that block outbound SMTP (e.g. Render).
-  const resendResult = await sendViaResend({ to, subject, from, html: brandedHtml, text: brandedText, attachments: allAttachments });
+  const resendResult = await sendViaResend({ to, subject, from, replyTo: resolvedReplyTo, html: brandedHtml, text: brandedText, attachments: allAttachments });
   if (resendResult) return resendResult; // configured (success or hard fail)
 
   // Fallback to Gmail SMTP (works locally / on SMTP-allowed hosts).
@@ -166,6 +173,7 @@ async function sendEmail({ to, subject, html, text, attachments }) {
   if (!t || !to) return { ok: false, reason: 'no-transporter-or-recipient' };
   try {
     const mailOptions = { from: `"Trust CRM" <${process.env.SMTP_USER}>`, to, subject, html: brandedHtml, text: brandedText };
+    if (resolvedReplyTo) mailOptions.replyTo = resolvedReplyTo;
     if (allAttachments.length > 0) mailOptions.attachments = allAttachments;
     await t.sendMail(mailOptions);
     return { ok: true };

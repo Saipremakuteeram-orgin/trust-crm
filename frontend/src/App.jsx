@@ -18,6 +18,7 @@ const FileSend = lazy(() => import("./pages/FileSend"));
 const Mail = lazy(() => import("./pages/Mail"));
 const RecurringTransactions = lazy(() => import("./pages/RecurringTransactions"));
 const Functions = lazy(() => import("./pages/Functions"));
+const WhatsApp = lazy(() => import("./pages/WhatsAppPage"));
 
 function PageLoader() {
   return (
@@ -64,6 +65,7 @@ export default function App() {
         <Route path="/recurring" element={<Protected><RecurringTransactions /></Protected>} />
         <Route path="/functions" element={<Protected><Functions /></Protected>} />
         <Route path="/functions/:id" element={<Protected><Functions /></Protected>} />
+        <Route path="/whatsapp" element={<Protected><WhatsApp /></Protected>} />
         <Route path="/contacts" element={<Protected><Contacts /></Protected>} />
         <Route path="/groups" element={<Protected><Groups /></Protected>} />
         <Route path="/users" element={<Protected><AdminProtected><Users /></AdminProtected></Protected>} />

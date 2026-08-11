@@ -45,6 +45,7 @@ app.use('/api/reports', require('./routes/reports'));
 app.use('/api/scheduled-reports', require('./routes/scheduledReports'));
 app.use('/api/recurring-transactions', require('./routes/recurringTransactions'));
 app.use('/api/functions', require('./routes/functions'));
+app.use('/api/whatsapp', require('./routes/whatsapp'));
 
 app.post('/api/reports/monthly/send-now', requireAuth, sensitiveLimiter, requireRole('admin', 'accountant'), async (req, res) => {
   const { generateAndSendMonthlyReport } = require('./cron/monthlyReport');
@@ -73,6 +74,9 @@ startScheduledReportsCron();
 
 const { startRecurringTransactionsCron } = require('./cron/recurringTransactions');
 startRecurringTransactionsCron();
+
+const { manager } = require('./services/whatsapp/sessionManager');
+manager.restoreSessions();
 
 // --- Keep-alive: prevent Render free tier from sleeping the service ---
 const KEEP_ALIVE_INTERVAL = 10 * 60 * 1000; // 10 minutes

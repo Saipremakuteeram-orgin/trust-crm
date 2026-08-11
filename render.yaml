@@ -3,7 +3,7 @@ services:
     name: trust-crm-backend
     runtime: node
     rootDir: backend
-    buildCommand: npm install
+    buildCommand: npm install && npx puppeteer browsers install chrome
     startCommand: node src/server.js
     envVars:
       - key: NODE_ENV
@@ -43,4 +43,8 @@ services:
       - key: GOOGLE_DRIVE_COMMON_FOLDER_ID
         sync: false
       - key: GOOGLE_DRIVE_USER_EMAIL
+        sync: false
+      - key: WA_SESSION_ENCRYPTION_KEY
+        sync: false
+      - key: PUPPETEER_EXECUTABLE_PATH
         sync: false

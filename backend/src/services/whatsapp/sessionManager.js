@@ -1,8 +1,9 @@
 const { Client, MessageMedia } = require('whatsapp-web.js');
 const path = require('path');
+const fs = require('fs');
 const { logActivity } = require('@/lib/logger');
 const { safeErrorMessage } = require('@/lib/security');
-const { saveEncryptedSession, loadEncryptedSession, deleteEncryptedSession } = require('@/lib/whatsappCrypto');
+const { saveEncryptedSession, loadEncryptedSession, deleteEncryptedSession, getSessionPath } = require('@/lib/whatsappCrypto');
 const supabaseAdmin = require('@/config/supabaseAdmin');
 
 const PUPPETEER_EXECUTABLE = process.env.PUPPETEER_EXECUTABLE_PATH;
@@ -215,10 +216,25 @@ class WhatsAppSessionManager {
     return this.qrData.get(userId) || null;
   }
 
-  async disconnect(userId) {
-    await this._safeDestroyClient(userId);
-    deleteEncryptedSession(userId);
-    return { success: true };
+
+
+  async restoreSessions() {
+    try {
+      const sessionDir = path.dirname(getSessionPath('placeholder'));
+      if (!fs.existsSync(sessionDir)) return;
+      const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.enc'));
+      for (const file of files) {
+        const userId = file.replace(/\.enc$/, '');
+        try {
+          await this.createClient(userId);
+          console.log(`[WhatsAppSessionManager] Restored session for user ${userId}`);
+        } catch (err) {
+          console.error(`[WhatsAppSessionManager] Failed to restore session for ${userId}:`, err.message);
+        }
+      }
+    } catch (err) {
+      console.error('[WhatsAppSessionManager] restoreSessions error:', err.message);
+    }
   }
 
   registerSSE(userId, res) {

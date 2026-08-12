@@ -75,6 +75,9 @@ startScheduledReportsCron();
 const { startRecurringTransactionsCron } = require('./cron/recurringTransactions');
 startRecurringTransactionsCron();
 
+process.on('unhandledRejection',(err)=>{console.error('[unhandledRejection]',err.message||err);});
+process.on('uncaughtException',(err)=>{console.error('[uncaughtException]',err.message||err);});
+
 const { manager } = require('./services/whatsapp/sessionManager');
 manager.restoreSessions().catch(err => console.error('[startup] restoreSessions failed:', err.message));
 

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { QrCode, MessageCircle, Shield, Loader2, Wifi, WifiOff } from "lucide-react";
 import AppLayout from "../components/AppLayout";
@@ -130,7 +130,7 @@ export default function WhatsAppPage() {
       await api.post("/whatsapp/connect");
       setSessionStatus(STATUS.CONNECTING);
       addToast("WhatsApp client initializing… check for a QR code below.", "success");
-      setTimeout(fetchQR, 3000);
+      setTimeout(fetchQR, 5000);
     } catch {
       addToast("Failed to connect WhatsApp", "error");
     }

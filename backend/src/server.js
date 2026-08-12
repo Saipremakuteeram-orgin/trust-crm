@@ -76,7 +76,7 @@ const { startRecurringTransactionsCron } = require('./cron/recurringTransactions
 startRecurringTransactionsCron();
 
 const { manager } = require('./services/whatsapp/sessionManager');
-manager.restoreSessions();
+manager.restoreSessions().catch(err => console.error('[startup] restoreSessions failed:', err.message));
 
 // --- Keep-alive: prevent Render free tier from sleeping the service ---
 const KEEP_ALIVE_INTERVAL = 10 * 60 * 1000; // 10 minutes

@@ -184,7 +184,7 @@ class WhatsAppSessionManager {
     const client = new Client(options);
     this._registerEvents(userId, client);
 
-    client.initialize();
+    client.initialize().catch(err => console.error('[WhatsAppSessionManager] initialize failed:', err.message));
 
     this.clients.set(userId, client);
     this.qrData.set(userId, null);

@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { motion } from "framer-motion";
 import { FileText, Upload, Send, X, FileSpreadsheet, File, Loader2 } from "lucide-react";
-import api from "../lib/api";
+import api from "../../lib/api";
 
 const reportIcons = {
   "transactions-excel": FileSpreadsheet,

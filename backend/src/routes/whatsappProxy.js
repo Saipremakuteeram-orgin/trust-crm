@@ -67,7 +67,9 @@ function buildForwardHeaders(req) {
     const lk = k.toLowerCase();
     if (HOP_BY_HOP.has(lk)) continue;
     if (lk === 'host' || lk === 'content-length') continue; // h2 sets these
-    if (lk === 'origin' || lk === 'referer') continue; // rewrite below
+    // Pass the browser's real Origin/Referer through.  Faking
+    // Origin: web.whatsapp.com (tested earlier) trips WhatsApp's anomaly
+    // checks and returns 400.  The browser's natural onrender Origin returns 200.
     fwd[k] = v;
   }
   fwd[HTTP2_HEADER_METHOD] = req.method;
@@ -76,15 +78,13 @@ function buildForwardHeaders(req) {
   if (!fwd['user-agent']) {
     fwd['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
   }
-  // Present our own origin to WhatsApp so it doesn't reject cross-origin fetches.
-  fwd['origin'] = TARGET_ORIGIN;
-  fwd['referer'] = TARGET_ORIGIN + '/';
   // Replay the server-side session cookie jar on every upstream request.
   if (cookieJar) fwd['cookie'] = cookieJar;
   return fwd;
 }
 
 function proxyHandler(req, res) {
+  console.log(`[wa-proxy] >>> ${req.method} ${req.url} origin=${req.headers.origin || '-'} cookie=${req.headers.cookie ? 'len=' + req.headers.cookie.length : 'no'} jar=${cookieJar ? 'len=' + cookieJar.length : 'empty'}`);
   const s = getSession();
   let fwd;
   try {
@@ -109,16 +109,20 @@ function proxyHandler(req, res) {
     stream.end();
   }
 
+  let chunks = [];
   stream.on('response', (h2headers) => {
     const status = Number(h2headers[HTTP2_HEADER_STATUS] || 200);
     const out = {};
+    const setCookieDebug = [];
     for (const [k, v] of Object.entries(h2headers)) {
       const lk = k.toLowerCase();
       if (lk.startsWith(':')) continue;
       if (HOP_BY_HOP.has(lk)) continue;
       if (STRIP.has(lk)) continue;
       if (lk === 'set-cookie') {
-        mergeSetCookie(v); // capture into server-side jar
+        const arr = Array.isArray(v) ? v : [v];
+        arr.forEach((c) => setCookieDebug.push(c.split(';')[0]));
+        mergeSetCookie(arr); // capture into server-side jar
         continue; // don't leak WhatsApp cookies to the browser
       }
       if (lk === 'location' && typeof v === 'string' && v.startsWith(TARGET_ORIGIN)) {
@@ -127,12 +131,21 @@ function proxyHandler(req, res) {
         out[k] = v;
       }
     }
+    if (setCookieDebug.length) console.log(`[wa-proxy] <<< set-cookie: ${setCookieDebug.join(', ')}`);
+    console.log(`[wa-proxy] <<< ${req.method} ${req.url} -> ${status} (${out['content-type'] || '?'})`);
     try {
       res.writeHead(status, out);
-      stream.pipe(res);
     } catch (e) {
       console.error('[wa-proxy] writeHead error:', e.message);
     }
+    stream.on('data', (d) => { chunks.push(d); res.write(d); });
+    stream.on('end', () => {
+      const body = Buffer.concat(chunks).toString('utf8');
+      if (status >= 400) {
+        console.error(`[wa-proxy] <<< UPSTREAM ERROR BODY (${body.length} bytes): ${body.slice(0, 600)}`);
+      }
+      res.end();
+    });
   });
 
   stream.on('error', (e) => {
@@ -148,7 +161,7 @@ function attachWebSocket(server) {
   server.on('upgrade', (req, clientSocket, head) => {
     if (!req.url || !req.url.startsWith(PREFIX)) return;
     const path = targetPathFrom(req.url);
-    const headers = { ...req.headers, host: TARGET_HOST, origin: TARGET_ORIGIN };
+    const headers = { ...req.headers, host: TARGET_HOST };
     if (cookieJar) headers['cookie'] = cookieJar;
     const upstream = http.request({ host: TARGET_HOST, port: 443, path, method: 'GET', headers });
     upstream.on('upgrade', (resUp, upstreamSocket, upgradeHead) => {

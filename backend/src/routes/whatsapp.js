@@ -159,4 +159,18 @@ router.get('/events/stream', (req, res) => {
   res.write(`data: ${JSON.stringify({ event: 'connected' })}\n\n`);
 });
 
+// Generates a QR code for any URL WITHOUT requiring a headless browser.
+// Used to give users a reliable way to open WhatsApp Web (or a click-to-chat
+// link) on their phone. Works in every environment, including production.
+router.get('/link-qr', async (req, res) => {
+  try {
+    const url = (req.query.url && String(req.query.url)) || 'https://web.whatsapp.com';
+    const QRCode = require('qrcode');
+    const dataUrl = await QRCode.toDataURL(url, { width: 320, margin: 1 });
+    res.json({ success: true, result: { dataUrl, url } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: 'QR generation failed' });
+  }
+});
+
 module.exports = router;

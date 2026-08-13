@@ -16,12 +16,36 @@ const HOP_BY_HOP = new Set([
 const STRIP = new Set([
   'content-security-policy', 'content-security-policy-report-only',
   'x-frame-options', 'frame-options', 'cross-origin-opener-policy',
-  'cross-origin-resource-policy', 'content-security-policy-report-only',
+  'cross-origin-resource-policy', 'cross-origin-embedder-policy',
 ]);
+
+// ---------------------------------------------------------------------------
+// Server-side cookie jar.  WhatsApp's anti-bot rejects requests that don't carry
+// the session cookie (wa_ul + login cookies).  In a third-party iframe the
+// browser often refuses to persist/send those cookies, which makes every
+// follow-up request 400.  We capture Set-Cookie from WhatsApp and replay it on
+// ALL upstream requests, so the browser never has to manage WhatsApp cookies.
+// (Single shared jar — fine for one-org CRM; the WhatsApp Web session is shared.)
+// ---------------------------------------------------------------------------
+let cookieJar = ''; // "name1=val1; name2=val2"
+function mergeSetCookie(setCookieHeader) {
+  const list = Array.isArray(setCookieHeader) ? setCookieHeader : [setCookieHeader];
+  const map = {};
+  if (cookieJar) cookieJar.split(';').forEach((p) => {
+    const i = p.indexOf('=');
+    if (i > -1) map[p.slice(0, i).trim()] = p.slice(i + 1).trim();
+  });
+  for (const c of list) {
+    const pair = c.split(';')[0];
+    const i = pair.indexOf('=');
+    if (i > -1) map[pair.slice(0, i).trim()] = pair.slice(i + 1).trim();
+  }
+  cookieJar = Object.entries(map).map(([k, v]) => `${k}=${v}`).join('; ');
+}
 
 let session = null;
 function getSession() {
-  if (session && !session.destroyed && session.connecting !== false && session.closed !== true) {
+  if (session && !session.destroyed && session.closed !== true) {
     try { if (session.state !== 'closed') return session; } catch (_) {}
   }
   session = http2.connect(TARGET_ORIGIN, { rejectUnauthorized: true });
@@ -37,22 +61,37 @@ function targetPathFrom(url) {
   return stripped;
 }
 
-function proxyHandler(req, res) {
-  const path = targetPathFrom(req.url);
-  const s = getSession();
-
+function buildForwardHeaders(req) {
   const fwd = {};
   for (const [k, v] of Object.entries(req.headers)) {
     const lk = k.toLowerCase();
     if (HOP_BY_HOP.has(lk)) continue;
     if (lk === 'host' || lk === 'content-length') continue; // h2 sets these
+    if (lk === 'origin' || lk === 'referer') continue; // rewrite below
     fwd[k] = v;
   }
   fwd[HTTP2_HEADER_METHOD] = req.method;
-  fwd[HTTP2_HEADER_PATH] = path;
+  fwd[HTTP2_HEADER_PATH] = targetPathFrom(req.url);
   fwd[HTTP2_HEADER_AUTHORITY] = TARGET_HOST;
   if (!fwd['user-agent']) {
     fwd['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+  }
+  // Present our own origin to WhatsApp so it doesn't reject cross-origin fetches.
+  fwd['origin'] = TARGET_ORIGIN;
+  fwd['referer'] = TARGET_ORIGIN + '/';
+  // Replay the server-side session cookie jar on every upstream request.
+  if (cookieJar) fwd['cookie'] = cookieJar;
+  return fwd;
+}
+
+function proxyHandler(req, res) {
+  const s = getSession();
+  let fwd;
+  try {
+    fwd = buildForwardHeaders(req);
+  } catch (e) {
+    if (!res.headersSent) res.writeHead(500);
+    return res.end('wa-proxy header error');
   }
 
   let stream;
@@ -78,25 +117,12 @@ function proxyHandler(req, res) {
       if (lk.startsWith(':')) continue;
       if (HOP_BY_HOP.has(lk)) continue;
       if (STRIP.has(lk)) continue;
+      if (lk === 'set-cookie') {
+        mergeSetCookie(v); // capture into server-side jar
+        continue; // don't leak WhatsApp cookies to the browser
+      }
       if (lk === 'location' && typeof v === 'string' && v.startsWith(TARGET_ORIGIN)) {
         out[k] = v.replace(TARGET_ORIGIN, PREFIX);
-      } else if (lk === 'set-cookie') {
-        // WhatsApp scopes its session cookie to .web.whatsapp.com; the browser
-        // rejects that on our origin. Also, the WhatsApp iframe is a DIFFERENT
-        // site than the CRM frontend, so a SameSite=Lax cookie would be blocked
-        // by the browser's third-party-cookie policy and never sent back — every
-        // follow-up /wa request would then hit WhatsApp's anti-bot wall (400).
-        // Strip Domain, force Secure + SameSite=None (the explicit exception that
-        // browsers DO send in a third-party iframe) so the session persists.
-        const list = Array.isArray(v) ? v : [v];
-        out[k] = list.map((c) => {
-          const cleaned = c
-            .replace(/;\s*Domain=[^;]*/i, '')
-            .replace(/;\s*Secure/i, '')
-            .replace(/;\s*SameSite=[^;]*/i, '')
-            .trim();
-          return cleaned + '; Secure; SameSite=None';
-        });
       } else {
         out[k] = v;
       }
@@ -122,10 +148,9 @@ function attachWebSocket(server) {
   server.on('upgrade', (req, clientSocket, head) => {
     if (!req.url || !req.url.startsWith(PREFIX)) return;
     const path = targetPathFrom(req.url);
-    const upstream = http.request({
-      host: TARGET_HOST, port: 443, path, method: 'GET',
-      headers: { ...req.headers, host: TARGET_HOST, origin: TARGET_ORIGIN },
-    });
+    const headers = { ...req.headers, host: TARGET_HOST, origin: TARGET_ORIGIN };
+    if (cookieJar) headers['cookie'] = cookieJar;
+    const upstream = http.request({ host: TARGET_HOST, port: 443, path, method: 'GET', headers });
     upstream.on('upgrade', (resUp, upstreamSocket, upgradeHead) => {
       clientSocket.write(
         'HTTP/1.1 101 Switching Protocols\r\n' +

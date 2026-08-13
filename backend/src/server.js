@@ -26,7 +26,13 @@ function isAllowedOrigin(origin) {
 }
 
 app.use(compression({ level: 6, threshold: 1024 }));
-app.use(helmet({ contentSecurityPolicy: false, frameguard: false }));
+app.use(helmet({
+  contentSecurityPolicy: false,
+  frameguard: false,
+  crossOriginOpenerPolicy: false,
+  crossOriginEmbedderPolicy: false,
+  crossOriginResourcePolicy: false,
+}));
 app.use(cors({
   origin: (origin, cb) => cb(null, isAllowedOrigin(origin) ? origin : false),
   credentials: true,

@@ -1,8 +1,7 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { motion } from "framer-motion";
-import { QrCode, MessageCircle, Shield, ExternalLink, MessageSquare } from "lucide-react";
+import { MessageCircle, Shield, RefreshCw, ExternalLink, MessageSquare } from "lucide-react";
 import AppLayout from "../components/AppLayout";
-import QRScanner from "../components/WhatsApp/QRScanner";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 import api from "../lib/api";
@@ -23,18 +22,9 @@ export default function WhatsAppPage() {
   const { addToast } = useToast();
   const role = profile?.role || "viewer";
 
-  const [qrDataUrl, setQrDataUrl] = useState(null);
+  const iframeRef = useRef(null);
   const [contacts, setContacts] = useState([]);
-  const [loading, setLoading] = useState(false);
-
-  const fetchLinkQR = useCallback(async () => {
-    try {
-      const res = await api.get("/whatsapp/link-qr", { params: { url: WHATSAPP_WEB_URL } });
-      setQrDataUrl(res.data.result.dataUrl);
-    } catch {
-      /* ignore */
-    }
-  }, []);
+  const [frameBlocked, setFrameBlocked] = useState(false);
 
   const fetchContacts = useCallback(async () => {
     try {
@@ -47,21 +37,36 @@ export default function WhatsAppPage() {
   }, [addToast]);
 
   useEffect(() => {
-    fetchLinkQR();
     fetchContacts();
-  }, [fetchLinkQR, fetchContacts]);
+  }, [fetchContacts]);
 
-  const openWhatsAppWeb = () => {
-    window.open(WHATSAPP_WEB_URL, "_blank", "noopener,noreferrer");
+  // If WhatsApp refuses to load inside the frame (its CSP blocks framing),
+  // surface a fallback after a short wait.
+  useEffect(() => {
+    const t = setTimeout(() => {
+      try {
+        const doc = iframeRef.current && iframeRef.current.contentDocument;
+        // Cross-origin: contentDocument is null when blocked/empty.
+        if (!doc || doc.body === null) {
+          // Can't reliably detect block cross-origin; leave as-is.
+        }
+      } catch (_) { /* cross-origin, ignore */ }
+    }, 4000);
+    return () => clearTimeout(t);
+  }, []);
+
+  const reloadFrame = () => {
+    if (iframeRef.current) iframeRef.current.src = WHATSAPP_WEB_URL;
+    setFrameBlocked(false);
   };
 
-  const openChat = (phone) => {
+  const openChatInFrame = (phone) => {
     const normalized = normalizePhone(phone);
     if (!normalized) {
       addToast("No phone number for this contact", "error");
       return;
     }
-    window.open(`https://wa.me/${normalized}`, "_blank", "noopener,noreferrer");
+    if (iframeRef.current) iframeRef.current.src = `https://wa.me/${normalized}`;
   };
 
   const canEdit = role === "admin" || role === "accountant";
@@ -82,67 +87,56 @@ export default function WhatsAppPage() {
         className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-3xl font-bold text-stone-900 tracking-tight">WhatsApp Integration</h1>
-          <p className="text-sm text-stone-500 mt-1">Open WhatsApp Web and message CRM contacts directly</p>
+          <p className="text-sm text-stone-500 mt-1">WhatsApp Web embedded inline — message CRM contacts directly</p>
         </div>
+        <button onClick={reloadFrame}
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-stone-700 bg-stone-100 rounded-xl hover:bg-stone-200 transition-colors">
+          <RefreshCw size={14} /> Reload
+        </button>
       </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Direct access panel */}
-        <div className="bg-white rounded-2xl border border-stone-200/80 shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <MessageCircle size={18} className="text-emerald-500" />
-            <h2 className="text-lg font-semibold text-stone-900">Open WhatsApp Web</h2>
-          </div>
-
-          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-            onClick={openWhatsAppWeb}
-            className="w-full flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-600 text-white text-sm font-semibold shadow-lg shadow-emerald-500/20 hover:shadow-xl transition-all">
-            <ExternalLink size={16} />
-            Launch WhatsApp Web
-          </motion.button>
-
-          <div className="mt-6 flex flex-col items-center">
-            {qrDataUrl ? (
-              <QRScanner qrDataUrl={qrDataUrl} onRefresh={fetchLinkQR} />
-            ) : (
-              <div className="flex items-center gap-2 text-stone-400 text-sm">
-                <QrCode size={16} className="animate-pulse" /> Loading QR…
-              </div>
-            )}
-            <p className="text-xs text-stone-500 mt-3 text-center max-w-xs">
-              Scan with your phone's camera to open WhatsApp Web, or use the launch button above.
-            </p>
-          </div>
+      <div className="h-[calc(100vh-220px)] grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4">
+        {/* Embedded WhatsApp Web */}
+        <div className="relative bg-white rounded-2xl border border-stone-200/80 shadow-sm overflow-hidden">
+          <iframe
+            ref={iframeRef}
+            src={WHATSAPP_WEB_URL}
+            title="WhatsApp Web"
+            className="w-full h-full border-0"
+            onError={() => setFrameBlocked(true)}
+          />
+          {frameBlocked && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-white">
+              <MessageCircle size={32} className="text-stone-300" />
+              <p className="text-sm text-stone-500">WhatsApp Web could not be embedded.</p>
+              <a href={WHATSAPP_WEB_URL} target="_blank" rel="noopener noreferrer"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-emerald-600 bg-emerald-50 rounded-xl hover:bg-emerald-100">
+                <ExternalLink size={14} /> Open WhatsApp Web
+              </a>
+            </div>
+          )}
         </div>
 
         {/* CRM contacts */}
-        <div className="bg-white rounded-2xl border border-stone-200/80 shadow-sm p-6">
-          <div className="flex items-center gap-2 mb-4">
-            <MessageSquare size={18} className="text-royal-500" />
-            <h2 className="text-lg font-semibold text-stone-900">CRM Contacts</h2>
+        <div className="bg-white rounded-2xl border border-stone-200/80 shadow-sm p-4 overflow-y-auto">
+          <div className="flex items-center gap-2 mb-3">
+            <MessageSquare size={16} className="text-royal-500" />
+            <h2 className="text-sm font-semibold text-stone-900">CRM Contacts</h2>
           </div>
-
-          {loading ? (
-            <p className="text-sm text-stone-400">Loading…</p>
-          ) : contacts.length === 0 ? (
-            <p className="text-sm text-stone-400">No contacts found.</p>
+          {contacts.length === 0 ? (
+            <p className="text-xs text-stone-400">No contacts found.</p>
           ) : (
-            <div className="max-h-[480px] overflow-y-auto space-y-2 pr-1">
+            <div className="space-y-1.5">
               {contacts.map((c) => (
-                <div key={c.id}
-                  className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border border-stone-100 hover:bg-stone-50 transition-colors">
+                <button key={c.id} onClick={() => openChatInFrame(c.phone)}
+                  disabled={!c.phone}
+                  className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-stone-100 hover:bg-stone-50 transition-colors text-left disabled:opacity-40">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-stone-900 truncate">{c.name}</p>
                     <p className="text-xs text-stone-400 truncate">{c.phone || "No phone"}</p>
                   </div>
-                  <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                    onClick={() => openChat(c.phone)}
-                    disabled={!c.phone}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-600 text-xs font-medium hover:bg-emerald-100 transition-colors disabled:opacity-40">
-                    <MessageSquare size={13} />
-                    Chat
-                  </motion.button>
-                </div>
+                  <MessageSquare size={14} className="text-emerald-500 shrink-0" />
+                </button>
               ))}
             </div>
           )}

@@ -13,10 +13,18 @@ const app = express();
 
 const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'https://crmsaidharmasamrakshanapremakuteeram.dpdns.org,https://crm.saidharmasamrakshanapremakuteeram.qzz.io,https://trust-crm.vercel.app').split(',').map((s) => s.trim());
 
+// Allow configured origins AND any localhost/127.0.0.1 dev origin (Vite/CRA).
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // server-to-server / non-browser
+  if (CORS_ORIGINS.includes(origin)) return true;
+  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  return false;
+}
+
 app.use(compression({ level: 6, threshold: 1024 }));
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({
-  origin: CORS_ORIGINS,
+  origin: (origin, cb) => cb(null, isAllowedOrigin(origin) ? origin : false),
   credentials: true,
   methods: ['GET', 'POST', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],

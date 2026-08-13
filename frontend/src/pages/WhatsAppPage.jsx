@@ -213,11 +213,13 @@ export default function WhatsAppPage() {
             setQrDataUrl(null);
             setChats([]);
             addToast("WhatsApp session disconnected", "warning");
-          } else if (evt === "auth_failure") {
-            setSessionStatus(STATUS.DISCONNECTED);
-            setQrDataUrl(null);
-            addToast(data?.message || "WhatsApp authentication failed", "error");
-          }
+           } else if (evt === "auth_failure") {
+             setSessionStatus(STATUS.DISCONNECTED);
+             setQrDataUrl(null);
+             addToast(data?.message || "WhatsApp authentication failed", "error");
+           } else if (evt === "error") {
+             addToast(data?.message || "WhatsApp error occurred", "error");
+           }
         } catch (e) {
           console.error("[WhatsApp SSE] parse error:", e);
         }

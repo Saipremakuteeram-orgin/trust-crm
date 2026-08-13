@@ -13,13 +13,8 @@ const puppeteerArgs = [
   '--disable-setuid-sandbox',
   '--disable-infobars',
   '--window-size=1280,800',
-  '--disable-web-security',
-  '--disable-features=site-per-process',
-  '--disable-site-per-process',
-  '--disable-setuptee',
   '--no-first-run',
   '--no-default-browser-check',
-  '--no-default-check',
 ];
 
 class WhatsAppSessionManager {
@@ -27,8 +22,17 @@ class WhatsAppSessionManager {
     this.clients = new Map();       // Map<userId, Client>
     this.qrData = new Map();       // Map<userId, qrString>
     this.sseClients = new Map();   // Map<userId, res>
+    this.qrTimeouts = new Map();   // Map<userId, timeoutId>
     this.fileQueue = [];           // Async file-send queue
     this.processing = false;
+  }
+
+  _clearQrTimeout(userId) {
+    const timeout = this.qrTimeouts.get(userId);
+    if (timeout) {
+      clearTimeout(timeout);
+      this.qrTimeouts.delete(userId);
+    }
   }
 
   _getStealthPuppeteer() {
@@ -66,6 +70,7 @@ class WhatsAppSessionManager {
   _registerEvents(userId, client) {
     client.on('qr', (qr) => {
       this.qrData.set(userId, qr);
+      this._clearQrTimeout(userId);
       this._emitSSE(userId, { event: 'qr', data: qr });
     });
 
@@ -193,28 +198,14 @@ class WhatsAppSessionManager {
     this.clients.set(userId, client);
     this.qrData.set(userId, null);
 
-    // Start polling for QR every 2 seconds as a fallback
-    const pollStart = Date.now();
-    const pollInterval = setInterval(async () => {
-      const elapsed = Date.now() - pollStart;
-      if (elapsed > 60000) {
-        clearInterval(pollInterval);
-        return;
+    // Set a timeout to emit an error if QR doesn't appear within 30 seconds
+    const qrTimeout = setTimeout(() => {
+      if (!this.qrData.get(userId)) {
+        this._emitSSE(userId, { event: 'error', data: { message: 'WhatsApp client failed to generate QR code. Check server logs.' } });
       }
-      // Check if QR was set by event
-      if (this.qrData.get(userId)) {
-        clearInterval(pollInterval);
-      }
-      // Try to fetch current QR
-      try {
-        const currentQR = await client.getQRCode();
-        this.qrData.set(userId, currentQR);
-        this._emitSSE(userId, { event: 'qr', data: currentQR });
-        clearInterval(pollInterval);
-      } catch (e) {
-        // Still initializing
-      }
-    }, 2000);
+    }, 30000);
+
+    this.qrTimeouts.set(userId, qrTimeout);
 
     return { status: 'initializing' };
   }
@@ -237,6 +228,7 @@ class WhatsAppSessionManager {
         console.error(`[WhatsAppSessionManager] destroy error for ${userId}:`, err.message);
       }
     }
+    this._clearQrTimeout(userId);
     this.clients.delete(userId);
     this.qrData.delete(userId);
     deleteEncryptedSession(userId);

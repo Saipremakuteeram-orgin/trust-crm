@@ -1,0 +1,4 @@
+Fix WhatsApp disconnect and QR polling
+
+- Add missing disconnect() method in sessionManager.js
+- Improve QR code polling in WhatsAppPage.jsx

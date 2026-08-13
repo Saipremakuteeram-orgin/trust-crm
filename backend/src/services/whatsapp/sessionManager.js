@@ -9,19 +9,39 @@ const supabaseAdmin = require('@/config/supabaseAdmin');
 const PUPPETEER_EXECUTABLE = process.env.PUPPETEER_EXECUTABLE_PATH;
 
 function findChromeExecutable() {
-  if (PUPPETEER_EXECUTABLE) return PUPPETEER_EXECUTABLE;
-
   const fs = require('fs');
   const path = require('path');
+  const os = require('os');
 
-  const puppeteerCache = process.env.PUPPETEER_CACHE_DIR || path.join(require('os').homedir(), '.cache', 'puppeteer', 'chrome');
+  if (PUPPETEER_EXECUTABLE && fs.existsSync(PUPPETEER_EXECUTABLE)) {
+    return PUPPETEER_EXECUTABLE;
+  }
+
+  const platform = os.platform();
+  const exeName = platform === 'win32' ? 'chrome.exe' : 'chrome';
+
+  const puppeteerCache = process.env.PUPPETEER_CACHE_DIR || path.join(os.homedir(), '.cache', 'puppeteer', 'chrome');
   if (fs.existsSync(puppeteerCache)) {
-    const versions = fs.readdirSync(puppeteerCache).filter(f => f.startsWith('win64-'));
-    for (const v of versions.sort().reverse()) {
-      const chromePath = path.join(puppeteerCache, v, 'chrome-win64', 'chrome.exe');
-      if (fs.existsSync(chromePath)) {
-        console.log(`[WhatsAppSessionManager] Found Chrome: ${chromePath}`);
-        return chromePath;
+    let versions = [];
+    try {
+      versions = fs.readdirSync(puppeteerCache).filter(f => f.startsWith('chrome-') || f.startsWith('win64-') || f.startsWith('linux-') || f.startsWith('mac-'));
+    } catch (e) {
+      versions = [];
+    }
+    // Newest first
+    versions.sort().reverse();
+    for (const v of versions) {
+      const candidates = [
+        path.join(puppeteerCache, v, 'chrome-linux64', exeName),
+        path.join(puppeteerCache, v, 'chrome-win64', exeName),
+        path.join(puppeteerCache, v, 'chrome-mac64', exeName),
+        path.join(puppeteerCache, v, exeName),
+      ];
+      for (const chromePath of candidates) {
+        if (fs.existsSync(chromePath)) {
+          console.log(`[WhatsAppSessionManager] Found Chrome: ${chromePath}`);
+          return chromePath;
+        }
       }
     }
   }
@@ -29,7 +49,7 @@ function findChromeExecutable() {
   try {
     const puppeteer = require('puppeteer');
     const p = puppeteer.executablePath();
-    if (fs.existsSync(p)) return p;
+    if (p && fs.existsSync(p)) return p;
   } catch (e) {
     /* ignore */
   }
@@ -38,6 +58,11 @@ function findChromeExecutable() {
 }
 
 const RESOLVED_CHROME = findChromeExecutable();
+if (!RESOLVED_CHROME) {
+  console.error('[WhatsAppSessionManager] WARNING: No Chrome executable found. WhatsApp QR will not generate. Set PUPPETEER_EXECUTABLE_PATH or ensure Chrome is installed in the puppeteer cache.');
+} else {
+  console.log(`[WhatsAppSessionManager] Using Chrome: ${RESOLVED_CHROME}`);
+}
 
 const puppeteerArgs = [
   '--no-sandbox',

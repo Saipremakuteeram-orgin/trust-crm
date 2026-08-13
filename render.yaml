@@ -53,4 +53,4 @@ services:
       - key: PUPPETEER_CACHE_DIR
         value: "/root/.cache/puppeteer"
       - key: CORS_ORIGINS
-        value: "https://crmsaidharasamrakshanapremakuteeram.dpdns.org,https://crm.saidharasamrakshanapremakuteeram.qzz.io,https://trust-crm.vercel.app"
+        value: "https://crmsaidharmasamrakshanapremakuteeram.dpdns.org,https://crm.saidharmasamrakshanapremakuteeram.qzz.io,https://trust-crm.vercel.app"

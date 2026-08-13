@@ -13,11 +13,14 @@ const app = express();
 
 const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'https://crmsaidharmasamrakshanapremakuteeram.dpdns.org,https://crm.saidharmasamrakshanapremakuteeram.qzz.io,https://trust-crm.vercel.app').split(',').map((s) => s.trim());
 
-// Allow configured origins AND any localhost/127.0.0.1 dev origin (Vite/CRA).
+// Allow configured origins, localhost dev origins, and any https origin.
+// Safe because the API authenticates via Bearer tokens (not cookies), so
+// reflecting the origin does not expose credentialed cross-site requests.
 function isAllowedOrigin(origin) {
   if (!origin) return true; // server-to-server / non-browser
   if (CORS_ORIGINS.includes(origin)) return true;
   if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
+  if (/^https:\/\//.test(origin)) return true; // any https origin (production frontends)
   return false;
 }
 

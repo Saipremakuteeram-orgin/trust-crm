@@ -14,6 +14,12 @@ const puppeteerArgs = [
   '--disable-infobars',
   '--window-size=1280,800',
   '--disable-web-security',
+  '--disable-features=site-per-process',
+  '--disable-site-per-process',
+  '--disable-setuptee',
+  '--no-first-run',
+  '--no-default-browser-check',
+  '--no-default-check',
 ];
 
 class WhatsAppSessionManager {
@@ -27,13 +33,11 @@ class WhatsAppSessionManager {
 
   _getStealthPuppeteer() {
     try {
-      const puppeteer = require('puppeteer-extra');
-      const StealthPlugin = require('puppeteer-extra-plugin-stealth');
-      puppeteer.use(StealthPlugin());
+      const puppeteer = require('puppeteer');
       return puppeteer;
     } catch (err) {
-      console.warn('[WhatsAppSessionManager] puppeteer-extra-stealth not available, falling back to core puppeteer');
-      return require('puppeteer');
+      console.warn('[WhatsAppSessionManager] puppeteer not available');
+      return require('puppeteer-core');
     }
   }
 
@@ -188,6 +192,29 @@ class WhatsAppSessionManager {
 
     this.clients.set(userId, client);
     this.qrData.set(userId, null);
+
+    // Start polling for QR every 2 seconds as a fallback
+    const pollStart = Date.now();
+    const pollInterval = setInterval(async () => {
+      const elapsed = Date.now() - pollStart;
+      if (elapsed > 60000) {
+        clearInterval(pollInterval);
+        return;
+      }
+      // Check if QR was set by event
+      if (this.qrData.get(userId)) {
+        clearInterval(pollInterval);
+      }
+      // Try to fetch current QR
+      try {
+        const currentQR = await client.getQRCode();
+        this.qrData.set(userId, currentQR);
+        this._emitSSE(userId, { event: 'qr', data: currentQR });
+        clearInterval(pollInterval);
+      } catch (e) {
+        // Still initializing
+      }
+    }, 2000);
 
     return { status: 'initializing' };
   }

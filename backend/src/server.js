@@ -8,6 +8,7 @@ const compression = require('compression');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const { requireAuth, requireRole } = require('./middlewares/auth');
+const { proxyHandler, attachWebSocket } = require('./routes/whatsappProxy');
 
 const app = express();
 
@@ -25,7 +26,7 @@ function isAllowedOrigin(origin) {
 }
 
 app.use(compression({ level: 6, threshold: 1024 }));
-app.use(helmet({ contentSecurityPolicy: false }));
+app.use(helmet({ contentSecurityPolicy: false, frameguard: false }));
 app.use(cors({
   origin: (origin, cb) => cb(null, isAllowedOrigin(origin) ? origin : false),
   credentials: true,
@@ -58,6 +59,10 @@ app.use('/api/recurring-transactions', require('./routes/recurringTransactions')
 app.use('/api/functions', require('./routes/functions'));
 app.use('/api/whatsapp', require('./routes/whatsapp'));
 
+// WhatsApp Web reverse proxy — serves web.whatsapp.com from our own origin
+// so it can be embedded in an iframe (strips WhatsApp's frame-ancestors CSP).
+app.use('/wa', proxyHandler);
+
 app.post('/api/reports/monthly/send-now', requireAuth, sensitiveLimiter, requireRole('admin', 'accountant'), async (req, res) => {
   const { generateAndSendMonthlyReport } = require('./cron/monthlyReport');
   const { logActivity } = require('./lib/logger');
@@ -69,7 +74,8 @@ app.post('/api/reports/monthly/send-now', requireAuth, sensitiveLimiter, require
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 8888;
-app.listen(PORT, '0.0.0.0', () => console.log(`Express running → On PORT : ${PORT}`));
+const server = app.listen(PORT, '0.0.0.0', () => console.log(`Express running → On PORT : ${PORT}`));
+attachWebSocket(server);
 
 const { startMonthlyReportCron } = require('./cron/monthlyReport');
 startMonthlyReportCron();

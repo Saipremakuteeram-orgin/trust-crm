@@ -6,7 +6,11 @@ import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 import api from "../lib/api";
 
-const WHATSAPP_WEB_URL = "https://web.whatsapp.com";
+// WhatsApp Web is served through our own backend proxy (/wa) so it can be
+// embedded in an iframe (WhatsApp's own CSP forbids direct framing).
+const API_URL = import.meta.env.VITE_API_URL || "";
+const PROXY_BASE = API_URL.replace(/\/api\/?$/, "");
+const WHATSAPP_WEB_URL = `${PROXY_BASE}/wa`;
 
 function normalizePhone(p) {
   if (!p) return null;
@@ -66,7 +70,7 @@ export default function WhatsAppPage() {
       addToast("No phone number for this contact", "error");
       return;
     }
-    if (iframeRef.current) iframeRef.current.src = `https://wa.me/${normalized}`;
+    if (iframeRef.current) iframeRef.current.src = `${WHATSAPP_WEB_URL}/send?phone=${normalized}`;
   };
 
   const canEdit = role === "admin" || role === "accountant";

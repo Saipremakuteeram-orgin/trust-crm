@@ -196,6 +196,26 @@ class WhatsAppSessionManager {
     return this.createClient(userId);
   }
 
+  async disconnect(userId) {
+    const client = this.clients.get(userId);
+    if (client) {
+      try {
+        await client.logout();
+      } catch (err) {
+        console.error(`[WhatsAppSessionManager] logout error for ${userId}:`, err.message);
+      }
+      try {
+        await client.destroy();
+      } catch (err) {
+        console.error(`[WhatsAppSessionManager] destroy error for ${userId}:`, err.message);
+      }
+    }
+    this.clients.delete(userId);
+    this.qrData.delete(userId);
+    deleteEncryptedSession(userId);
+    this._emitSSE(userId, { event: 'disconnected', data: { reason: 'manual' } });
+  }
+
   getClient(userId) {
     return this.clients.get(userId) || null;
   }

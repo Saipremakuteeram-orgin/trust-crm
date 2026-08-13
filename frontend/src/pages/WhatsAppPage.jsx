@@ -130,7 +130,20 @@ export default function WhatsAppPage() {
       await api.post("/whatsapp/connect");
       setSessionStatus(STATUS.CONNECTING);
       addToast("WhatsApp client initializing… check for a QR code below.", "success");
-      setTimeout(fetchQR, 5000);
+      
+      let attempts = 0;
+      const maxAttempts = 12;
+      const pollInterval = setInterval(async () => {
+        attempts++;
+        if (attempts >= maxAttempts) {
+          clearInterval(pollInterval);
+        }
+        await fetchQR();
+        const res = await api.get("/whatsapp/status").catch(() => ({ data: { result: { connected: false } } }));
+        if (res.data.result.connected || attempts >= maxAttempts) {
+          clearInterval(pollInterval);
+        }
+      }, 2000);
     } catch {
       addToast("Failed to connect WhatsApp", "error");
     }

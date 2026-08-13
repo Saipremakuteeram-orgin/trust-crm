@@ -82,15 +82,21 @@ function proxyHandler(req, res) {
         out[k] = v.replace(TARGET_ORIGIN, PREFIX);
       } else if (lk === 'set-cookie') {
         // WhatsApp scopes its session cookie to .web.whatsapp.com; the browser
-        // rejects that on our origin, so the session is never persisted and all
-        // follow-up requests hit the anti-bot wall (400). Strip Domain/Secure so
-        // the cookie is stored for OUR domain and sent back on every /wa request.
+        // rejects that on our origin. Also, the WhatsApp iframe is a DIFFERENT
+        // site than the CRM frontend, so a SameSite=Lax cookie would be blocked
+        // by the browser's third-party-cookie policy and never sent back — every
+        // follow-up /wa request would then hit WhatsApp's anti-bot wall (400).
+        // Strip Domain, force Secure + SameSite=None (the explicit exception that
+        // browsers DO send in a third-party iframe) so the session persists.
         const list = Array.isArray(v) ? v : [v];
-        out[k] = list.map((c) =>
-          c.replace(/;\s*Domain=[^;]*/i, '')
-           .replace(/;\s*Secure/i, '')
-           .trim()
-        );
+        out[k] = list.map((c) => {
+          const cleaned = c
+            .replace(/;\s*Domain=[^;]*/i, '')
+            .replace(/;\s*Secure/i, '')
+            .replace(/;\s*SameSite=[^;]*/i, '')
+            .trim();
+          return cleaned + '; Secure; SameSite=None';
+        });
       } else {
         out[k] = v;
       }

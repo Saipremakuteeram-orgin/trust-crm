@@ -3,7 +3,7 @@ services:
     name: trust-crm-backend
     runtime: node
     rootDir: backend
-    buildCommand: npm install && npx puppeteer browsers install chrome
+    buildCommand: npm install && npx @puppeteer/browsers install chrome@stable --path /root/.cache/puppeteer/chrome
     startCommand: node src/server.js
     envVars:
       - key: NODE_ENV
@@ -50,5 +50,7 @@ services:
         sync: false
       - key: PUPPETEER_SKIP_DOWNLOAD
         value: "true"
+      - key: PUPPETEER_CACHE_DIR
+        value: "/root/.cache/puppeteer"
       - key: CORS_ORIGINS
         value: "https://crmsaidharasamrakshanapremakuteeram.dpdns.org,https://crm.saidharasamrakshanapremakuteeram.qzz.io,https://trust-crm.vercel.app"

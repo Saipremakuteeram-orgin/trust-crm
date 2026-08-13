@@ -8,6 +8,37 @@ const supabaseAdmin = require('@/config/supabaseAdmin');
 
 const PUPPETEER_EXECUTABLE = process.env.PUPPETEER_EXECUTABLE_PATH;
 
+function findChromeExecutable() {
+  if (PUPPETEER_EXECUTABLE) return PUPPETEER_EXECUTABLE;
+
+  const fs = require('fs');
+  const path = require('path');
+
+  const puppeteerCache = process.env.PUPPETEER_CACHE_DIR || path.join(require('os').homedir(), '.cache', 'puppeteer', 'chrome');
+  if (fs.existsSync(puppeteerCache)) {
+    const versions = fs.readdirSync(puppeteerCache).filter(f => f.startsWith('win64-'));
+    for (const v of versions.sort().reverse()) {
+      const chromePath = path.join(puppeteerCache, v, 'chrome-win64', 'chrome.exe');
+      if (fs.existsSync(chromePath)) {
+        console.log(`[WhatsAppSessionManager] Found Chrome: ${chromePath}`);
+        return chromePath;
+      }
+    }
+  }
+
+  try {
+    const puppeteer = require('puppeteer');
+    const p = puppeteer.executablePath();
+    if (fs.existsSync(p)) return p;
+  } catch (e) {
+    /* ignore */
+  }
+
+  return undefined;
+}
+
+const RESOLVED_CHROME = findChromeExecutable();
+
 const puppeteerArgs = [
   '--no-sandbox',
   '--disable-setuid-sandbox',
@@ -46,10 +77,9 @@ class WhatsAppSessionManager {
   }
 
   _buildClientOptions(userId) {
-    const puppeteer = this._getStealthPuppeteer();
     const options = {
       puppeteer: {
-        executablePath: PUPPETEER_EXECUTABLE || (puppeteer.executablePath ? puppeteer.executablePath() : undefined),
+        executablePath: RESOLVED_CHROME,
         headless: 'new',
         args: puppeteerArgs,
         defaultViewport: { width: 1280, height: 800 },

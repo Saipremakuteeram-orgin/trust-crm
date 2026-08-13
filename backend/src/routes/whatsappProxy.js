@@ -80,6 +80,17 @@ function proxyHandler(req, res) {
       if (STRIP.has(lk)) continue;
       if (lk === 'location' && typeof v === 'string' && v.startsWith(TARGET_ORIGIN)) {
         out[k] = v.replace(TARGET_ORIGIN, PREFIX);
+      } else if (lk === 'set-cookie') {
+        // WhatsApp scopes its session cookie to .web.whatsapp.com; the browser
+        // rejects that on our origin, so the session is never persisted and all
+        // follow-up requests hit the anti-bot wall (400). Strip Domain/Secure so
+        // the cookie is stored for OUR domain and sent back on every /wa request.
+        const list = Array.isArray(v) ? v : [v];
+        out[k] = list.map((c) =>
+          c.replace(/;\s*Domain=[^;]*/i, '')
+           .replace(/;\s*Secure/i, '')
+           .trim()
+        );
       } else {
         out[k] = v;
       }

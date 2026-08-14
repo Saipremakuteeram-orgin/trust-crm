@@ -70,7 +70,10 @@ export default function WhatsAppPage() {
       addToast("No phone number for this contact", "error");
       return;
     }
-    if (iframeRef.current) iframeRef.current.src = `${WHATSAPP_WEB_URL}/send?phone=${normalized}`;
+    // Navigate within the iframe without full reload (same-origin)
+    if (iframeRef.current?.contentWindow) {
+      iframeRef.current.contentWindow.location.href = `${WHATSAPP_WEB_URL}/send?phone=${normalized}`;
+    }
   };
 
   const canEdit = role === "admin" || role === "accountant";

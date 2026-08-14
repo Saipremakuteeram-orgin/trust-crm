@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
+import React from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
@@ -9,7 +10,7 @@ import {
   FileBarChart, Download, RefreshCw, Calendar, Wallet, Landmark, TrendingUp, TrendingDown,
   Clock, Send, Loader2, Plus, Pencil, Trash2, Eye, ToggleLeft, ToggleRight,
   Mail, MessageSquare, Users, Filter, X, CheckCircle, XCircle, ChevronDown, ChevronRight,
-  CalendarClock, Zap, FilePlus, Save, Shield,
+  CalendarClock, Zap, FilePlus, Save, Shield, Radio, CalendarDays, Clock as ClockIcon,
 } from "lucide-react";
 import {
   AreaChart, Area, PieChart, Pie, Cell,
@@ -732,11 +733,15 @@ export default function Reports() {
   const [exporting, setExporting] = useState(null);
   const [modal, setModal] = useState({ open: false, title: "", subtitle: "", transactions: null, loading: false });
   const [activeTab, setActiveTab] = useState("analytics");
+  const [createReportOpen, setCreateReportOpen] = useState(false);
+  const [crStep, setCrStep] = useState(1);
 
   // Create Custom Report state
   const [crRange, setCrRange] = useState("monthly");
   const [crDate, setCrDate] = useState(todayISO());
+  const [crWeekStart, setCrWeekStart] = useState("");
   const [crMonth, setCrMonth] = useState(thisMonth());
+  const [crQuarter, setCrQuarter] = useState("");
   const [crYear, setCrYear] = useState(thisYear());
   const [crFrom, setCrFrom] = useState("");
   const [crTo, setCrTo] = useState("");
@@ -789,6 +794,20 @@ export default function Reports() {
       }).catch(() => {});
     }
   }, [activeTab]);
+
+  useEffect(() => {
+    if (createReportOpen) {
+      Promise.all([
+        api.get("/categories"),
+        api.get("/contacts"),
+        api.get("/groups"),
+      ]).then(([cat, con, grp]) => {
+        setCrCategoriesList(cat.data.result || []);
+        setCrContacts(con.data.result || []);
+        setCrGroups(grp.data.result || []);
+      }).catch(() => {});
+    }
+  }, [createReportOpen]);
 
   function openTxnModal(filterMode, title, subtitle) {
     setModal({ open: true, title, subtitle: `${subtitle} · ${data?.label || ""}`, transactions: null, loading: true });
@@ -874,6 +893,159 @@ export default function Reports() {
     }
   }
 
+  function toggleCrGroup(id) {
+    setCrRecipientGroupIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  }
+
+  // Build payload for report generation
+  function buildCrPayload(overrides = {}) {
+    const f = { ...crFormData, ...overrides };
+    const base = {
+      filter_type: f.type,
+      filter_mode: f.mode,
+      filter_categories: f.categories,
+      format: f.format,
+      delivery_email: f.delivery_email,
+      delivery_telegram: f.delivery_telegram,
+      recipient_mode: f.recipient_mode,
+      recipient_contact_ids: f.recipient_contact_ids,
+      recipient_group_ids: f.recipient_group_ids,
+    };
+
+    // Resolve date range into from/to
+    switch (f.range) {
+      case 'today':
+        return { ...base, range: 'daily', date: f.date };
+      case 'week': {
+        const start = f.weekStart || todayISO();
+        const end = new Date(start);
+        end.setDate(end.getDate() + 6);
+        return { ...base, range: 'custom', from: start, to: end.toISOString().slice(0, 10) };
+      }
+      case 'month':
+        return { ...base, range: 'monthly', month: f.month };
+      case 'quarter': {
+        if (!f.quarter) return { ...base, range: 'custom', from: '', to: '' };
+        const [year, q] = f.quarter.split('-Q');
+        const qNum = parseInt(q);
+        const startMonth = (qNum - 1) * 3 + 1;
+        const start = `${year}-${String(startMonth).padStart(2, '0')}-01`;
+        const endDate = new Date(parseInt(year), startMonth + 2, 0);
+        const end = endDate.toISOString().slice(0, 10);
+        return { ...base, range: 'custom', from: start, to: end };
+      }
+      case 'year':
+        return { ...base, range: 'yearly', year: f.year };
+      case 'all':
+        return { ...base, range: 'custom', from: '2000-01-01', to: todayISO() };
+      case 'custom':
+        return { ...base, range: 'custom', from: f.from, to: f.to };
+      default:
+        return { ...base, range: 'monthly', month: thisMonth() };
+    }
+  }
+
+  // Computed form data for payload building
+  const crFormData = {
+    range: crRange,
+    date: crDate,
+    weekStart: crWeekStart,
+    month: crMonth,
+    quarter: crQuarter,
+    year: crYear,
+    from: crFrom,
+    to: crTo,
+    type: crType,
+    mode: crMode,
+    categories: crCategories,
+    format: crFormat,
+    delivery_email: crDeliveryEmail,
+    delivery_telegram: crDeliveryTelegram,
+    recipient_mode: crRecipientMode,
+    recipient_contact_ids: crRecipientContactIds,
+    recipient_group_ids: crRecipientGroupIds,
+  };
+
+  function openCreateReport() {
+    setCrStep(1);
+    setCrPreview(null);
+    setCreateReportOpen(true);
+  }
+
+  function closeCreateReport() {
+    setCreateReportOpen(false);
+    setCrPreview(null);
+    setCrStep(1);
+  }
+
+  function nextStep() { setCrStep(s => Math.min(s + 1, 4)); }
+  function prevStep() { setCrStep(s => Math.max(s - 1, 1)); }
+
+  async function handlePreview() {
+    setCrGenerating(true);
+    try {
+      const payload = buildCrPayload({ format: 'preview' });
+      const res = await api.post("/reports/generate", payload);
+      setCrPreview(res.data.result);
+      setCrGenerating(false);
+      setCrStep(4); // Show preview on step 4
+    } catch (err) {
+      setCrGenerating(false);
+      console.error(err);
+    }
+  }
+
+  async function handleGenerateDownload() {
+    setCrGenerating(true);
+    try {
+      const payload = buildCrPayload();
+      const res = await api.post("/reports/generate", payload, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const ext = crFormat === 'pdf' ? 'pdf' : crFormat === 'summary' ? 'json' : 'xlsx';
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Trust-CRM-Report-${Date.now()}.${ext}`);
+      document.body.appendChild(link); link.click(); link.remove(); window.URL.revokeObjectURL(url);
+      setCrGenerating(false);
+      closeCreateReport();
+    } catch (err) {
+      setCrGenerating(false);
+      console.error(err);
+    }
+  }
+
+  async function handleSaveAsScheduled() {
+    // Pre-fill the scheduled report form with current settings
+    const scheduledForm = {
+      name: `Custom Report ${new Date().toLocaleDateString()}`,
+      filter_type: crType,
+      filter_mode: crMode,
+      filter_categories: crCategories,
+      filter_from: (() => {
+        const p = buildCrPayload();
+        return p.from || todayISO();
+      })(),
+      filter_to: (() => {
+        const p = buildCrPayload();
+        return p.to || todayISO();
+      })(),
+      schedule_type: 'once',
+      schedule_day: 1,
+      schedule_hour: 8,
+      schedule_minute: 0,
+      format: crFormat,
+      delivery_email: crDeliveryEmail,
+      delivery_telegram: crDeliveryTelegram,
+      recipient_mode: crRecipientMode,
+      recipient_contact_ids: crRecipientContactIds,
+      recipient_group_ids: crRecipientGroupIds,
+    };
+    setForm(scheduledForm);
+    setEditingReport(null);
+    setShowForm(true);
+    closeCreateReport();
+  }
+
   function toggleCrType(t) {
     setCrType((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]);
   }
@@ -893,32 +1065,38 @@ export default function Reports() {
   const tabs = [
     { id: "analytics", label: "Analytics", icon: FileBarChart },
     { id: "scheduled", label: "Scheduled Reports", icon: CalendarClock },
-    { id: "create", label: "Create Report", icon: FilePlus },
   ];
 
   const ov = data?.overview || {};
 
   return (
-    <AppLayout>
+    <>
+      <AppLayout>
       <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
         className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <h1 className="text-3xl font-bold text-stone-900 tracking-tight">Reports</h1>
-        {activeTab === "analytics" && (
-          <div className="flex items-center gap-2">
-            <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={load}
-              className="p-2.5 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 transition-colors">
-              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
-            </motion.button>
-            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={exportPDF} disabled={exporting === "pdf"}
-              className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 transition-colors disabled:opacity-50">
-              <Download size={15} /> {exporting === "pdf" ? "..." : "PDF"}
-            </motion.button>
-            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={exportExcel} disabled={exporting === "excel"}
-              className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/20 hover:shadow-xl transition-all disabled:opacity-50">
-              <Download size={15} /> {exporting === "excel" ? "..." : "Excel"}
-            </motion.button>
-          </div>
-        )}
+        <div className="flex items-center gap-2">
+          {activeTab === "analytics" && (
+            <div className="flex items-center gap-2">
+              <motion.button whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }} onClick={load}
+                className="p-2.5 rounded-xl border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 transition-colors">
+                <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+              </motion.button>
+              <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={exportPDF} disabled={exporting === "pdf"}
+                className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 transition-colors disabled:opacity-50">
+                <Download size={15} /> {exporting === "pdf" ? "..." : "PDF"}
+              </motion.button>
+              <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={exportExcel} disabled={exporting === "excel"}
+                className="flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-xl bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/20 hover:shadow-xl transition-all disabled:opacity-50">
+                <Download size={15} /> {exporting === "excel" ? "..." : "Excel"}
+              </motion.button>
+            </div>
+          )}
+          <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={openCreateReport}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-saffron-500 to-saffron-600 text-white text-sm font-semibold shadow-lg shadow-saffron-500/20 hover:shadow-xl transition-all">
+            <FilePlus size={15} /> Create Report
+          </motion.button>
+        </div>
       </motion.div>
 
       {/* Tabs */}
@@ -1130,10 +1308,119 @@ export default function Reports() {
         </>
       ) : (activeTab === "scheduled" ? (
         <ScheduledReportsTab />
-      ) : (
-        <CreateReportTab />
-      ))}
+      ) : null)}
     </AppLayout>
+
+    <AnimatePresence>
+      {createReportOpen && (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          onClick={(e) => { if (e.target === e.currentTarget) closeCreateReport(); }}>
+          <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-stone-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-saffron-100 text-saffron-600">
+                  <FilePlus size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-stone-800">Create Custom Report</h3>
+                  <p className="text-xs text-stone-500">Step {crStep} of 4</p>
+                </div>
+              </div>
+              <button onClick={closeCreateReport} className="p-1.5 rounded-lg text-stone-400 hover:text-stone-600 hover:bg-stone-50">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Step Indicator */}
+            <div className="px-6 py-4 border-b border-stone-100 bg-stone-50/50">
+              <div className="flex items-center justify-between">
+                {[
+                  { num: 1, label: 'Date Range', icon: CalendarDays },
+                  { num: 2, label: 'Filters', icon: Filter },
+                  { num: 3, label: 'Format & Delivery', icon: FileBarChart },
+                  { num: 4, label: 'Actions', icon: Shield },
+                ].map((step, i) => (
+                  <React.Fragment key={step.num}>
+                    <div className="flex items-center gap-1">
+                      <div className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold transition-all ${
+                        crStep >= step.num ? 'bg-saffron-600 text-white' : 'bg-stone-200 text-stone-400'
+                      }`}>
+                        {crStep > step.num ? <CheckCircle size={12} /> : <step.icon size={12} />}
+                      </div>
+                      <span className={`text-xs font-medium hidden sm:block ${
+                        crStep >= step.num ? 'text-saffron-600' : 'text-stone-400'
+                      }`}>{step.label}</span>
+                    </div>
+                    {i < 3 && (
+                      <div className={`hidden lg:block flex-1 h-1 mx-2 rounded transition-colors ${
+                        crStep > step.num ? 'bg-saffron-600' : 'bg-stone-200'
+                      }`} />
+                    )}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6">
+              {crStep === 1 && (
+                <CreateReportStep1 />
+              )}
+              {crStep === 2 && (
+                <CreateReportStep2 />
+              )}
+              {crStep === 3 && (
+                <CreateReportStep3 />
+              )}
+              {crStep === 4 && (
+                <CreateReportStep4 />
+              )}
+            </div>
+
+            {/* Footer Navigation */}
+            <div className="px-6 py-4 border-t border-stone-100 bg-stone-50/50 flex items-center justify-end gap-2">
+              {crStep > 1 && (
+                <motion.button whileTap={{ scale: 0.97 }} onClick={prevStep}
+                  className="px-4 py-2 rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 transition-colors">
+                  Back
+                </motion.button>
+              )}
+              {crStep < 4 && (
+                <motion.button whileTap={{ scale: 0.97 }} onClick={nextStep}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-saffron-500 to-saffron-600 text-white text-sm font-semibold shadow-lg shadow-saffron-500/20 hover:shadow-xl transition-all">
+                  Next
+                  <ChevronRight size={14} />
+                </motion.button>
+              )}
+              {crStep === 4 && (
+                <motion.button whileTap={{ scale: 0.97 }} onClick={handlePreview} disabled={crGenerating}
+                  className="flex items-center gap-2 px-4 py-2 rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 transition-colors disabled:opacity-50">
+                  <Eye size={14} /> {crGenerating ? <Loader2 size={14} className="animate-spin" /> : "Preview"}
+                </motion.button>
+              )}
+              {crStep === 4 && (
+                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={handleGenerateDownload} disabled={crGenerating}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-saffron-500 to-saffron-600 text-white text-sm font-semibold shadow-lg shadow-saffron-500/20 hover:shadow-xl transition-all disabled:opacity-50">
+                  {crGenerating ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+                  Generate & Download
+                </motion.button>
+              )}
+              {crStep === 4 && (
+                <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={handleSaveAsScheduled} disabled={crGenerating}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-stone-100 text-stone-700 text-sm font-semibold hover:bg-stone-200 transition-all disabled:opacity-50">
+                  <CalendarClock size={14} /> Save as Scheduled
+                </motion.button>
+              )}
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+    </>
   );
 }
 

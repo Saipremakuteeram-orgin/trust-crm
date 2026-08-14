@@ -6,6 +6,14 @@ const TARGET_HOST = 'web.whatsapp.com';
 const TARGET_ORIGIN = 'https://' + TARGET_HOST;
 const PREFIX = '/wa';
 
+// WhatsApp's anti-bot serves its "Error" page (HTTP 400) to requests whose
+// User-Agent carries the Windows platform token ("Windows NT ...; Win64") — i.e.
+// Chrome/Edge/Firefox on Windows all get 400, while a Mac Safari UA (and generic
+// UAs) get the real app.  We therefore always present a Mac Safari UA upstream and
+// never forward the browser's own UA.  (Runtime browser behaviour is unaffected —
+// the app's JS still runs in the user's real browser.)
+const SAFE_UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Safari/605.1.15';
+
 // Headers that must not be forwarded / are connection-scoped.
 const HOP_BY_HOP = new Set([
   'connection', 'proxy-connection', 'keep-alive', 'transfer-encoding',
@@ -72,8 +80,9 @@ function buildForwardHeaders(req) {
     // it upstream makes WhatsApp 400 the very first /wa load.  We use ONLY the
     // server-side jar.
     if (lk === 'cookie') continue;
-    // sec-fetch-*/sec-ch-* describe the onrender (iframe) context and don't
-    // apply to the upstream web.whatsapp.com request.
+    // sec-* headers (sec-fetch-* context hints and sec-ch-* client hints)
+    // describe the browser's real (Windows/Chrome) context and must not be sent
+    // alongside our spoofed Mac Safari UA.
     if (lk.startsWith('sec-')) continue;
     // Pass the browser's real Origin/Referer through.  Faking
     // Origin: web.whatsapp.com (tested earlier) trips WhatsApp's anomaly
@@ -83,9 +92,9 @@ function buildForwardHeaders(req) {
   fwd[HTTP2_HEADER_METHOD] = req.method;
   fwd[HTTP2_HEADER_PATH] = targetPathFrom(req.url);
   fwd[HTTP2_HEADER_AUTHORITY] = TARGET_HOST;
-  if (!fwd['user-agent']) {
-    fwd['user-agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
-  }
+  // Always present the accepted Mac Safari UA (see SAFE_UA).  Never forward the
+  // browser's real Windows/Chrome UA, which makes WhatsApp return 400.
+  fwd['user-agent'] = SAFE_UA;
   // Replay the server-side session cookie jar on every upstream request.
   if (cookieJar) fwd['cookie'] = cookieJar;
   return fwd;
@@ -101,6 +110,7 @@ function proxyHandler(req, res) {
     if (!res.headersSent) res.writeHead(500);
     return res.end('wa-proxy header error');
   }
+  console.log('[wa-proxy] fwd-headers:', JSON.stringify(fwd));
 
   let stream;
   try {

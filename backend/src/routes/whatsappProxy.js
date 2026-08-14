@@ -67,6 +67,14 @@ function buildForwardHeaders(req) {
     const lk = k.toLowerCase();
     if (HOP_BY_HOP.has(lk)) continue;
     if (lk === 'host' || lk === 'content-length') continue; // h2 sets these
+    // NEVER forward the browser's cookies.  The browser carries a stale
+    // wa_ul (and friends) scoped to onrender.com from earlier deploys; sending
+    // it upstream makes WhatsApp 400 the very first /wa load.  We use ONLY the
+    // server-side jar.
+    if (lk === 'cookie') continue;
+    // sec-fetch-*/sec-ch-* describe the onrender (iframe) context and don't
+    // apply to the upstream web.whatsapp.com request.
+    if (lk.startsWith('sec-')) continue;
     // Pass the browser's real Origin/Referer through.  Faking
     // Origin: web.whatsapp.com (tested earlier) trips WhatsApp's anomaly
     // checks and returns 400.  The browser's natural onrender Origin returns 200.

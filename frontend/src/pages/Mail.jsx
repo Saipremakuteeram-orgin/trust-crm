@@ -5,7 +5,7 @@ import AppLayout from "../components/AppLayout";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 import {
-  Send, Paperclip, X, Users, Loader2, Mail as MailIcon, Search, ShieldAlert, File as FileIcon, ChevronDown, Inbox, ArrowLeft,
+  Send, Paperclip, X, Users, Loader2, Mail as MailIcon, Search, ShieldAlert, File as FileIcon, ChevronDown, Inbox, ArrowLeft, Archive, Eye, EyeOff, MailX,
 } from "lucide-react";
 
 function formatDate(d) {
@@ -21,6 +21,14 @@ const statusConfig = {
   failed: { color: "text-rose-500", bg: "bg-rose-50", ring: "ring-rose-200", label: "Failed" },
 };
 
+const inboxStatusConfig = {
+  unread: { color: "text-saffron-600", bg: "bg-saffron-50", ring: "ring-saffron-200", label: "Unread" },
+  read: { color: "text-stone-500", bg: "bg-stone-100", ring: "ring-stone-200", label: "Read" },
+  archived: { color: "text-blue-600", bg: "bg-blue-50", ring: "ring-blue-200", label: "Archived" },
+  deleted: { color: "text-rose-600", bg: "bg-rose-50", ring: "ring-rose-200", label: "Deleted" },
+  spam: { color: "text-amber-600", bg: "bg-amber-50", ring: "ring-amber-200", label: "Spam" },
+};
+
 export default function Mail() {
   const { session, profile } = useAuth();
   const { addToast } = useToast();
@@ -30,6 +38,11 @@ export default function Mail() {
   const [contacts, setContacts] = useState([]);
   const [logs, setLogs] = useState([]);
   const [loadingLogs, setLoadingLogs] = useState(true);
+  const [inbox, setInbox] = useState([]);
+  const [loadingInbox, setLoadingInbox] = useState(true);
+  const [inboxTotal, setInboxTotal] = useState(0);
+  const [inboxSearch, setInboxSearch] = useState("");
+  const [inboxStatus, setInboxStatus] = useState("all");
 
   const [toInput, setToInput] = useState("");
   const [toChips, setToChips] = useState([]);
@@ -40,6 +53,7 @@ export default function Mail() {
   const [showCc, setShowCc] = useState(false);
   const [sending, setSending] = useState(false);
   const [showSent, setShowSent] = useState(false);
+  const [showInbox, setShowInbox] = useState(false);
   const fileInputRef = useRef(null);
   const bodyRef = useRef(null);
 
@@ -53,7 +67,26 @@ export default function Mail() {
       .catch(() => {})
       .finally(() => setLoadingLogs(false));
   }
+  function loadInbox() {
+    setLoadingInbox(true);
+    const params = new URLSearchParams();
+    if (inboxStatus !== 'all') params.append('status', inboxStatus);
+    if (inboxSearch) params.append('search', inboxSearch);
+    params.append('limit', '100');
+    api.get(`/mail/inbox?${params.toString()}`)
+      .then((res) => {
+        setInbox(res.data.result || []);
+        setInboxTotal(res.data.total || 0);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingInbox(false));
+  }
   useEffect(() => { loadContacts(); loadLogs(); }, []);
+  useEffect(() => { loadInbox(); }, [inboxStatus, inboxSearch]);
+
+  const filteredInbox = inbox.filter((msg) =>
+    (msg.subject || msg.from_email || msg.from_name || msg.body_text || "").toLowerCase().includes(inboxSearch.toLowerCase())
+  );
 
   const recipientsWithEmail = contacts.filter((c) => c.email);
   const filteredRecipients = recipientsWithEmail.filter((c) =>
@@ -124,27 +157,178 @@ export default function Mail() {
     setSending(false);
   }
 
+  async function updateInboxMessage(id, updates) {
+    try {
+      await api.patch(`/mail/inbox/${id}`, updates);
+      addToast("Message updated", "success");
+      loadInbox();
+    } catch (err) {
+      addToast(err.response?.data?.message || "Failed to update message", "error");
+    }
+  }
+
   return (
     <AppLayout>
       <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
         className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-stone-900 tracking-tight">Mail</h1>
-          <p className="text-sm text-stone-500 mt-1">Compose and send emails with attachments</p>
+          <p className="text-sm text-stone-500 mt-1">Compose, send, and receive emails</p>
         </div>
-        <button onClick={() => setShowSent((s) => !s)}
-          className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 transition-colors">
-          <Inbox size={15} /> {showSent ? "Compose" : "Sent"} ({logs.length})
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => { setShowInbox(false); setShowSent(false); }}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl border transition-colors ${
+              !showSent && !showInbox
+                ? "bg-saffron-500 text-white border-saffron-500"
+                : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
+            }`}>
+            <MailIcon size={15} /> Compose
+          </button>
+          <button onClick={() => { setShowSent(true); setShowInbox(false); }}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl border transition-colors ${
+              showSent
+                ? "bg-saffron-500 text-white border-saffron-500"
+                : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
+            }`}>
+            <Send size={15} /> Sent ({logs.length})
+          </button>
+          <button onClick={() => { setShowInbox(true); setShowSent(false); }}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-xl border transition-colors ${
+              showInbox
+                ? "bg-saffron-500 text-white border-saffron-500"
+                : "bg-white text-stone-700 border-stone-200 hover:bg-stone-50"
+            }`}>
+            <Inbox size={15} /> Inbox ({inboxTotal})
+          </button>
+        </div>
       </motion.div>
 
       {!canEdit && (
         <div className="flex items-center gap-3 mb-6 bg-royal-50 border border-royal-100 rounded-2xl px-5 py-3 text-sm text-royal-700">
-          <ShieldAlert size={18} /> You have read-only access. You can view the Sent folder below.
+          <ShieldAlert size={18} /> You have read-only access. You can view the Sent folder and Inbox below.
         </div>
       )}
 
-      {showSent || !canEdit ? (
+      {showInbox ? (
+        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+          className="bg-white rounded-2xl border border-stone-200/80 shadow-sm overflow-hidden">
+          <div className="px-5 py-4 border-b border-stone-100 flex items-center gap-2">
+            <button onClick={() => setShowInbox(false)}
+              className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500 transition-colors">
+              <ArrowLeft size={16} />
+            </button>
+            <Inbox size={16} className="text-stone-500" />
+            <h2 className="text-sm font-semibold text-stone-700">Inbox</h2>
+            <div className="ml-auto flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Search inbox..."
+                value={inboxSearch}
+                onChange={(e) => setInboxSearch(e.target.value)}
+                className="text-sm border border-stone-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-saffron-400 w-64"
+              />
+              <select
+                value={inboxStatus}
+                onChange={(e) => setInboxStatus(e.target.value)}
+                className="text-sm border border-stone-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-saffron-400"
+              >
+                <option value="all">All</option>
+                <option value="unread">Unread</option>
+                <option value="read">Read</option>
+                <option value="archived">Archived</option>
+                <option value="spam">Spam</option>
+                <option value="deleted">Deleted</option>
+              </select>
+            </div>
+          </div>
+          {loadingInbox ? (
+            <div className="flex items-center justify-center py-16"><Loader2 size={26} className="animate-spin text-saffron-500" /></div>
+          ) : filteredInbox.length === 0 ? (
+            <div className="text-center py-16 text-stone-400"><MailIcon size={36} className="mx-auto mb-3 opacity-40" /><p className="font-medium">No messages in inbox</p></div>
+          ) : (
+            <div className="divide-y divide-stone-100">
+              {filteredInbox.map((msg, i) => {
+                const cfg = inboxStatusConfig[msg.status] || inboxStatusConfig.unread;
+                const isUnread = msg.status === 'unread';
+                return (
+                  <motion.div key={msg.id} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: i * 0.03 }}
+                    className={`px-5 py-4 hover:bg-stone-50/50 ${isUnread ? 'bg-saffron-50/30' : ''}`}>
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className={`text-sm font-semibold truncate ${isUnread ? 'text-stone-900' : 'text-stone-700'}`}>{msg.subject}</span>
+                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${cfg.bg} ${cfg.color} ring-1 ${cfg.ring}`}>{cfg.label}</span>
+                          {msg.is_spam && (
+                            <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full ring-1 ring-amber-200 flex items-center gap-1">
+                              <MailX size={11} /> Spam
+                            </span>
+                          )}
+                          {msg.attachments?.length > 0 && (
+                            <span className="text-[10px] text-stone-400 flex items-center gap-1"><Paperclip size={11} />{msg.attachments.length}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-stone-500 mt-1 truncate">From: {msg.from_name ? `${msg.from_name} ` : ''}{`<${msg.from_email}>`}</p>
+                        <p className="text-xs text-stone-500 mt-1 truncate">To: {msg.to_email}</p>
+                        {msg.body_text && <p className="text-xs text-stone-400 mt-1 line-clamp-2">{msg.body_text}</p>}
+                      </div>
+                      <div className="flex flex-col items-end gap-2">
+                        <div className="text-xs text-stone-400 whitespace-nowrap">{formatDate(msg.received_at)}</div>
+                        <div className="flex items-center gap-1">
+                          {isUnread && (
+                            <button
+                              onClick={() => updateInboxMessage(msg.id, { status: 'read' })}
+                              className="p-1.5 rounded-lg hover:bg-saffron-100 text-saffron-600 transition-colors"
+                              title="Mark as read"
+                            >
+                              <EyeOff size={14} />
+                            </button>
+                          )}
+                          {!isUnread && msg.status !== 'deleted' && (
+                            <button
+                              onClick={() => updateInboxMessage(msg.id, { status: 'unread' })}
+                              className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-500 transition-colors"
+                              title="Mark as unread"
+                            >
+                              <Eye size={14} />
+                            </button>
+                          )}
+                          {msg.status !== 'archived' && msg.status !== 'deleted' && (
+                            <button
+                              onClick={() => updateInboxMessage(msg.id, { status: 'archived' })}
+                              className="p-1.5 rounded-lg hover:bg-blue-50 text-blue-600 transition-colors"
+                              title="Archive"
+                            >
+                              <Archive size={14} />
+                            </button>
+                          )}
+                          {msg.status !== 'deleted' && (
+                            <button
+                              onClick={() => updateInboxMessage(msg.id, { status: 'deleted' })}
+                              className="p-1.5 rounded-lg hover:bg-rose-50 text-rose-600 transition-colors"
+                              title="Delete"
+                            >
+                              <MailX size={14} />
+                            </button>
+                          )}
+                          {msg.status === 'deleted' && (
+                            <button
+                              onClick={() => updateInboxMessage(msg.id, { status: 'unread' })}
+                              className="p-1.5 rounded-lg hover:bg-emerald-50 text-emerald-600 transition-colors"
+                              title="Restore"
+                            >
+                              <ArrowLeft size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )}
+        </motion.div>
+      ) : (showSent || !canEdit ? (
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
           className="bg-white rounded-2xl border border-stone-200/80 shadow-sm overflow-hidden">
           <div className="px-5 py-4 border-b border-stone-100 flex items-center gap-2">
@@ -310,7 +494,7 @@ export default function Mail() {
             </motion.button>
           </div>
         </motion.div>
-      )}
+      ))}
     </AppLayout>
   );
 }

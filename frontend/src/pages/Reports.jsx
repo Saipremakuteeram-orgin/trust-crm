@@ -9,7 +9,7 @@ import {
   FileBarChart, Download, RefreshCw, Calendar, Wallet, Landmark, TrendingUp, TrendingDown,
   Clock, Send, Loader2, Plus, Pencil, Trash2, Eye, ToggleLeft, ToggleRight,
   Mail, MessageSquare, Users, Filter, X, CheckCircle, XCircle, ChevronDown, ChevronRight,
-  CalendarClock, Zap,
+  CalendarClock, Zap, FilePlus, Save, Shield,
 } from "lucide-react";
 import {
   AreaChart, Area, PieChart, Pie, Cell,
@@ -733,6 +733,28 @@ export default function Reports() {
   const [modal, setModal] = useState({ open: false, title: "", subtitle: "", transactions: null, loading: false });
   const [activeTab, setActiveTab] = useState("analytics");
 
+  // Create Custom Report state
+  const [crRange, setCrRange] = useState("monthly");
+  const [crDate, setCrDate] = useState(todayISO());
+  const [crMonth, setCrMonth] = useState(thisMonth());
+  const [crYear, setCrYear] = useState(thisYear());
+  const [crFrom, setCrFrom] = useState("");
+  const [crTo, setCrTo] = useState("");
+  const [crType, setCrType] = useState([]);
+  const [crMode, setCrMode] = useState([]);
+  const [crCategories, setCrCategories] = useState([]);
+  const [crFormat, setCrFormat] = useState("excel");
+  const [crDeliveryEmail, setCrDeliveryEmail] = useState(false);
+  const [crDeliveryTelegram, setCrDeliveryTelegram] = useState(false);
+  const [crRecipientMode, setCrRecipientMode] = useState("subscribed");
+  const [crRecipientContactIds, setCrRecipientContactIds] = useState([]);
+  const [crRecipientGroupIds, setCrRecipientGroupIds] = useState([]);
+  const [crGenerating, setCrGenerating] = useState(false);
+  const [crPreview, setCrPreview] = useState(null);
+  const [crCategoriesList, setCrCategoriesList] = useState([]);
+  const [crContacts, setCrContacts] = useState([]);
+  const [crGroups, setCrGroups] = useState([]);
+
   const query = useMemo(() => {
     const q = { range };
     if (range === "daily") q.date = date;
@@ -753,6 +775,20 @@ export default function Reports() {
   }
 
   useEffect(() => { if (activeTab === "analytics") load(); }, [qs, activeTab]);
+
+  useEffect(() => {
+    if (activeTab === "create") {
+      Promise.all([
+        api.get("/categories"),
+        api.get("/contacts"),
+        api.get("/groups"),
+      ]).then(([cat, con, grp]) => {
+        setCrCategoriesList(cat.data.result || []);
+        setCrContacts(con.data.result || []);
+        setCrGroups(grp.data.result || []);
+      }).catch(() => {});
+    }
+  }, [activeTab]);
 
   function openTxnModal(filterMode, title, subtitle) {
     setModal({ open: true, title, subtitle: `${subtitle} · ${data?.label || ""}`, transactions: null, loading: true });
@@ -791,9 +827,73 @@ export default function Reports() {
     } catch (err) { console.error(err); } finally { setExporting(null); }
   }
 
+  // Create Custom Report handlers
+  async function loadCrPreview() {
+    setCrGenerating(true);
+    try {
+      const payload = {
+        range: crRange,
+        date: crDate, month: crMonth, year: crYear, from: crFrom, to: crTo,
+        filter_type: crType, filter_mode: crMode, filter_categories: crCategories,
+        format: 'preview',
+      };
+      const res = await api.post("/reports/generate", payload);
+      setCrPreview(res.data.result);
+      setCrGenerating(false);
+    } catch (err) {
+      setCrGenerating(false);
+      console.error(err);
+    }
+  }
+
+  async function crGenerateAndDownload() {
+    setCrGenerating(true);
+    try {
+      const payload = {
+        range: crRange,
+        date: crDate, month: crMonth, year: crYear, from: crFrom, to: crTo,
+        filter_type: crType, filter_mode: crMode, filter_categories: crCategories,
+        format: crFormat,
+        delivery_email: crDeliveryEmail,
+        delivery_telegram: crDeliveryTelegram,
+        recipient_mode: crRecipientMode,
+        recipient_contact_ids: crRecipientContactIds,
+        recipient_group_ids: crRecipientGroupIds,
+      };
+      const res = await api.post("/reports/generate", payload, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const ext = crFormat === 'pdf' ? 'pdf' : 'xlsx';
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Trust-CRM-Report-${Date.now()}.${ext}`);
+      document.body.appendChild(link); link.click(); link.remove(); window.URL.revokeObjectURL(url);
+      setCrGenerating(false);
+    } catch (err) {
+      setCrGenerating(false);
+      console.error(err);
+    }
+  }
+
+  function toggleCrType(t) {
+    setCrType((prev) => prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]);
+  }
+  function toggleCrMode(m) {
+    setCrMode((prev) => prev.includes(m) ? prev.filter((x) => x !== m) : [...prev, m]);
+  }
+  function toggleCrCategory(id) {
+    setCrCategories((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  }
+  function toggleCrContact(id) {
+    setCrRecipientContactIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  }
+  function toggleCrGroup(id) {
+    setCrRecipientGroupIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+  }
+
   const tabs = [
     { id: "analytics", label: "Analytics", icon: FileBarChart },
     { id: "scheduled", label: "Scheduled Reports", icon: CalendarClock },
+    { id: "create", label: "Create Report", icon: FilePlus },
   ];
 
   const ov = data?.overview || {};
@@ -1028,9 +1128,296 @@ export default function Reports() {
             loading={modal.loading}
           />
         </>
-      ) : (
+      ) : (activeTab === "scheduled" ? (
         <ScheduledReportsTab />
-      )}
+      ) : (
+        <CreateReportTab />
+      ))}
     </AppLayout>
+  );
+}
+
+function CreateReportTab() {
+  return (
+    <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-bold text-stone-800">Create Custom Report</h2>
+        <div className="flex items-center gap-2">
+          <motion.button whileTap={{ scale: 0.97 }} onClick={loadCrPreview} disabled={crGenerating}
+            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-stone-200 bg-white text-stone-700 hover:bg-stone-50 transition-colors disabled:opacity-50">
+            <Eye size={14} /> {crGenerating ? <Loader2 size={14} className="animate-spin" /> : "Preview"}
+          </motion.button>
+          <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={crGenerateAndDownload} disabled={crGenerating}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-saffron-500 to-saffron-600 text-white text-sm font-semibold shadow-lg shadow-saffron-500/20 hover:shadow-xl transition-all disabled:opacity-50">
+            {crGenerating ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+            Generate & Download
+          </motion.button>
+        </div>
+      </div>
+
+      {/* Period Selection */}
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl border border-stone-200/80 shadow-sm p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Calendar size={16} className="text-saffron-500" />
+          <span className="text-sm font-semibold text-stone-700">Select Period</span>
+        </div>
+        <div className="flex flex-wrap gap-2 mb-4">
+          {[{ k: "daily", l: "Today" }, { k: "weekly", l: "This Week" }, { k: "monthly", l: "This Month" }, { k: "yearly", l: "This Year" }, { k: "all", l: "All Data" }, { k: "custom", l: "Custom Range" }].map((o) => (
+            <button key={o.k} onClick={() => setCrRange(o.k)}
+              className={`px-4 py-2 rounded-xl text-sm font-medium border-2 transition-all ${
+                crRange === o.k
+                  ? "bg-saffron-600 text-white border-saffron-600 shadow-lg shadow-saffron-500/25"
+                  : "border-stone-200 text-stone-600 hover:border-saffron-300"
+              }`}>
+              {o.l}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-3 items-end">
+          {crRange === "daily" && (
+            <label className="flex flex-col gap-1 text-xs text-stone-500">
+              Date
+              <input type="date" value={crDate} onChange={(e) => setCrDate(e.target.value)}
+                className="border-2 border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-800 focus:border-saffron-400 transition-colors" />
+            </label>
+          )}
+          {crRange === "weekly" && (
+            <label className="flex flex-col gap-1 text-xs text-stone-500">
+              Week Start Date
+              <input type="date" value={crFrom} onChange={(e) => setCrFrom(e.target.value)}
+                className="border-2 border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-800 focus:border-saffron-400 transition-colors" />
+            </label>
+          )}
+          {crRange === "monthly" && (
+            <label className="flex flex-col gap-1 text-xs text-stone-500">
+              Month
+              <input type="month" value={crMonth} onChange={(e) => setCrMonth(e.target.value)}
+                className="border-2 border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-800 focus:border-saffron-400 transition-colors" />
+            </label>
+          )}
+          {crRange === "yearly" && (
+            <label className="flex flex-col gap-1 text-xs text-stone-500">
+              Year
+              <input type="number" min="2000" max="2100" value={crYear} onChange={(e) => setCrYear(e.target.value)}
+                className="border-2 border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-800 focus:border-saffron-400 transition-colors w-28" />
+            </label>
+          )}
+          {crRange === "custom" && (
+            <>
+              <label className="flex flex-col gap-1 text-xs text-stone-500">
+                From
+                <input type="date" value={crFrom} onChange={(e) => setCrFrom(e.target.value)}
+                  className="border-2 border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-800 focus:border-saffron-400 transition-colors" />
+              </label>
+              <label className="flex flex-col gap-1 text-xs text-stone-500">
+                To
+                <input type="date" value={crTo} onChange={(e) => setCrTo(e.target.value)}
+                  className="border-2 border-stone-200 rounded-xl px-3 py-2 text-sm text-stone-800 focus:border-saffron-400 transition-colors" />
+              </label>
+            </>
+          )}
+          {crRange === "all" && (
+            <span className="text-sm text-stone-500">All transactions from the beginning</span>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Filters */}
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }} className="bg-white rounded-2xl border border-stone-200/80 shadow-sm p-5">
+        <h4 className="text-xs font-bold text-stone-600 uppercase tracking-wider flex items-center gap-1.5 mb-4">
+          <Filter size={13} /> Filters (Optional)
+        </h4>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-stone-500 mb-1">Transaction Type</label>
+            <div className="flex flex-wrap gap-1.5">
+              {["credit", "debit"].map((t) => (
+                <button key={t} type="button" onClick={() => toggleCrType(t)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                    crType.includes(t)
+                      ? "bg-blue-100 text-blue-700 border-blue-300"
+                      : "bg-white text-stone-500 border-stone-200 hover:border-blue-300"
+                  }`}>
+                  {t === "credit" ? "Credit" : "Debit"}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-stone-400 mt-1">None = all types</p>
+          </div>
+          <div>
+            <label className="block text-xs text-stone-500 mb-1">Payment Mode</label>
+            <div className="flex flex-wrap gap-1.5">
+              {["cash", "digital"].map((m) => (
+                <button key={m} type="button" onClick={() => toggleCrMode(m)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                    crMode.includes(m)
+                      ? "bg-purple-100 text-purple-700 border-purple-300"
+                      : "bg-white text-stone-500 border-stone-200 hover:border-purple-300"
+                  }`}>
+                  {m === "cash" ? "Cash" : "Digital"}
+                </button>
+              ))}
+            </div>
+            <p className="text-[10px] text-stone-400 mt-1">None = all modes</p>
+          </div>
+        </div>
+        {crCategoriesList.length > 0 && (
+          <div>
+            <label className="block text-xs text-stone-500 mb-1">Categories (leave empty = all)</label>
+            <div className="flex flex-wrap gap-2">
+              {crCategoriesList.map((cat) => (
+                <button key={cat.id} type="button" onClick={() => toggleCrCategory(cat.id)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium border transition-all ${
+                    crCategories.includes(cat.id)
+                      ? "bg-saffron-100 text-saffron-700 border-saffron-300"
+                      : "bg-white text-stone-500 border-stone-200 hover:border-saffron-300"
+                  }`}>
+                  {cat.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </motion.div>
+
+      {/* Format & Delivery */}
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        <div className="bg-white rounded-2xl border border-stone-200/80 shadow-sm p-5">
+          <h4 className="text-xs font-bold text-stone-600 uppercase tracking-wider flex items-center gap-1.5 mb-3">
+            <FileBarChart size={13} /> Report Format
+          </h4>
+          <div className="flex gap-2">
+            {[{ v: "excel", l: "Excel", color: "text-emerald-600" }, { v: "pdf", l: "PDF", color: "text-rose-600" }, { v: "summary", l: "Summary (JSON)", color: "text-blue-600" }].map((fo) => (
+              <button key={fo.v} type="button" onClick={() => setCrFormat(fo.v)}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border-2 transition-all ${
+                  crFormat === fo.v
+                    ? "bg-saffron-600 text-white border-saffron-600"
+                    : "border-stone-200 text-stone-600 hover:border-saffron-300"
+                }`}>
+                {fo.l}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-stone-200/80 shadow-sm p-5">
+          <h4 className="text-xs font-bold text-stone-600 uppercase tracking-wider flex items-center gap-1.5 mb-3">
+            <Send size={13} /> Delivery & Recipients
+          </h4>
+          <div className="flex gap-4 mb-4">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={crDeliveryEmail} onChange={(e) => setCrDeliveryEmail(e.target.checked)}
+                className="w-4 h-4 rounded border-stone-300 text-saffron-600 focus:ring-saffron-500" />
+              <Mail size={14} className="text-stone-500" />
+              <span className="text-sm text-stone-700">Email</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={crDeliveryTelegram} onChange={(e) => setCrDeliveryTelegram(e.target.checked)}
+                className="w-4 h-4 rounded border-stone-300 text-saffron-600 focus:ring-saffron-500" />
+              <MessageSquare size={14} className="text-stone-500" />
+              <span className="text-sm text-stone-700">Telegram</span>
+            </label>
+          </div>
+          <div className="mb-4">
+            <label className="block text-xs text-stone-500 mb-1">Recipients</label>
+            <select value={crRecipientMode} onChange={(e) => setCrRecipientMode(e.target.value)}
+              className="w-full border-2 border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-saffron-400 transition-colors">
+              <option value="subscribed">All Subscribed Contacts</option>
+              <option value="selected">Select Specific Contacts</option>
+              <option value="groups">By Contact Group</option>
+            </select>
+          </div>
+          {crRecipientMode === "selected" && crContacts.length > 0 && (
+            <div className="max-h-48 overflow-y-auto border-2 border-stone-200 rounded-xl">
+              <table className="w-full text-xs">
+                <thead className="bg-stone-50 sticky top-0">
+                  <tr>
+                    <th className="px-2 py-1.5 text-left font-semibold text-stone-500 w-8"></th>
+                    <th className="px-2 py-1.5 text-left font-semibold text-stone-500">Name</th>
+                    <th className="px-2 py-1.5 text-left font-semibold text-stone-500">Email</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {crContacts.filter((c) => c.enabled).map((c) => (
+                    <tr key={c.id} className="hover:bg-white cursor-pointer border-t border-stone-100"
+                      onClick={() => toggleCrContact(c.id)}>
+                      <td className="px-2 py-1.5">
+                        <input type="checkbox" readOnly
+                          checked={crRecipientContactIds.includes(c.id)}
+                          className="w-3.5 h-3.5 rounded border-stone-300 text-saffron-600 focus:ring-saffron-500" />
+                      </td>
+                      <td className="px-2 py-1.5 font-medium text-stone-700">{c.name}</td>
+                      <td className="px-2 py-1.5 text-stone-500">{c.email || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {crRecipientMode === "groups" && crGroups.length > 0 && (
+            <div>
+              <label className="block text-xs text-stone-500 mb-1">Select Groups</label>
+              <div className="flex flex-wrap gap-2">
+                {crGroups.map((g) => (
+                  <button key={g.id} type="button" onClick={() => toggleCrGroup(g.id)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all ${
+                      crRecipientGroupIds.includes(g.id)
+                        ? "bg-indigo-100 text-indigo-700 border-indigo-300"
+                        : "bg-white text-stone-500 border-stone-200 hover:border-indigo-300"
+                    }`}>
+                    <Users size={12} />
+                    {g.name}
+                    <span className="text-stone-400">({g.member_count || 0})</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </motion.div>
+
+      {/* Preview Panel */}
+      {crPreview && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="bg-white rounded-2xl border border-stone-200/80 shadow-sm p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-xs font-bold text-stone-600 uppercase">Preview — {crPreview.start} to {crPreview.end}</h4>
+            <button onClick={() => setCrPreview(null)} className="text-stone-400 hover:text-stone-600">
+              <X size={14} />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-white rounded-xl p-3 border border-stone-200/80">
+              <p className="text-[10px] text-stone-400 font-medium">Transactions</p>
+              <p className="text-lg font-bold text-stone-800">{crPreview.txn_count}</p>
+            </div>
+            <div className="bg-white rounded-xl p-3 border border-stone-200/80">
+              <p className="text-[10px] text-stone-400 font-medium">Income</p>
+              <p className="text-lg font-bold text-emerald-600">{fmt(crPreview.overview.total_credit)}</p>
+            </div>
+            <div className="bg-white rounded-xl p-3 border border-stone-200/80">
+              <p className="text-[10px] text-stone-400 font-medium">Expenses</p>
+              <p className="text-lg font-bold text-rose-600">{fmt(crPreview.overview.total_debit)}</p>
+            </div>
+            <div className="bg-white rounded-xl p-3 border border-stone-200/80">
+              <p className="text-[10px] text-stone-400 font-medium">Net</p>
+              <p className="text-lg font-bold text-stone-800">{fmt(crPreview.overview.net_balance)}</p>
+            </div>
+          </div>
+          {crPreview.category_breakdown?.length > 0 && (
+            <div className="mt-4">
+              <p className="text-xs font-semibold text-stone-600 mb-2">Top Categories</p>
+              <div className="flex flex-wrap gap-2">
+                {crPreview.category_breakdown.slice(0, 5).map((cat, i) => (
+                  <span key={i} className="inline-flex items-center gap-1.5 text-xs text-stone-600">
+                    <span className="w-2 h-2 rounded-full" style={{ background: COLORS[i % COLORS.length] }} />
+                    {cat.name}: {fmt(cat.value)}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </motion.div>
+      )}
+    </motion.div>
   );
 }

@@ -1,8 +1,10 @@
-﻿import { NavLink } from "react-router-dom";
-import { LayoutDashboard, ArrowDownCircle, Users, Shield, History, Table2, UsersRound, FolderCog, Database, FileBarChart, Send, Mail, Repeat, PartyPopper, MessageCircle } from "lucide-react";
+﻿import { useState, useEffect, useCallback } from "react";
+import { NavLink } from "react-router-dom";
+import { LayoutDashboard, ArrowDownCircle, Users, Shield, History, Table2, UsersRound, FolderCog, Database, FileBarChart, Send, Mail, Repeat, PartyPopper, MessageCircle, GripVertical } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
+import api from "../lib/api";
 
-const links = [
+const allItems = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/transactions", label: "Transactions", icon: ArrowDownCircle },
   { to: "/recurring", label: "Recurring", icon: Repeat },
@@ -11,25 +13,95 @@ const links = [
   { to: "/activity", label: "Activity Log", icon: History },
   { to: "/file-send", label: "Send File", icon: Send },
   { to: "/mail", label: "Mail", icon: Mail },
-];
-
-const roleLinks = [
   { to: "/reports", label: "Reports", icon: FileBarChart, roles: ["admin", "accountant"] },
   { to: "/functions", label: "Functions & Budget", icon: PartyPopper, roles: ["admin", "accountant"] },
   { to: "/spreadsheet", label: "Spreadsheet", icon: Table2, roles: ["admin", "accountant"] },
   { to: "/whatsapp", label: "WhatsApp", icon: MessageCircle, roles: ["admin", "accountant"] },
   { to: "/drive", label: "Common Drive", icon: FolderCog, roles: ["admin", "accountant"] },
+  { to: "/users", label: "User Management", icon: Shield, roles: ["admin"] },
+  { to: "/backup", label: "Backup & Restore", icon: Database, roles: ["admin"] },
 ];
 
-const adminLinks = [
-  { to: "/users", label: "User Management", icon: Shield },
-  { to: "/backup", label: "Backup & Restore", icon: Database },
-];
+function isVisible(item, role) {
+  return !item.roles || item.roles.includes(role);
+}
 
 export default function Nav() {
   const { profile } = useAuth();
   const role = profile?.role || "viewer";
-  const isAdmin = role === "admin";
+  const canReorder = role === "admin" || role === "accountant";
+
+  const [editing, setEditing] = useState(false);
+  const [order, setOrder] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [dragIndex, setDragIndex] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api.get('/profile/nav-order')
+      .then(({ data }) => {
+        if (!cancelled) {
+          setOrder(data?.order || []);
+          setLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const visibleDefault = allItems.filter((item) => isVisible(item, role));
+  const visiblePaths = new Set(visibleDefault.map((i) => i.to));
+  const savedVisible = (order || []).filter((to) => visiblePaths.has(to));
+  const renderedOrder = savedVisible.length > 0
+    ? savedVisible
+    : visibleDefault.map((i) => i.to);
+
+  const itemByPath = Object.fromEntries(allItems.map((i) => [i.to, i]));
+
+  const saveOrder = useCallback(async (newOrder) => {
+    setOrder(newOrder);
+    try {
+      await api.put('/profile/nav-order', { order: newOrder });
+    } catch (err) {
+      console.error('Failed to save nav order:', err);
+    }
+  }, []);
+
+  const handleDragStart = (index) => (e) => {
+    e.dataTransfer.effectAllowed = 'move';
+    setDragIndex(index);
+  };
+
+  const handleDragOver = (e, _index) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (index) => (e) => {
+    e.preventDefault();
+    if (dragIndex === null || dragIndex === index) {
+      setDragIndex(null);
+      return;
+    }
+    const newOrder = [...renderedOrder];
+    const [moved] = newOrder.splice(dragIndex, 1);
+    newOrder.splice(index, 0, moved);
+    setDragIndex(null);
+    saveOrder(newOrder);
+  };
+
+  const handleReset = async () => {
+    await saveOrder([]);
+  };
+
+  const handleToggleEdit = () => {
+    setEditing((prev) => !prev);
+  };
+
+  const navItems = renderedOrder.map((to) => itemByPath[to]).filter(Boolean);
 
   return (
     <nav className="w-60 shrink-0 min-h-screen flex flex-col relative overflow-hidden animate-slide-in-left"
@@ -48,51 +120,68 @@ export default function Nav() {
             <div className="text-[10px] font-medium text-royal-300 tracking-wider uppercase">Management Portal</div>
           </div>
         </div>
+        {canReorder && (
+          <div className="flex gap-2">
+            <button
+              onClick={handleToggleEdit}
+              className="flex-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+            >
+              {editing ? 'Done' : 'Reorder'}
+            </button>
+            {editing && (
+              <button
+                onClick={handleReset}
+                className="text-xs font-medium px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+              >
+                Reset to default
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="relative z-10 w-full h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
       <div className="relative z-10 flex-1 px-3 py-4 space-y-1 stagger-children">
-        {links.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to}
-            className={({ isActive }) =>
-              `group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                isActive
-                  ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
-                  : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
-              } animate-fade-in-up`
-            }>
-            <Icon size={18} className="transition-transform group-hover:scale-110" /> {label}
-          </NavLink>
-        ))}
-        {isAdmin && adminLinks.map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to}
-            className={({ isActive }) =>
-              `group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                isActive
-                  ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
-                  : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
-              } animate-fade-in-up`
-            }>
-            <Icon size={18} className="transition-transform group-hover:scale-110" /> {label}
-          </NavLink>
-        ))}
-        {roleLinks.filter(l => l.roles.includes(role)).map(({ to, label, icon: Icon }) => (
-          <NavLink key={to} to={to}
-            className={({ isActive }) =>
-              `group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                isActive
-                  ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
-                  : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
-              } animate-fade-in-up`
-            }>
-            <Icon size={18} className="transition-transform group-hover:scale-110" /> {label}
-          </NavLink>
-        ))}
+        {loading ? (
+          <div className="text-sm text-royal-300 px-4">Loading...</div>
+        ) : navItems.length === 0 ? (
+          <div className="text-sm text-royal-300 px-4">No items</div>
+        ) : (
+          navItems.map(({ to, label, icon: Icon }, index) => (
+            <div
+              key={to}
+              onDragOver={editing ? (e) => handleDragOver(e, index) : undefined}
+              onDrop={editing ? handleDrop(index) : undefined}
+              className={`flex items-center ${editing ? '' : ''}`}
+            >
+              {editing && (
+                <span
+                  className="text-royal-300 hover:text-white transition-colors mr-1"
+                  onDragStart={handleDragStart(index)}
+                  draggable
+                >
+                  <GripVertical size={16} />
+                </span>
+              )}
+              <NavLink
+                to={to}
+                className={({ isActive }) =>
+                  `group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                    isActive
+                      ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
+                      : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
+                  } animate-fade-in-up`
+                }
+              >
+                <Icon size={18} className="transition-transform group-hover:scale-110" /> {label}
+              </NavLink>
+            </div>
+          ))
+        )}
       </div>
 
       <div className="relative z-10 p-3 mt-auto" />
     </nav>
   );
 }
-

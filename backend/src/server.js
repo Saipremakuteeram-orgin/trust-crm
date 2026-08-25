@@ -61,6 +61,7 @@ app.use('/api/file-send', sensitiveLimiter, require('./routes/fileSend'));
 app.use('/api/mail', sensitiveLimiter, require('./routes/mail'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/scheduled-reports', require('./routes/scheduledReports'));
+app.use('/api/profile', require('./routes/profile'));
 app.use('/api/recurring-transactions', require('./routes/recurringTransactions'));
 app.use('/api/functions', require('./routes/functions'));
 app.use('/api/whatsapp', require('./routes/whatsapp'));

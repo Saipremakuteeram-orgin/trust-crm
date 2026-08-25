@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
-import { Plus, X, Trash2, Pencil, Search, Download, FileText, RefreshCw, Upload, File, Eye, Paperclip } from "lucide-react";
+import { Plus, X, Trash2, Pencil, Search, Download, FileText, RefreshCw, Upload } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 import { useNavigate } from "react-router-dom";
@@ -10,11 +10,6 @@ import useEscToClose from "../hooks/useEscToClose";
 
 const fmt = (n) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n || 0));
-
-const catRemaining = (fc) => {
-  if (fc.remaining_total !== undefined && fc.remaining_total !== null) return Number(fc.remaining_total);
-  return Number(fc.budget_amount || 0) - Number(fc.spent_total || 0);
-};
 
 const emptyForm = {
   type: "credit", mode: "cash", digital_method: "upi", amount: "",
@@ -544,7 +539,7 @@ export default function Transactions() {
 
                 <div className="rounded-xl border-2 border-saffron-100 bg-saffron-50/40 p-3 space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-semibold text-stone-700">Function Budget</span>
+                    <span className="text-sm font-semibold text-stone-700">Function</span>
                     <span className="text-[11px] font-medium text-stone-400">optional</span>
                   </div>
                   <div className="flex gap-2">
@@ -579,25 +574,21 @@ export default function Transactions() {
                             onChange={(e) => handleFunctionChange(e.target.value)}
                             className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
                             <option value="">Select a function…</option>
-                            {functions.filter((f) => f.status === "active").map((f) => {
-                              const over = Number(f.remaining_total) < 0;
-                              return (
-                                <option key={f.id} value={f.id}>
-                                  {f.name} — {over ? `Over by ${fmt(Math.abs(f.remaining_total))}` : `${fmt(f.remaining_total)} left`}
-                                </option>
-                              );
-                            })}
+                            {functions.filter((f) => f.status === "active").map((f) => (
+                              <option key={f.id} value={f.id}>
+                                {f.name}
+                              </option>
+                            ))}
                           </select>
                         )}
                         {!functionsLoading && !functionsError && functions.filter((f) => f.status === "active").length === 0 && (
-                          <p className="text-xs text-stone-400 px-1">No active functions. Create one in Functions &amp; Budget first.</p>
+                          <p className="text-xs text-stone-400 px-1">No active functions. Create one in Functions first.</p>
                         )}
 
                         {form.function_id && form.function_id !== "_link_" && (
                           <>
                             <div className="flex items-center justify-between px-1 pt-1">
                               <span className="text-xs font-medium text-stone-500">Sub-category (optional)</span>
-                              <span className="text-[10px] text-stone-400">Skip to use the main budget only</span>
                             </div>
                             {categoriesLoading ? (
                               <div className="flex items-center gap-2 text-sm text-stone-400 px-2 py-1">
@@ -608,39 +599,15 @@ export default function Transactions() {
                                 onChange={(e) => setForm({ ...form, function_category_id: e.target.value })}
                                 className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
                                 <option value="">Select a sub-category…</option>
-                                {functionCategories.map((fc) => {
-                                  const rem = catRemaining(fc);
-                                  const over = rem < 0;
-                                  return (
-                                    <option key={fc.id} value={fc.id}>
-                                      {fc.category_name} — {over ? `Over by ${fmt(Math.abs(rem))}` : `${fmt(rem)} left`}
-                                    </option>
-                                  );
-                                })}
+                                {functionCategories.map((fc) => (
+                                  <option key={fc.id} value={fc.id}>
+                                    {fc.category_name}
+                                  </option>
+                                ))}
                               </select>
                             ) : (
-                              <p className="text-xs text-stone-400 px-1">No sub-categories — the whole amount will count against the main function budget.</p>
+                              <p className="text-xs text-stone-400 px-1">No sub-categories — the whole amount will count against the main function.</p>
                             )}
-
-                            {(() => {
-                              const selFn = functions.find((f) => f.id === form.function_id);
-                              const fnOver = selFn && Number(selFn.remaining_total) < 0;
-                              const selFc = functionCategories.find((fc) => fc.id === form.function_category_id);
-                              const fcOver = selFc && catRemaining(selFc) < 0;
-                              if (!fnOver && !fcOver) return null;
-                              return (
-                                <div className="rounded-xl border-2 border-amber-200 bg-amber-50 px-3 py-2 flex items-start gap-2">
-                                  <span className="text-amber-600 mt-0.5">⚠</span>
-                                  <p className="text-xs text-amber-700">
-                                    {fnOver && fcOver
-                                      ? `This function is over budget by ${fmt(Math.abs(selFn.remaining_total))} and this category is over by ${fmt(Math.abs(catRemaining(selFc)))}. The transaction will still be recorded.`
-                                      : fnOver
-                                        ? `This function is over budget by ${fmt(Math.abs(selFn.remaining_total))}. The transaction will still be recorded.`
-                                        : `This category is over budget by ${fmt(Math.abs(catRemaining(selFc)))}. The transaction will still be recorded.`}
-                                  </p>
-                                </div>
-                              );
-                            })()}
                           </>
                         )}
                       </motion.div>

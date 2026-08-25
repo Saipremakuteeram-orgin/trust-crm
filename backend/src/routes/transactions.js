@@ -28,13 +28,9 @@ async function validateFunctionLink(functionId, functionCategoryId, type, mode, 
 
   try {
     if (functionId) {
-      const { data: fn, error } = await supabaseAdmin.from('functions').select('id, budget_total, budget_cash, budget_digital, status').eq('id', functionId).single();
+      const { data: fn, error } = await supabaseAdmin.from('functions').select('id, status').eq('id', functionId).single();
       if (error || !fn) return 'Linked function not found';
       if (fn.status !== 'active') return 'Cannot link transaction to a non-active function';
-      if (fn.budget_total > 0 && Number(amount) > fn.budget_total) {
-        // Allow overspend but return warning via a flag - handled by caller
-        return null;
-      }
     }
     if (functionCategoryId) {
       const { data: fc, error } = await supabaseAdmin.from('function_categories').select('id, function_id').eq('id', functionCategoryId).single();

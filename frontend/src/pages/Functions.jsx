@@ -188,79 +188,80 @@ export default function Functions() {
     }
   }
 
-  function getAvailableCategoriesForAdd() {
-    if (!fn?.categories) return availableCategories;
-    const linkedIds = new Set(fn.categories.map(c => c.category_id));
-    return availableCategories.filter(c => !linkedIds.has(c.id));
-  }
-
-  function openAddSubCat() {
-    const avail = getAvailableCategoriesForAdd();
-    if (avail.length === 0) {
-      addToast('All categories are already linked to this function', 'error');
-      return;
-    }
-    setEditingSubCat(null);
-    setSubCatForm({
-      category_id: avail[0].id,
-      budget_amount: '',
-      budget_cash: '',
-      budget_digital: '',
-    });
-    setSubCatModalOpen(true);
-  }
-
-  function openEditSubCat(cat) {
-    setEditingSubCat(cat);
-    setSubCatForm({
-      category_id: cat.category_id,
-      budget_amount: String(cat.budget_amount || ''),
-      budget_cash: String(cat.budget_cash || ''),
-      budget_digital: String(cat.budget_digital || ''),
-    });
-    setSubCatModalOpen(true);
-  }
-
-  async function handleSaveSubCat(e) {
-    e.preventDefault();
-    if (!subCatForm.category_id) { addToast('Category is required', 'error'); return; }
-    setSavingSubCat(true);
-    try {
-      const payload = {
-        category_id: subCatForm.category_id,
-        budget_amount: Number(subCatForm.budget_amount) || 0,
-        budget_cash: Number(subCatForm.budget_cash) || 0,
-        budget_digital: Number(subCatForm.budget_digital) || 0,
-      };
-      if (editingSubCat) {
-        await api.patch(`/functions/${fn.id}/categories/${editingSubCat.id}`, payload);
-        addToast('Sub-category updated', 'success');
-      } else {
-        await api.post(`/functions/${fn.id}/categories`, payload);
-        addToast('Sub-category added', 'success');
-      }
-      setSubCatModalOpen(false);
-      load();
-    } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to save sub-category', 'error');
-    }
-    setSavingSubCat(false);
-  }
-
-  async function handleDeleteSubCat(cat) {
-    if (!window.confirm(`Remove "${cat.category_name}" from this function?`)) return;
-    try {
-      await api.delete(`/functions/${fn.id}/categories/${cat.id}`);
-      addToast('Sub-category removed', 'success');
-      load();
-    } catch (err) {
-      addToast(err.response?.data?.message || 'Failed to remove sub-category', 'error');
-    }
-  }
-
   // ---- Detail view ----
   if (id) {
     const fn = detail;
+
+    function getAvailableCategoriesForAdd() {
+      if (!fn?.categories) return availableCategories;
+      const linkedIds = new Set(fn.categories.map(c => c.category_id));
+      return availableCategories.filter(c => !linkedIds.has(c.id));
+    }
+
+    function openAddSubCat() {
+      const avail = getAvailableCategoriesForAdd();
+      if (avail.length === 0) {
+        addToast('All categories are already linked to this function', 'error');
+        return;
+      }
+      setEditingSubCat(null);
+      setSubCatForm({
+        category_id: avail[0].id,
+        budget_amount: '',
+        budget_cash: '',
+        budget_digital: '',
+      });
+      setSubCatModalOpen(true);
+    }
+
+    function openEditSubCat(cat) {
+      setEditingSubCat(cat);
+      setSubCatForm({
+        category_id: cat.category_id,
+        budget_amount: String(cat.budget_amount || ''),
+        budget_cash: String(cat.budget_cash || ''),
+        budget_digital: String(cat.budget_digital || ''),
+      });
+      setSubCatModalOpen(true);
+    }
+
+    async function handleSaveSubCat(e) {
+      e.preventDefault();
+      if (!subCatForm.category_id) { addToast('Category is required', 'error'); return; }
+      setSavingSubCat(true);
+      try {
+        const payload = {
+          category_id: subCatForm.category_id,
+          budget_amount: Number(subCatForm.budget_amount) || 0,
+          budget_cash: Number(subCatForm.budget_cash) || 0,
+          budget_digital: Number(subCatForm.budget_digital) || 0,
+        };
+        if (editingSubCat) {
+          await api.patch(`/functions/${fn.id}/categories/${editingSubCat.id}`, payload);
+          addToast('Sub-category updated', 'success');
+        } else {
+          await api.post(`/functions/${fn.id}/categories`, payload);
+          addToast('Sub-category added', 'success');
+        }
+        setSubCatModalOpen(false);
+        load();
+      } catch (err) {
+        addToast(err.response?.data?.message || 'Failed to save sub-category', 'error');
+      }
+      setSavingSubCat(false);
+    }
+
+    async function handleDeleteSubCat(cat) {
+      if (!window.confirm(`Remove "${cat.category_name}" from this function?`)) return;
+      try {
+        await api.delete(`/functions/${fn.id}/categories/${cat.id}`);
+        addToast('Sub-category removed', 'success');
+        load();
+      } catch (err) {
+        addToast(err.response?.data?.message || 'Failed to remove sub-category', 'error');
+      }
+    }
+
     return (
       <AppLayout>
         <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}

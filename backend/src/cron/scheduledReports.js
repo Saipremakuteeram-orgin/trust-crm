@@ -2,6 +2,7 @@ const supabaseAdmin = require('@/config/supabaseAdmin');
 const { sendEmail, sendTelegram, fmt } = require('@/services/notify');
 const { safeErrorMessage } = require('@/lib/security');
 const { logActivity } = require('@/lib/logger');
+const { reportHeaderHtml, drawPdfHeader } = require('@/lib/reportBranding');
 
 function computeNextRun(schedule) {
   const now = new Date();
@@ -153,7 +154,8 @@ function buildSummaryHtml(schedule, txns, start, end) {
   const co = txns.filter((t) => t.type === 'debit' && t.mode === 'cash').reduce((s, t) => s + Number(t.amount), 0);
   const di = txns.filter((t) => t.type === 'credit' && t.mode === 'digital').reduce((s, t) => s + Number(t.amount), 0);
   const dout = txns.filter((t) => t.type === 'debit' && t.mode === 'digital').reduce((s, t) => s + Number(t.amount), 0);
-  return `<div style="font-family:sans-serif;font-size:14px;color:#333"><h2>📊 ${schedule.name}</h2><p style="color:#666">Period: ${start} to ${end}</p><table cellpadding="6" style="border-collapse:collapse;width:100%;max-width:480px"><tr><td>Credit (In)</td><td style="text-align:right;color:#059669">${fmt(tc)}</td></tr><tr><td>Debit (Out)</td><td style="text-align:right;color:#dc2626">${fmt(td)}</td></tr><tr><td><b>Net</b></td><td style="text-align:right"><b>${fmt(tc - td)}</b></td></tr><tr><td colspan="2"><hr/></td></tr><tr><td>Cash In/Out</td><td style="text-align:right">${fmt(ci)} / ${fmt(co)}</td></tr><tr><td>Digital In/Out</td><td style="text-align:right">${fmt(di)} / ${fmt(dout)}</td></tr><tr><td colspan="2"><hr/></td></tr><tr><td>Transactions</td><td style="text-align:right">${txns.length}</td></tr></table></div>`;
+  return reportHeaderHtml({ title: schedule.name, subtitle: `Period: ${start} to ${end}`, purposeKey: 'scheduled', purposeVars: { NAME: schedule.name, START: start, END: end } }) +
+    `<div style="font-family:sans-serif;font-size:14px;color:#333"><h2>📊 ${schedule.name}</h2><p style="color:#666">Period: ${start} to ${end}</p><table cellpadding="6" style="border-collapse:collapse;width:100%;max-width:480px"><tr><td>Credit (In)</td><td style="text-align:right;color:#059669">${fmt(tc)}</td></tr><tr><td>Debit (Out)</td><td style="text-align:right;color:#dc2626">${fmt(td)}</td></tr><tr><td><b>Net</b></td><td style="text-align:right"><b>${fmt(tc - td)}</b></td></tr><tr><td colspan="2"><hr/></td></tr><tr><td>Cash In/Out</td><td style="text-align:right">${fmt(ci)} / ${fmt(co)}</td></tr><tr><td>Digital In/Out</td><td style="text-align:right">${fmt(di)} / ${fmt(dout)}</td></tr><tr><td colspan="2"><hr/></td></tr><tr><td>Transactions</td><td style="text-align:right">${txns.length}</td></tr></table></div>`;
 }
 
 function buildSummaryText(schedule, txns, start, end) {
@@ -182,7 +184,8 @@ async function executeReport(schedule) {
             const buffer = await workbook.xlsx.writeBuffer();
             await sendEmail({
               to: c.email, subject: `📊 ${schedule.name} (${start} to ${end})`,
-              html: `<div style="font-family:sans-serif;font-size:14px"><p>${schedule.name} report — ${txns.length} transactions</p></div>`,
+              html: reportHeaderHtml({ title: schedule.name, subtitle: `${start} to ${end}`, purposeKey: 'scheduled', purposeVars: { NAME: schedule.name, START: start, END: end } }) +
+                `<div style="font-family:sans-serif;font-size:14px"><p>${schedule.name} report — ${txns.length} transactions attached.</p></div>`,
               attachments: [{ filename: `${safeName}-${start}-to-${end}.xlsx`, content: Buffer.from(buffer) }],
             });
           } else if (schedule.format === 'pdf') {
@@ -192,13 +195,17 @@ async function executeReport(schedule) {
             doc.on('data', (chunk) => chunks.push(chunk));
             const pdfBuffer = await new Promise((resolve) => {
               doc.on('end', () => resolve(Buffer.concat(chunks)));
-              doc.fontSize(18).font('Helvetica-Bold').text('Trust CRM', 40, 40);
-              doc.fontSize(11).font('Helvetica').text(`${schedule.name} — ${start} to ${end}`, 40, 60);
-              doc.moveTo(40, 80).lineTo(815, 80).strokeColor('#e5e7eb').stroke();
+              const headerStart = drawPdfHeader(doc, {
+                subtitle: `${schedule.name} — ${start} to ${end}`,
+                purposeKey: 'scheduled',
+                purposeVars: { NAME: schedule.name, START: start, END: end },
+                generatedBy: profile?.full_name,
+                date: new Date().toLocaleDateString('en-IN'),
+              });
               let tCredit = 0, tDebit = 0;
               const hdrs = ['Date', 'Type', 'Mode', 'Amount', 'Party', 'Category', 'Notes'];
               const cw = [80, 60, 60, 100, 140, 120, 215];
-              let hy = 90;
+              let hy = headerStart;
               doc.font('Helvetica-Bold').fontSize(7).fillColor('#4338ca');
               doc.rect(40, hy, 775, 18).fill('#4338ca');
               let x = 40;
@@ -224,7 +231,8 @@ async function executeReport(schedule) {
             });
             await sendEmail({
               to: c.email, subject: `📊 ${schedule.name} (${start} to ${end})`,
-              html: `<div style="font-family:sans-serif;font-size:14px"><p>${schedule.name} report — ${txns.length} transactions</p></div>`,
+              html: reportHeaderHtml({ title: schedule.name, subtitle: `${start} to ${end}`, purposeKey: 'scheduled', purposeVars: { NAME: schedule.name, START: start, END: end } }) +
+                `<div style="font-family:sans-serif;font-size:14px"><p>${schedule.name} report — ${txns.length} transactions attached.</p></div>`,
               attachments: [{ filename: `${safeName}-${start}-to-${end}.pdf`, content: pdfBuffer }],
             });
           }

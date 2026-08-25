@@ -2,6 +2,7 @@ const cron = require('node-cron');
 const supabaseAdmin = require('@/config/supabaseAdmin');
 const { sendEmail, sendTelegram, fmt } = require('@/services/notify');
 const { logActivity } = require('@/lib/logger');
+const { reportHeaderHtml, purposeFor, TRUST_NAME } = require('@/lib/reportBranding');
 
 async function generateAndSendMonthlyReport() {
   const now = new Date();
@@ -29,9 +30,9 @@ async function generateAndSendMonthlyReport() {
   const net = totalCredit - totalDebit;
 
   const subject = `📊 Monthly Trust Report — ${monthLabel}`;
-  const html = `
-    <div style="font-family:sans-serif;font-size:14px;color:#333">
-      <h2>Monthly Report — ${monthLabel}</h2>
+  const html =
+    reportHeaderHtml({ title: `Monthly Report — ${monthLabel}`, purposeKey: 'monthly' }) +
+    `<div style="font-family:sans-serif;font-size:14px;color:#333">
       <table cellpadding="6" style="border-collapse:collapse;width:100%;max-width:480px">
         <tr><td>Total Credit (In)</td><td style="text-align:right;color:#059669">${fmt(totalCredit)}</td></tr>
         <tr><td>Total Debit (Out)</td><td style="text-align:right;color:#dc2626">${fmt(totalDebit)}</td></tr>
@@ -46,7 +47,8 @@ async function generateAndSendMonthlyReport() {
       </table>
     </div>`;
   const telegramText =
-    `📊 <b>Monthly Report — ${monthLabel}</b>\n\n` +
+    `📊 <b>${TRUST_NAME}</b>\nMonthly Report — ${monthLabel}\n\n` +
+    `<b>Purpose:</b> ${purposeFor('monthly')}\n\n` +
     `Total Credit: <b>${fmt(totalCredit)}</b>\nTotal Debit: <b>${fmt(totalDebit)}</b>\nNet: <b>${fmt(net)}</b>\n\n` +
     `Cash In/Out: ${fmt(cashCredit)} / ${fmt(cashDebit)}\nDigital In/Out: ${fmt(digitalCredit)} / ${fmt(digitalDebit)}\n\n` +
     `Total Transactions: ${txns.length}`;

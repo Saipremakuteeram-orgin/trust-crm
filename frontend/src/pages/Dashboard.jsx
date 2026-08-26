@@ -93,15 +93,19 @@ export default function Dashboard() {
 
   useEffect(() => {
     loadSummary();
-    api.get("/analytics").then((res) => setAnalytics(res.data.result)).catch(() => setAnalyticsError(true));
-    api.get("/dashboard/recurring-commitment").then((res) => setRecurring(res.data.result)).catch(() => {});
+    Promise.all([
+      api.get("/analytics").then((res) => setAnalytics(res.data.result)).catch(() => setAnalyticsError(true)),
+      api.get("/dashboard/recurring-commitment").then((res) => setRecurring(res.data.result)).catch(() => {}),
+    ]);
   }, []);
 
   function handleRefresh() {
     setRefreshing(true);
     loadSummary();
-    api.get("/analytics").then((res) => setAnalytics(res.data.result)).catch(() => {});
-    api.get("/dashboard/recurring-commitment").then((res) => setRecurring(res.data.result)).catch(() => {});
+    Promise.all([
+      api.get("/analytics").then((res) => setAnalytics(res.data.result)).catch(() => {}),
+      api.get("/dashboard/recurring-commitment").then((res) => setRecurring(res.data.result)).catch(() => {}),
+    ]);
     setTimeout(() => setRefreshing(false), 600);
   }
 

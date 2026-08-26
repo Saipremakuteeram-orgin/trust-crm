@@ -5,7 +5,7 @@ import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
 import {
   Plus, X, Pencil, Trash2, ArrowLeft, RefreshCw,
-  TrendingUp, TrendingDown, PartyPopper, Info, ChevronRight, ChevronDown
+  TrendingUp, TrendingDown, PartyPopper, Info, ChevronRight, ChevronDown, Loader2
 } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
@@ -102,6 +102,7 @@ export default function Functions() {
   const [form, setForm] = useState({ name: "", description: "", status: "active" });
   const [saving, setSaving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingDetail, setLoadingDetail] = useState(false);
   const [availableCategories, setAvailableCategories] = useState([]);
   const [subCatModalOpen, setSubCatModalOpen] = useState(false);
   const [editingSubCat, setEditingSubCat] = useState(null);
@@ -121,15 +122,20 @@ export default function Functions() {
   const [savingItem, setSavingItem] = useState(false);
   useEscToClose(() => setOpen(false), open);
 
-  function load() {
-    api.get("/functions").then((res) => setFunctions(res.data.result)).catch(() => setFunctions([]));
+  async function load() {
+    const listPromise = api.get("/functions").then((res) => setFunctions(res.data.result)).catch(() => setFunctions([]));
     if (id) {
-      api.get(`/functions/${id}`).then((res) => setDetail(res.data.result)).catch(() => setDetail(null));
-      api.get("/categories").then((res) => setAvailableCategories(res.data.result || [])).catch(() => setAvailableCategories([]));
+      setLoadingDetail(true);
+      await Promise.all([
+        api.get(`/functions/${id}`).then((res) => setDetail(res.data.result)).catch(() => setDetail(null)),
+        api.get("/categories").then((res) => setAvailableCategories(res.data.result || [])).catch(() => setAvailableCategories([])),
+      ]);
+      setLoadingDetail(false);
     }
+    await listPromise;
   }
 
-  useEffect(load, [id]);
+  useEffect(() => { load(); }, [id]);
 
   function handleRefresh() { setRefreshing(true); load(); setTimeout(() => setRefreshing(false), 600); }
 
@@ -166,7 +172,8 @@ export default function Functions() {
         addToast("Function created", "success");
       }
       setOpen(false);
-      load();
+      api.get("/functions").then((res) => setFunctions(res.data.result)).catch(() => setFunctions([]));
+      if (id) api.get(`/functions/${id}`).then((res) => setDetail(res.data.result)).catch(() => setDetail(null));
     } catch (err) {
       addToast(err.response?.data?.message || "Failed to save function", "error");
     }
@@ -178,8 +185,7 @@ export default function Functions() {
     try {
       await api.delete(`/functions/${fn.id}`);
       addToast("Function deleted", "success");
-      if (id) navigate("/functions");
-      load();
+      if (id) navigate("/functions"); else api.get("/functions").then((res) => setFunctions(res.data.result)).catch(() => setFunctions([]));
     } catch (err) {
       addToast(err.response?.data?.message || "Failed to delete function", "error");
     }
@@ -189,7 +195,8 @@ export default function Functions() {
     try {
       await api.patch(`/functions/${fn.id}/status`, { status });
       addToast(`Function marked as ${status}`, "success");
-      load();
+      api.get("/functions").then((res) => setFunctions(res.data.result)).catch(() => setFunctions([]));
+      if (id) api.get(`/functions/${id}`).then((res) => setDetail(res.data.result)).catch(() => setDetail(null));
     } catch (err) {
       addToast(err.response?.data?.message || "Failed to update status", "error");
     }
@@ -261,7 +268,6 @@ export default function Functions() {
         }
         setSubCatModalOpen(false);
         setNewCategoryName('');
-        api.get("/functions").then((res) => setFunctions(res.data.result)).catch(() => setFunctions([]));
         api.get(`/functions/${fn.id}`).then((res) => setDetail(res.data.result)).catch(() => setDetail(null));
       } catch (err) {
         addToast(err.response?.data?.message || 'Failed to save sub-category', 'error');
@@ -379,7 +385,13 @@ export default function Functions() {
           </div>
         </motion.div>
 
-        {!fn && (
+        {loadingDetail && (
+          <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-stone-400">
+            <Loader2 size={32} className="mx-auto mb-3 animate-spin" />
+            <p>Loading function details...</p>
+          </div>
+        )}
+        {!loadingDetail && !fn && (
           <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-stone-400">
             <Info size={32} className="mx-auto mb-3" />
             <p>Function not found.</p>

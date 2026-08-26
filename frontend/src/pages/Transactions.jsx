@@ -55,17 +55,27 @@ export default function Transactions() {
   const fileInputRef = useRef(null);
   useEscToClose(() => { setReceiptOpen(false); setReceiptTxn(null); setReceiptFile(null); }, receiptOpen);
 
-  function load() {
-    api.get("/transactions").then((res) => setTxns(res.data.result));
-    api.get("/contacts").then((res) => setContacts(res.data.result));
-    api.get("/groups").then((res) => setGroups(res.data.result)).catch(() => {});
-    api.get("/categories").then((res) => setCategories(res.data.result)).catch(() => {});
+  async function load() {
     setFunctionsLoading(true);
     setFunctionsError("");
-    api.get("/functions")
-      .then((res) => setFunctions(res.data.result || []))
-      .catch(() => { setFunctions([]); setFunctionsError("Failed to load functions"); })
-      .finally(() => setFunctionsLoading(false));
+    try {
+      const [txnsRes, contactsRes, groupsRes, categoriesRes, functionsRes] = await Promise.all([
+        api.get("/transactions"),
+        api.get("/contacts"),
+        api.get("/groups"),
+        api.get("/categories"),
+        api.get("/functions"),
+      ]);
+      setTxns(txnsRes.data.result || []);
+      setContacts(contactsRes.data.result || []);
+      setGroups(groupsRes.data.result || []);
+      setCategories(categoriesRes.data.result || []);
+      setFunctions(functionsRes.data.result || []);
+    } catch {
+      setFunctions([]);
+      setFunctionsError("Failed to load data");
+    }
+    setFunctionsLoading(false);
   }
   useEffect(load, []);
 

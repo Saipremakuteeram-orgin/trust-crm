@@ -263,42 +263,29 @@ router.delete('/:id/categories/:catId', requireRole('admin', 'accountant'), asyn
 // SOURCE BALANCE report (cash/digital income vs function expenses)
 router.get('/summary/source-balance', async (req, res) => {
   try {
-    const { data: txnData, error: txnErr } = await supabaseAdmin.from('transactions').select('type, mode, amount, function_id');
-    if (txnErr) throw txnErr;
+    const { data, error } = await supabaseAdmin
+      .from('v_source_balance')
+      .select('*')
+      .single();
 
-    let total_cash_income = 0;
-    let total_digital_income = 0;
-    let total_cash_function_expenses = 0;
-    let total_digital_function_expenses = 0;
-    let total_cash_nonfunction_expenses = 0;
-    let total_digital_nonfunction_expenses = 0;
+    if (error) {
+      console.error('Source balance view error:', error.message);
+      return res.status(500).json({ success: false, message: 'Failed to compute source balance' });
+    }
 
-    (txnData || []).forEach((t) => {
-      const amt = Number(t.amount) || 0;
-      if (t.type === 'credit' && t.mode === 'cash') total_cash_income += amt;
-      else if (t.type === 'credit' && t.mode === 'digital') total_digital_income += amt;
-      else if (t.type === 'debit' && t.mode === 'cash') {
-        if (t.function_id) total_cash_function_expenses += amt;
-        else total_cash_nonfunction_expenses += amt;
-      } else if (t.type === 'debit' && t.mode === 'digital') {
-        if (t.function_id) total_digital_function_expenses += amt;
-        else total_digital_nonfunction_expenses += amt;
-      }
-    });
-
-    const cash_available = total_cash_income - total_cash_nonfunction_expenses;
-    const digital_available = total_digital_income - total_digital_nonfunction_expenses;
+    const cash_available = (Number(data.total_cash_income) || 0) - (Number(data.total_cash_nonfunction_expenses) || 0);
+    const digital_available = (Number(data.total_digital_income) || 0) - (Number(data.total_digital_nonfunction_expenses) || 0);
 
     res.set('Cache-Control', 'private, max-age=30');
     res.json({
       success: true,
       result: {
-        total_cash_income,
-        total_digital_income,
-        total_cash_function_expenses,
-        total_digital_function_expenses,
-        total_cash_nonfunction_expenses,
-        total_digital_nonfunction_expenses,
+        total_cash_income: Number(data.total_cash_income) || 0,
+        total_digital_income: Number(data.total_digital_income) || 0,
+        total_cash_function_expenses: Number(data.total_cash_function_expenses) || 0,
+        total_digital_function_expenses: Number(data.total_digital_function_expenses) || 0,
+        total_cash_nonfunction_expenses: Number(data.total_cash_nonfunction_expenses) || 0,
+        total_digital_nonfunction_expenses: Number(data.total_digital_nonfunction_expenses) || 0,
         cash_available,
         digital_available,
       },

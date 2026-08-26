@@ -120,7 +120,14 @@ export default function Functions() {
   const [categoryItems, setCategoryItems] = useState({});
   const [itemForm, setItemForm] = useState({ item_name: '', quantity: '1', unit_price: '0', notes: '' });
   const [savingItem, setSavingItem] = useState(false);
-  useEscToClose(() => setOpen(false), open);
+  const [txnModalOpen, setTxnModalOpen] = useState(false);
+  const [txnForm, setTxnForm] = useState({
+    type: 'debit', mode: 'cash', amount: '', party: '', description: '',
+    txn_date: new Date().toISOString().slice(0, 10), category_id: '',
+    function_id: '', function_category_id: '', voucher_filed: null, digital_method: 'upi'
+  });
+  const [txnSaving, setTxnSaving] = useState(false);
+  useEscToClose(() => setTxnModalOpen(false), txnModalOpen);
 
   async function load() {
     const listPromise = api.get("/functions").then((res) => setFunctions(res.data.result)).catch(() => setFunctions([]));
@@ -366,6 +373,36 @@ export default function Functions() {
       });
     }
 
+    function openAddTxn() {
+      setTxnForm({
+        type: 'debit', mode: 'cash', amount: '', party: '', description: '',
+        txn_date: new Date().toISOString().slice(0, 10), category_id: '',
+        function_id: fn.id, function_category_id: '', voucher_filed: null, digital_method: 'upi'
+      });
+      setTxnSaving(false);
+      setTxnModalOpen(true);
+    }
+
+    async function handleSaveTxn(e) {
+      e.preventDefault();
+      if (!txnForm.amount || Number(txnForm.amount) <= 0) { addToast('Amount is required', 'error'); return; }
+      if (txnForm.mode === 'cash' && txnForm.voucher_filed === null) { addToast('Please select voucher filed status', 'error'); return; }
+      setTxnSaving(true);
+      try {
+        const payload = { ...txnForm, amount: Number(txnForm.amount) };
+        if (payload.mode !== 'cash') delete payload.voucher_filed;
+        if (!payload.category_id) delete payload.category_id;
+        await api.post('/transactions', payload);
+        addToast('Transaction added', 'success');
+        setTxnModalOpen(false);
+        api.get(`/functions/${fn.id}`).then((res) => setDetail(res.data.result)).catch(() => setDetail(null));
+        api.get('/functions').then((res) => setFunctions(res.data.result)).catch(() => setFunctions([]));
+      } catch (err) {
+        addToast(err.response?.data?.message || 'Failed to add transaction', 'error');
+      }
+      setTxnSaving(false);
+    }
+
     return (
       <AppLayout>
         <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
@@ -545,7 +582,15 @@ export default function Functions() {
 
             {/* Transactions for this function */}
             <div className="bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm">
-              <h2 className="text-sm font-semibold text-stone-700 mb-4">Transactions ({fn.transactions?.length || 0})</h2>
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-sm font-semibold text-stone-700">Transactions ({fn.transactions?.length || 0})</h2>
+                {canEdit && (
+                  <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={openAddTxn}
+                    className="flex items-center gap-1.5 bg-saffron-500 hover:bg-saffron-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm">
+                    <Plus size={14} /> Add Transaction
+                  </motion.button>
+                )}
+              </div>
               {(!fn.transactions || fn.transactions.length === 0) ? (
                 <p className="text-sm text-stone-400">No transactions linked to this function yet.</p>
               ) : (
@@ -697,6 +742,107 @@ export default function Functions() {
                   <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} disabled={savingItem}
                     className="w-full bg-gradient-to-r from-saffron-500 to-saffron-600 hover:from-saffron-400 hover:to-saffron-500 text-white rounded-xl py-2.5 text-sm font-semibold shadow-lg shadow-saffron-500/25 transition-all disabled:opacity-50">
                     {savingItem ? 'Saving...' : editingItem ? 'Update Item' : 'Add Item'}
+                  </motion.button>
+                </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Transaction Modal */}
+        <AnimatePresence>
+          {txnModalOpen && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+              <motion.div initial={{ opacity: 0, scale: 0.92, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.92, y: 24 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl shadow-black/20">
+                <div className="flex justify-between items-center mb-5">
+                  <h2 className="text-lg font-bold text-stone-900">Add Transaction</h2>
+                  <motion.button whileHover={{ scale: 1.1, rotate: 90 }} whileTap={{ scale: 0.9 }}
+                    onClick={() => setTxnModalOpen(false)} className="p-1.5 rounded-lg hover:bg-stone-100 transition-colors"><X size={18} /></motion.button>
+                </div>
+                <form onSubmit={handleSaveTxn} className="space-y-4">
+                  <div className="flex gap-2">
+                    <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={() => setTxnForm({ ...txnForm, type: 'credit' })}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${txnForm.type === 'credit' ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-500/25' : 'border-stone-200 text-stone-600 hover:border-emerald-300'}`}>Credit (In)</motion.button>
+                    <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={() => setTxnForm({ ...txnForm, type: 'debit' })}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${txnForm.type === 'debit' ? 'bg-rose-600 text-white border-rose-600 shadow-lg shadow-rose-500/25' : 'border-stone-200 text-stone-600 hover:border-rose-300'}`}>Debit (Out)</motion.button>
+                  </div>
+                  <input required type="number" step="0.01" placeholder="Amount" value={txnForm.amount}
+                    onChange={(e) => setTxnForm({ ...txnForm, amount: e.target.value })}
+                    className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
+                  <input placeholder="Party (optional)" value={txnForm.party}
+                    onChange={(e) => setTxnForm({ ...txnForm, party: e.target.value })}
+                    className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Sub-category</label>
+                    <select value={txnForm.function_category_id} onChange={(e) => setTxnForm({ ...txnForm, function_category_id: e.target.value })}
+                      className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
+                      <option value="">Select sub-category (optional)</option>
+                      {(fn.categories || []).map((c) => (
+                        <option key={c.id} value={c.id}>{c.category_name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Category</label>
+                    <select value={txnForm.category_id} onChange={(e) => setTxnForm({ ...txnForm, category_id: e.target.value })}
+                      className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
+                      <option value="">Select category (optional)</option>
+                      {availableCategories.map((c) => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex gap-2">
+                    <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={() => setTxnForm({ ...txnForm, mode: 'cash' })}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${txnForm.mode === 'cash' ? 'bg-saffron-600 text-white border-saffron-600 shadow-lg shadow-saffron-500/25' : 'border-stone-200 text-stone-600 hover:border-saffron-300'}`}>Cash</motion.button>
+                    <motion.button whileTap={{ scale: 0.95 }} type="button" onClick={() => setTxnForm({ ...txnForm, mode: 'digital' })}
+                      className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${txnForm.mode === 'digital' ? 'bg-royal-600 text-white border-royal-600 shadow-lg shadow-royal-500/25' : 'border-stone-200 text-stone-600 hover:border-royal-300'}`}>Digital</motion.button>
+                  </div>
+                  <AnimatePresence>
+                    {txnForm.mode === 'cash' && (
+                      <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }} className="space-y-2">
+                        <label className="text-sm font-semibold text-stone-700">Voucher Filed? <span className="text-rose-500">*</span></label>
+                        <div className="flex gap-2">
+                          <motion.button whileTap={{ scale: 0.95 }} type="button"
+                            onClick={() => setTxnForm({ ...txnForm, voucher_filed: true })}
+                            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${txnForm.voucher_filed === true ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-500/25' : 'border-stone-200 text-stone-600 hover:border-emerald-300'}`}>Yes, Filed</motion.button>
+                          <motion.button whileTap={{ scale: 0.95 }} type="button"
+                            onClick={() => setTxnForm({ ...txnForm, voucher_filed: false })}
+                            className={`flex-1 py-2.5 rounded-xl text-sm font-semibold border-2 transition-all ${txnForm.voucher_filed === false ? 'bg-amber-600 text-white border-amber-600 shadow-lg shadow-amber-500/25' : 'border-stone-200 text-stone-600 hover:border-amber-300'}`}>No, Not Filed</motion.button>
+                        </div>
+                        {txnForm.voucher_filed === null && (
+                          <p className="text-xs text-rose-500">Please select voucher status</p>
+                        )}
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                  <AnimatePresence>
+                    {txnForm.mode === 'digital' && (
+                      <motion.select initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                        exit={{ opacity: 0, height: 0 }} value={txnForm.digital_method}
+                        onChange={(e) => setTxnForm({ ...txnForm, digital_method: e.target.value })}
+                        className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
+                        <option value="upi">UPI</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="card">Card</option>
+                        <option value="cheque">Cheque</option>
+                        <option value="other">Other</option>
+                      </motion.select>
+                    )}
+                  </AnimatePresence>
+                  <input placeholder="Description (optional)" value={txnForm.description}
+                    onChange={(e) => setTxnForm({ ...txnForm, description: e.target.value })}
+                    className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
+                  <input required type="date" value={txnForm.txn_date}
+                    onChange={(e) => setTxnForm({ ...txnForm, txn_date: e.target.value })}
+                    className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} disabled={txnSaving}
+                    className="w-full bg-gradient-to-r from-saffron-500 to-saffron-600 hover:from-saffron-400 hover:to-saffron-500 text-white rounded-xl py-2.5 text-sm font-semibold shadow-lg shadow-saffron-500/25 transition-all disabled:opacity-50">
+                    {txnSaving ? 'Saving...' : 'Add Transaction'}
                   </motion.button>
                 </form>
               </motion.div>

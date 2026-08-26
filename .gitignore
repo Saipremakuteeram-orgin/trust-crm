@@ -21,3 +21,5 @@ backend/logs/
 
 # Encrypted WhatsApp session files
 backend/.wa-sessions/
+
+.vercel

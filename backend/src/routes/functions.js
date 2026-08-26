@@ -309,4 +309,132 @@ router.get('/summary/source-balance', async (req, res) => {
   }
 });
 
+// LIST items for a function category
+router.get('/:id/categories/:catId/items', requireAuth, async (req, res) => {
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('function_category_items')
+      .select('*')
+      .eq('function_category_id', req.params.catId)
+      .order('created_at', { ascending: true });
+    if (error) return res.status(400).json({ success: false, message: error.message });
+    res.json({ success: true, result: data || [] });
+  } catch (err) {
+    console.error('Function category items list error:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to fetch items' });
+  }
+});
+
+// CREATE item for a function category
+router.post('/:id/categories/:catId/items', requireRole('admin', 'accountant'), async (req, res) => {
+  try {
+    const { item_name, quantity, unit_price, notes } = req.body;
+    if (!item_name || !item_name.trim()) return res.status(400).json({ success: false, message: 'Item name is required' });
+
+    const qty = Number(quantity || 1);
+    const price = Number(unit_price || 0);
+    const total = qty * price;
+
+    const { data, error } = await supabaseAdmin
+      .from('function_category_items')
+      .insert({
+        function_category_id: req.params.catId,
+        item_name: item_name.trim(),
+        quantity: qty,
+        unit_price: price,
+        total_amount: total,
+        notes: notes || null,
+      })
+      .select()
+      .single();
+    if (error) return res.status(400).json({ success: false, message: error.message });
+
+    logActivity({
+      userId: req.user.id,
+      userEmail: req.user.email,
+      action: 'create',
+      entity: 'function_category_item',
+      entityId: data.id,
+      details: { function_category_id: req.params.catId, item_name: data.item_name, total_amount: data.total_amount },
+      ipAddress: req.ip,
+    });
+
+    res.json({ success: true, result: data });
+  } catch (err) {
+    console.error('Function category item create error:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to create item' });
+  }
+});
+
+// UPDATE item
+router.patch('/:id/categories/:catId/items/:itemId', requireRole('admin', 'accountant'), async (req, res) => {
+  try {
+    const updates = {};
+    const { item_name, quantity, unit_price, notes } = req.body;
+
+    if (item_name !== undefined) {
+      if (!item_name || !item_name.trim()) return res.status(400).json({ success: false, message: 'Item name is required' });
+      updates.item_name = item_name.trim();
+    }
+    if (quantity !== undefined) updates.quantity = Number(quantity);
+    if (unit_price !== undefined) updates.unit_price = Number(unit_price);
+    if (notes !== undefined) updates.notes = notes || null;
+
+    if (Object.keys(updates).length === 0) return res.status(400).json({ success: false, message: 'No valid fields to update' });
+
+    const qty = updates.quantity !== undefined ? updates.quantity : undefined;
+    const price = updates.unit_price !== undefined ? updates.unit_price : undefined;
+
+    const { data: existing, error: fetchErr } = await supabaseAdmin
+      .from('function_category_items')
+      .select('quantity, unit_price')
+      .eq('id', req.params.itemId)
+      .single();
+    if (fetchErr || !existing) return res.status(404).json({ success: false, message: 'Item not found' });
+
+    const finalQty = qty !== undefined ? qty : existing.quantity;
+    const finalPrice = price !== undefined ? price : existing.unit_price;
+    updates.total_amount = finalQty * finalPrice;
+
+    const { data, error } = await supabaseAdmin
+      .from('function_category_items')
+      .update(updates)
+      .eq('id', req.params.itemId)
+      .select()
+      .single();
+    if (error) return res.status(400).json({ success: false, message: error.message });
+
+    res.json({ success: true, result: data });
+  } catch (err) {
+    console.error('Function category item update error:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to update item' });
+  }
+});
+
+// DELETE item
+router.delete('/:id/categories/:catId/items/:itemId', requireRole('admin', 'accountant'), async (req, res) => {
+  try {
+    const { error } = await supabaseAdmin
+      .from('function_category_items')
+      .delete()
+      .eq('id', req.params.itemId);
+    if (error) return res.status(400).json({ success: false, message: error.message });
+
+    logActivity({
+      userId: req.user.id,
+      userEmail: req.user.email,
+      action: 'delete',
+      entity: 'function_category_item',
+      entityId: req.params.itemId,
+      details: {},
+      ipAddress: req.ip,
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    console.error('Function category item delete error:', err.message);
+    res.status(500).json({ success: false, message: 'Failed to delete item' });
+  }
+});
+
 module.exports = router;

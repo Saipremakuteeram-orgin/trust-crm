@@ -5,7 +5,7 @@ import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
 import {
   Plus, X, Pencil, Trash2, ArrowLeft, RefreshCw,
-  TrendingUp, TrendingDown, PartyPopper, Info
+  TrendingUp, TrendingDown, PartyPopper, Info, ChevronRight, ChevronDown
 } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
@@ -112,6 +112,13 @@ export default function Functions() {
     budget_digital: '',
   });
   const [savingSubCat, setSavingSubCat] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [itemModalOpen, setItemModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState(null);
+  const [activeCategoryId, setActiveCategoryId] = useState(null);
+  const [categoryItems, setCategoryItems] = useState({});
+  const [itemForm, setItemForm] = useState({ item_name: '', quantity: '1', unit_price: '0', notes: '' });
+  const [savingItem, setSavingItem] = useState(false);
   useEscToClose(() => setOpen(false), open);
 
   function load() {
@@ -211,6 +218,7 @@ export default function Functions() {
         budget_cash: '',
         budget_digital: '',
       });
+      setNewCategoryName('');
       setSubCatModalOpen(true);
     }
 
@@ -222,6 +230,7 @@ export default function Functions() {
         budget_cash: String(cat.budget_cash || ''),
         budget_digital: String(cat.budget_digital || ''),
       });
+      setNewCategoryName('');
       setSubCatModalOpen(true);
     }
 
@@ -230,8 +239,15 @@ export default function Functions() {
       if (!subCatForm.category_id) { addToast('Category is required', 'error'); return; }
       setSavingSubCat(true);
       try {
+        let categoryId = subCatForm.category_id;
+        if (categoryId === '__new__') {
+          if (!newCategoryName.trim()) { addToast('New category name is required', 'error'); setSavingSubCat(false); return; }
+          const catRes = await api.post('/categories', { name: newCategoryName.trim() });
+          categoryId = catRes.data.result.id;
+          setAvailableCategories(prev => [...prev, catRes.data.result]);
+        }
         const payload = {
-          category_id: subCatForm.category_id,
+          category_id: categoryId,
           budget_amount: Number(subCatForm.budget_amount) || 0,
           budget_cash: Number(subCatForm.budget_cash) || 0,
           budget_digital: Number(subCatForm.budget_digital) || 0,
@@ -244,7 +260,9 @@ export default function Functions() {
           addToast('Sub-category added', 'success');
         }
         setSubCatModalOpen(false);
-        load();
+        setNewCategoryName('');
+        api.get("/functions").then((res) => setFunctions(res.data.result)).catch(() => setFunctions([]));
+        api.get(`/functions/${fn.id}`).then((res) => setDetail(res.data.result)).catch(() => setDetail(null));
       } catch (err) {
         addToast(err.response?.data?.message || 'Failed to save sub-category', 'error');
       }
@@ -260,6 +278,86 @@ export default function Functions() {
       } catch (err) {
         addToast(err.response?.data?.message || 'Failed to remove sub-category', 'error');
       }
+    }
+
+    async function loadCategoryItems(catId) {
+      try {
+        const res = await api.get(`/functions/${fn.id}/categories/${catId}/items`);
+        setCategoryItems(prev => ({ ...prev, [catId]: res.data.result || [] }));
+      } catch {
+        setCategoryItems(prev => ({ ...prev, [catId]: [] }));
+      }
+    }
+
+    function openAddItem(catId) {
+      setActiveCategoryId(catId);
+      setEditingItem(null);
+      setItemForm({ item_name: '', quantity: '1', unit_price: '0', notes: '' });
+      setItemModalOpen(true);
+      loadCategoryItems(catId);
+    }
+
+    function openEditItem(catId, item) {
+      setActiveCategoryId(catId);
+      setEditingItem(item);
+      setItemForm({
+        item_name: item.item_name || '',
+        quantity: String(item.quantity || 1),
+        unit_price: String(item.unit_price || 0),
+        notes: item.notes || '',
+      });
+      setItemModalOpen(true);
+    }
+
+    async function handleSaveItem(e) {
+      e.preventDefault();
+      if (!itemForm.item_name.trim()) { addToast('Item name is required', 'error'); return; }
+      setSavingItem(true);
+      try {
+        const payload = {
+          item_name: itemForm.item_name.trim(),
+          quantity: Number(itemForm.quantity) || 1,
+          unit_price: Number(itemForm.unit_price) || 0,
+          notes: itemForm.notes || null,
+        };
+        if (editingItem) {
+          await api.patch(`/functions/${fn.id}/categories/${activeCategoryId}/items/${editingItem.id}`, payload);
+          addToast('Item updated', 'success');
+        } else {
+          await api.post(`/functions/${fn.id}/categories/${activeCategoryId}/items`, payload);
+          addToast('Item added', 'success');
+        }
+        setItemModalOpen(false);
+        loadCategoryItems(activeCategoryId);
+        api.get(`/functions/${fn.id}`).then((res) => setDetail(res.data.result)).catch(() => setDetail(null));
+      } catch (err) {
+        addToast(err.response?.data?.message || 'Failed to save item', 'error');
+      }
+      setSavingItem(false);
+    }
+
+    async function handleDeleteItem(item) {
+      if (!window.confirm(`Remove "${item.item_name}"?`)) return;
+      try {
+        await api.delete(`/functions/${fn.id}/categories/${activeCategoryId}/items/${item.id}`);
+        addToast('Item removed', 'success');
+        loadCategoryItems(activeCategoryId);
+        api.get(`/functions/${fn.id}`).then((res) => setDetail(res.data.result)).catch(() => setDetail(null));
+      } catch (err) {
+        addToast(err.response?.data?.message || 'Failed to remove item', 'error');
+      }
+    }
+
+    function toggleItems(catId) {
+      setCategoryItems(prev => {
+        const next = { ...prev };
+        if (next[catId]) {
+          delete next[catId];
+        } else {
+          loadCategoryItems(catId);
+        }
+        return next;
+      });
     }
 
     return (
@@ -344,25 +442,87 @@ export default function Functions() {
                         const spent = Number(cat.spent_total) || 0;
                         const remaining = Number(cat.remaining_total) || 0;
                         const isOver = remaining < 0;
+                        const items = categoryItems[cat.id] || [];
+                        const itemsTotal = items.reduce((s, i) => s + (Number(i.total_amount) || 0), 0);
+                        const showItems = categoryItems[cat.id] !== undefined;
                         return (
-                          <tr key={cat.id} className="border-b border-stone-50">
-                            <td className="py-3 pr-3 font-medium text-stone-800">{cat.category_name}</td>
-                            <td className="py-3 pr-3 text-right text-stone-600">{fmt(budget)}</td>
-                            <td className="py-3 pr-3 text-right text-rose-600">{fmt(spent)}</td>
-                            <td className={`py-3 pr-3 text-right font-semibold ${isOver ? 'text-rose-600' : 'text-emerald-600'}`}>{fmt(remaining)}</td>
-                            {canEdit && (
-                              <td className="py-3 pl-3 text-center">
-                                <div className="flex items-center justify-center gap-1">
-                                  <button onClick={() => openEditSubCat(cat)} className="p-1.5 rounded-lg hover:bg-royal-50 text-stone-400 hover:text-royal-600 transition-colors">
-                                    <Pencil size={14} />
+                          <>
+                            <tr key={cat.id} className="border-b border-stone-50">
+                              <td className="py-3 pr-3">
+                                <div className="flex items-center gap-2">
+                                  <button onClick={() => toggleItems(cat.id)} className="text-stone-400 hover:text-stone-600 transition-colors">
+                                    {showItems ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                                   </button>
-                                  <button onClick={() => handleDeleteSubCat(cat)} className="p-1.5 rounded-lg hover:bg-rose-50 text-stone-400 hover:text-rose-600 transition-colors">
-                                    <Trash2 size={14} />
-                                  </button>
+                                  <span className="font-medium text-stone-800">{cat.category_name}</span>
                                 </div>
                               </td>
+                              <td className="py-3 pr-3 text-right text-stone-600">{fmt(budget)}</td>
+                              <td className="py-3 pr-3 text-right text-rose-600">{fmt(spent)}</td>
+                              <td className={`py-3 pr-3 text-right font-semibold ${isOver ? 'text-rose-600' : 'text-emerald-600'}`}>{fmt(remaining)}</td>
+                              {canEdit && (
+                                <td className="py-3 pl-3 text-center">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button onClick={() => openEditSubCat(cat)} className="p-1.5 rounded-lg hover:bg-royal-50 text-stone-400 hover:text-royal-600 transition-colors">
+                                      <Pencil size={14} />
+                                    </button>
+                                    <button onClick={() => handleDeleteSubCat(cat)} className="p-1.5 rounded-lg hover:bg-rose-50 text-stone-400 hover:text-rose-600 transition-colors">
+                                      <Trash2 size={14} />
+                                    </button>
+                                  </div>
+                                </td>
+                              )}
+                            </tr>
+                            {showItems && (
+                              <tr className="border-b border-stone-100 bg-stone-50/40">
+                                <td colSpan={canEdit ? 5 : 4} className="p-0">
+                                  <div className="px-4 py-3">
+                                    <div className="flex items-center justify-between mb-2">
+                                      <span className="text-xs font-semibold text-stone-500 uppercase tracking-wider">Items</span>
+                                      {canEdit && (
+                                        <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={() => openAddItem(cat.id)}
+                                          className="flex items-center gap-1 bg-saffron-500 hover:bg-saffron-600 text-white text-[10px] font-semibold px-2 py-1 rounded-md shadow-sm">
+                                          <Plus size={10} /> Add Item
+                                        </motion.button>
+                                      )}
+                                    </div>
+                                    {items.length === 0 ? (
+                                      <p className="text-xs text-stone-400">No items yet.</p>
+                                    ) : (
+                                      <div className="space-y-1">
+                                        {items.map((item) => (
+                                          <div key={item.id} className="flex items-center justify-between bg-white rounded-lg px-3 py-2 border border-stone-100">
+                                            <div className="flex-1 min-w-0">
+                                              <div className="text-sm font-medium text-stone-800 truncate">{item.item_name}</div>
+                                              <div className="text-xs text-stone-500">
+                                                Qty: {item.quantity} × {fmt(item.unit_price)}
+                                                {item.notes && <span className="text-stone-400 ml-2 italic">{item.notes}</span>}
+                                              </div>
+                                            </div>
+                                            <div className="flex items-center gap-3 pl-3">
+                                              <span className="text-sm font-semibold text-stone-700">{fmt(item.total_amount)}</span>
+                                              {canEdit && (
+                                                <div className="flex items-center gap-1">
+                                                  <button onClick={() => openEditItem(cat.id, item)} className="p-1 rounded hover:bg-royal-50 text-stone-400 hover:text-royal-600 transition-colors">
+                                                    <Pencil size={12} />
+                                                  </button>
+                                                  <button onClick={() => handleDeleteItem(item)} className="p-1 rounded hover:bg-rose-50 text-stone-400 hover:text-rose-600 transition-colors">
+                                                    <Trash2 size={12} />
+                                                  </button>
+                                                </div>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ))}
+                                        <div className="flex justify-end pt-1">
+                                          <span className="text-xs font-semibold text-stone-600">Items Total: {fmt(itemsTotal)}</span>
+                                        </div>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
                             )}
-                          </tr>
+                          </>
                         );
                       })}
                     </tbody>
@@ -428,17 +588,29 @@ export default function Functions() {
                 <form onSubmit={handleSaveSubCat} className="space-y-4">
                   <div>
                     <label className="block text-xs font-medium text-stone-500 mb-1">Category</label>
-                    <select value={subCatForm.category_id} onChange={(e) => setSubCatForm({ ...subCatForm, category_id: e.target.value })}
+                    <select value={subCatForm.category_id} onChange={(e) => {
+                      const val = e.target.value;
+                      setSubCatForm({ ...subCatForm, category_id: val });
+                      if (val !== '__new__') setNewCategoryName('');
+                    }}
                       disabled={!!editingSubCat}
                       className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors disabled:bg-stone-100 disabled:text-stone-500">
                       {editingSubCat ? (
                         <option value={subCatForm.category_id}>{fn?.categories?.find(c => c.category_id === subCatForm.category_id)?.category_name || 'Selected'}</option>
                       ) : (
-                        getAvailableCategoriesForAdd().map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))
+                        <>
+                          {getAvailableCategoriesForAdd().map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                          <option value="__new__">+ Add new category...</option>
+                        </>
                       )}
                     </select>
+                    {subCatForm.category_id === '__new__' && !editingSubCat && (
+                      <input type="text" placeholder="New category name" value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        className="w-full border-2 border-saffron-300 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-500 transition-colors mt-2" />
+                    )}
                   </div>
                   <div className="grid grid-cols-3 gap-3">
                     <div>
@@ -463,6 +635,56 @@ export default function Functions() {
                   <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} disabled={savingSubCat}
                     className="w-full bg-gradient-to-r from-saffron-500 to-saffron-600 hover:from-saffron-400 hover:to-saffron-500 text-white rounded-xl py-2.5 text-sm font-semibold shadow-lg shadow-saffron-500/25 transition-all disabled:opacity-50">
                     {savingSubCat ? 'Saving...' : editingSubCat ? 'Update Sub-category' : 'Add Sub-category'}
+                  </motion.button>
+                </form>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Item Modal */}
+        <AnimatePresence>
+          {itemModalOpen && activeCategoryId && (
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+              <motion.div initial={{ opacity: 0, scale: 0.92, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={{ opacity: 0, scale: 0.92, y: 24 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+                className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl shadow-black/20">
+                <div className="flex justify-between items-center mb-5">
+                  <h2 className="text-lg font-bold text-stone-900">{editingItem ? 'Edit Item' : 'Add Item'}</h2>
+                  <motion.button whileHover={{ scale: 1.1, rotate: 90 }} whileTap={{ scale: 0.9 }}
+                    onClick={() => setItemModalOpen(false)} className="p-1.5 rounded-lg hover:bg-stone-100 transition-colors"><X size={18} /></motion.button>
+                </div>
+                <form onSubmit={handleSaveItem} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Item Name</label>
+                    <input type="text" required placeholder="e.g., Flower garland, Pooja items" value={itemForm.item_name}
+                      onChange={(e) => setItemForm({ ...itemForm, item_name: e.target.value })}
+                      className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-stone-500 mb-1">Quantity</label>
+                      <input type="number" step="0.01" min="0" placeholder="1" value={itemForm.quantity}
+                        onChange={(e) => setItemForm({ ...itemForm, quantity: e.target.value })}
+                        className="w-full border-2 border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-stone-500 mb-1">Unit Price</label>
+                      <input type="number" step="0.01" min="0" placeholder="0" value={itemForm.unit_price}
+                        onChange={(e) => setItemForm({ ...itemForm, unit_price: e.target.value })}
+                        className="w-full border-2 border-stone-200 rounded-xl px-3 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Notes (optional)</label>
+                    <input type="text" placeholder="e.g., 2 varieties @ different rates" value={itemForm.notes}
+                      onChange={(e) => setItemForm({ ...itemForm, notes: e.target.value })}
+                      className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
+                  </div>
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} disabled={savingItem}
+                    className="w-full bg-gradient-to-r from-saffron-500 to-saffron-600 hover:from-saffron-400 hover:to-saffron-500 text-white rounded-xl py-2.5 text-sm font-semibold shadow-lg shadow-saffron-500/25 transition-all disabled:opacity-50">
+                    {savingItem ? 'Saving...' : editingItem ? 'Update Item' : 'Add Item'}
                   </motion.button>
                 </form>
               </motion.div>

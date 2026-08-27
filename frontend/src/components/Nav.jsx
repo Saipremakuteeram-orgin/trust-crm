@@ -1,6 +1,6 @@
 ﻿import { useState, useEffect, useCallback } from "react";
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, ArrowDownCircle, Users, Shield, History, Table2, UsersRound, FolderCog, Database, FileBarChart, Send, Mail, Repeat, PartyPopper, MessageCircle, GripVertical, BookOpen, TrendingUp, ScrollText, Heart } from "lucide-react";
+import { LayoutDashboard, ArrowDownCircle, Users, Shield, History, Table2, UsersRound, FolderCog, Database, FileBarChart, Send, Mail, Repeat, PartyPopper, MessageCircle, GripVertical, BookOpen, TrendingUp, ScrollText, Heart, CalendarDays } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import api from "../lib/api";
 
@@ -26,6 +26,7 @@ const allItems = [
   { to: "/ledger", label: "General Ledger", icon: ScrollText, roles: ["admin", "accountant"] },
   { to: "/trustees", label: "Trustees", icon: Shield, roles: ["admin", "accountant"] },
   { to: "/beneficiaries", label: "Beneficiaries", icon: Heart, roles: ["admin", "accountant"] },
+  { to: "/compliance", label: "Compliance", icon: CalendarDays, roles: ["admin", "accountant"] },
 ];
 
 function isVisible(item, role) {

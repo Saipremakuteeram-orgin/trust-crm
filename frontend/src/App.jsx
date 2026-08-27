@@ -23,6 +23,7 @@ const Accounts = lazy(() => import("./pages/Accounts"));
   const GeneralLedger = lazy(() => import("./pages/GeneralLedger"));
   const Trustees = lazy(() => import("./pages/Trustees"));
   const Beneficiaries = lazy(() => import("./pages/Beneficiaries"));
+  const Compliance = lazy(() => import("./pages/Compliance"));
   const Functions = lazy(() => import("./pages/Functions"));
 const WhatsApp = lazy(() => import("./pages/WhatsAppPage"));
 
@@ -76,6 +77,7 @@ export default function App() {
       <Route path="/ledger/:accountId" element={<Protected><GeneralLedger /></Protected>} />
       <Route path="/trustees" element={<Protected><Trustees /></Protected>} />
       <Route path="/beneficiaries" element={<Protected><Beneficiaries /></Protected>} />
+      <Route path="/compliance" element={<Protected><Compliance /></Protected>} />
       <Route path="/functions/:id" element={<Protected><Functions /></Protected>} />
         <Route path="/whatsapp" element={<Protected><WhatsApp /></Protected>} />
         <Route path="/contacts" element={<Protected><Contacts /></Protected>} />

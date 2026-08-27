@@ -52,6 +52,7 @@ app.use('/api/groups', require('./routes/groups'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/analytics', requireAuth, require('./routes/analytics'));
 app.use('/api/categories', require('./routes/categories'));
+app.use('/api/accounts', require('./routes/accounts'));
 app.use('/api/users', sensitiveLimiter, require('./routes/users'));
 app.use('/api/logs', require('./routes/logs'));
 app.use('/api/exports', require('./routes/exports'));

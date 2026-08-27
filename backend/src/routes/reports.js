@@ -496,4 +496,162 @@ router.post('/generate', requireRole('admin', 'accountant'), async (req, res) =>
   }
 });
 
+
+
+// GENERAL LEDGER
+router.get('/ledger/:accountId', requireAuth, async (req, res) => {
+  try {
+    const { accountId } = req.params;
+    const { start, end } = req.query;
+
+    let query = supabaseAdmin
+      .from('journal_entry_lines')
+      .select('*, journal_entries(entry_number, entry_date, description, reference, is_posted)')
+      .eq('account_id', accountId)
+      .order('created_at', { ascending: true });
+
+    if (start) query = query.gte('created_at', start);
+    if (end) query = query.lte('created_at', end);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    // Calculate running balance
+    let runningBalance = 0;
+    const lines = (data || []).map(line => {
+      const debit = Number(line.debit) || 0;
+      const credit = Number(line.credit) || 0;
+      runningBalance += debit - credit;
+      return {
+        ...line,
+        running_balance: runningBalance
+      };
+    });
+
+    const totalDebit = lines.reduce((sum, l) => sum + (Number(l.debit) || 0), 0);
+    const totalCredit = lines.reduce((sum, l) => sum + (Number(l.credit) || 0), 0);
+
+    res.json({
+      success: true,
+      result: {
+        lines,
+        total_debit: totalDebit,
+        total_credit: totalCredit,
+        closing_balance: runningBalance
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// BALANCE SHEET
+router.get('/financials/balance-sheet', requireAuth, async (req, res) => {
+  try {
+    const { data: accounts, error } = await supabaseAdmin
+      .from('v_account_balances')
+      .select('*')
+      .order('account_code');
+
+    if (error) throw error;
+
+    const assets = (accounts || []).filter(a => a.type === 'asset');
+    const liabilities = (accounts || []).filter(a => a.type === 'liability');
+    const equity = (accounts || []).filter(a => a.type === 'equity');
+
+    const totalAssets = assets.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+    const totalLiabilities = liabilities.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+    const totalEquity = equity.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+
+    res.json({
+      success: true,
+      result: {
+        assets,
+        liabilities,
+        equity,
+        total_assets: totalAssets,
+        total_liabilities: totalLiabilities,
+        total_equity: totalEquity,
+        is_balanced: Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 0.01
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// PROFIT & LOSS
+router.get('/financials/profit-loss', requireAuth, async (req, res) => {
+  try {
+    const { data: accounts, error } = await supabaseAdmin
+      .from('v_account_balances')
+      .select('*')
+      .order('account_code');
+
+    if (error) throw error;
+
+    const income = (accounts || []).filter(a => a.type === 'income');
+    const expenses = (accounts || []).filter(a => a.type === 'expense');
+
+    const totalIncome = income.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+    const totalExpenses = expenses.reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+    const netProfit = totalIncome - totalExpenses;
+
+    res.json({
+      success: true,
+      result: {
+        income,
+        expenses,
+        total_income: totalIncome,
+        total_expenses: totalExpenses,
+        net_profit: netProfit
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
+// CASH FLOW
+router.get('/financials/cash-flow', requireAuth, async (req, res) => {
+  try {
+    const { data: accounts, error } = await supabaseAdmin
+      .from('v_account_balances')
+      .select('*')
+      .order('account_code');
+
+    if (error) throw error;
+
+    // Simple cash flow based on account types
+    // Operating: Income and Expense accounts
+    // Financing: Equity accounts
+    // Investing: Asset accounts (excluding cash)
+
+    const cashAccount = accounts.find(a => a.type === 'asset' && a.name.toLowerCase().includes('cash'));
+    const bankAccount = accounts.find(a => a.type === 'asset' && a.name.toLowerCase().includes('bank'));
+
+    const operatingIn = accounts.filter(a => a.type === 'income').reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+    const operatingOut = accounts.filter(a => a.type === 'expense').reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+    const financingIn = accounts.filter(a => a.type === 'equity' && (Number(a.balance) || 0) > 0).reduce((sum, a) => sum + (Number(a.balance) || 0), 0);
+    const financingOut = accounts.filter(a => a.type === 'equity' && (Number(a.balance) || 0) < 0).reduce((sum, a) => sum + Math.abs(Number(a.balance) || 0), 0);
+
+    const netCashFlow = operatingIn - operatingOut + financingIn - financingOut;
+
+    res.json({
+      success: true,
+      result: {
+        operating_inflow: operatingIn,
+        operating_outflow: operatingOut,
+        financing_inflow: financingIn,
+        financing_outflow: financingOut,
+        net_cash_flow: netCashFlow,
+        cash_balance: cashAccount ? Number(cashAccount.balance) || 0 : 0,
+        bank_balance: bankAccount ? Number(bankAccount.balance) || 0 : 0
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 module.exports = router;

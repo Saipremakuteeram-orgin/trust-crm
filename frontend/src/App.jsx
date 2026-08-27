@@ -20,6 +20,7 @@ const RecurringTransactions = lazy(() => import("./pages/RecurringTransactions")
 const Accounts = lazy(() => import("./pages/Accounts"));
   const JournalEntries = lazy(() => import("./pages/JournalEntries"));
   const TrialBalance = lazy(() => import("./pages/TrialBalance"));
+  const GeneralLedger = lazy(() => import("./pages/GeneralLedger"));
   const Functions = lazy(() => import("./pages/Functions"));
 const WhatsApp = lazy(() => import("./pages/WhatsAppPage"));
 
@@ -70,6 +71,7 @@ export default function App() {
         <Route path="/accounts" element={<Protected><Accounts /></Protected>} />
       <Route path="/journal" element={<Protected><JournalEntries /></Protected>} />
       <Route path="/trial-balance" element={<Protected><TrialBalance /></Protected>} />
+      <Route path="/ledger/:accountId" element={<Protected><GeneralLedger /></Protected>} />
       <Route path="/functions/:id" element={<Protected><Functions /></Protected>} />
         <Route path="/whatsapp" element={<Protected><WhatsApp /></Protected>} />
         <Route path="/contacts" element={<Protected><Contacts /></Protected>} />

@@ -36,7 +36,7 @@ const cardVariants = {
 };
 
 const CustomTooltip = ({ active, payload, label }) => {
-  if (!active || !payload?.length) return null;
+  if (!active || !payload && length) return null;
   return (
     <div className="bg-white/95 backdrop-blur-sm border border-stone-200 rounded-xl px-4 py-3 shadow-xl">
       <p className="text-xs font-semibold text-stone-500 mb-1">{label}</p>
@@ -465,7 +465,7 @@ function ScheduledReportsTab() {
       setShowForm(false);
       load();
     } catch (err) {
-      addToast(err.response?.data?.message || "Failed to save", "error");
+      addToast(err.response && data && message || "Failed to save", "error");
     }
     setSaving(false);
   }
@@ -512,7 +512,7 @@ function ScheduledReportsTab() {
       addToast(`Report sent to ${r.sentCount} recipient(s) (${r.transactions} txns)`, r.failedCount === 0 ? "success" : "warning");
       load();
     } catch (err) {
-      addToast(err.response?.data?.message || "Send failed", "error");
+      addToast(err.response && data && message || "Send failed", "error");
     }
     setSending(null);
   }
@@ -576,7 +576,7 @@ function ScheduledReportsTab() {
                   <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-stone-100 text-stone-600">
                     {r.delivery_email && <Mail size={10} />}
                     {r.delivery_telegram && <MessageSquare size={10} />}
-                    {r.recipient_mode === "subscribed" ? "Subscribed" : r.recipient_mode === "groups" ? `${r.recipient_group_ids?.length || 0} groups` : `${r.recipient_contact_ids?.length || 0} contacts`}
+                    {r.recipient_mode === "subscribed" ? "Subscribed" : r.recipient_mode === "groups" ? `${r.recipient_group_ids && length || 0} groups` : `${r.recipient_contact_ids && length || 0} contacts`}
                   </span>
                 </div>
 
@@ -640,7 +640,7 @@ function ScheduledReportsTab() {
                           <p className="text-lg font-bold text-stone-800">{preview.recipientCount}</p>
                         </div>
                       </div>
-                      {preview.sample?.length > 0 && (
+                      {preview.sample && length > 0 && (
                         <div className="text-xs text-stone-500">
                           Sample: {preview.sample.slice(0, 3).map((t) => `${t.party || "—"} · ₹${Number(t.amount).toLocaleString("en-IN")}`).join(" | ")}
                           {preview.count > 3 && ` ... +${preview.count - 3} more`}
@@ -717,6 +717,197 @@ function ScheduledReportsTab() {
   );
 }
 
+
+function BalanceSheetTab({ data, loading }) {
+  if (loading) return <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-stone-400"><p>Loading balance sheet...</p></div>;
+  if (!data) return <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-stone-400"><p>No data available.</p></div>;
+
+  const fmt = (n) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n || 0));
+
+  return (
+    <div className="space-y-6">
+      <div className={`p-4 rounded-xl ${data.is_balanced ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
+        <p className="text-sm font-medium">{data.is_balanced ? "Balance Sheet is balanced" : "Balance Sheet is NOT balanced"}</p>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="bg-white rounded-2xl border border-stone-200 p-6">
+          <h3 className="text-lg font-bold text-stone-900 mb-4">Assets</h3>
+          <div className="space-y-2">
+            {data.assets && data.assets.map(a => (
+              <div key={a.account_id} className="flex justify-between text-sm">
+                <span className="text-stone-700">{a.name}</span>
+                <span className="font-medium text-stone-900">{fmt(a.balance)}</span>
+              </div>
+            ))}
+            <div className="border-t border-stone-100 pt-2 mt-2">
+              <div className="flex justify-between text-sm font-bold">
+                <span>Total Assets</span>
+                <span className="text-emerald-700">{fmt(data.total_assets)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-stone-200 p-6">
+          <h3 className="text-lg font-bold text-stone-900 mb-4">Liabilities</h3>
+          <div className="space-y-2">
+            {data.liabilities && data.liabilities.map(a => (
+              <div key={a.account_id} className="flex justify-between text-sm">
+                <span className="text-stone-700">{a.name}</span>
+                <span className="font-medium text-stone-900">{fmt(a.balance)}</span>
+              </div>
+            ))}
+            <div className="border-t border-stone-100 pt-2 mt-2">
+              <div className="flex justify-between text-sm font-bold">
+                <span>Total Liabilities</span>
+                <span className="text-rose-700">{fmt(data.total_liabilities)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-stone-200 p-6">
+          <h3 className="text-lg font-bold text-stone-900 mb-4">Equity</h3>
+          <div className="space-y-2">
+            {data.equity && data.equity.map(a => (
+              <div key={a.account_id} className="flex justify-between text-sm">
+                <span className="text-stone-700">{a.name}</span>
+                <span className="font-medium text-stone-900">{fmt(a.balance)}</span>
+              </div>
+            ))}
+            <div className="border-t border-stone-100 pt-2 mt-2">
+              <div className="flex justify-between text-sm font-bold">
+                <span>Total Equity</span>
+                <span className="text-blue-700">{fmt(data.total_equity)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ProfitLossTab({ data, loading }) {
+  if (loading) return <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-stone-400"><p>Loading profit & loss...</p></div>;
+  if (!data) return <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-stone-400"><p>No data available.</p></div>;
+
+  const fmt = (n) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n || 0));
+
+  return (
+    <div className="space-y-6">
+      <div className={`p-4 rounded-xl ${data.net_profit >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
+        <p className="text-sm font-medium">Net {data.net_profit >= 0 ? "Profit" : "Loss"}: {fmt(data.net_profit)}</p>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-2xl border border-stone-200 p-6">
+          <h3 className="text-lg font-bold text-stone-900 mb-4">Income</h3>
+          <div className="space-y-2">
+            {data.income && data.income.map(a => (
+              <div key={a.account_id} className="flex justify-between text-sm">
+                <span className="text-stone-700">{a.name}</span>
+                <span className="font-medium text-emerald-700">{fmt(a.balance)}</span>
+              </div>
+            ))}
+            <div className="border-t border-stone-100 pt-2 mt-2">
+              <div className="flex justify-between text-sm font-bold">
+                <span>Total Income</span>
+                <span className="text-emerald-700">{fmt(data.total_income)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-stone-200 p-6">
+          <h3 className="text-lg font-bold text-stone-900 mb-4">Expenses</h3>
+          <div className="space-y-2">
+            {data.expenses && data.expenses.map(a => (
+              <div key={a.account_id} className="flex justify-between text-sm">
+                <span className="text-stone-700">{a.name}</span>
+                <span className="font-medium text-rose-700">{fmt(a.balance)}</span>
+              </div>
+            ))}
+            <div className="border-t border-stone-100 pt-2 mt-2">
+              <div className="flex justify-between text-sm font-bold">
+                <span>Total Expenses</span>
+                <span className="text-rose-700">{fmt(data.total_expenses)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function CashFlowTab({ data, loading }) {
+  if (loading) return <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-stone-400"><p>Loading cash flow...</p></div>;
+  if (!data) return <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-stone-400"><p>No data available.</p></div>;
+
+  const fmt = (n) => new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n || 0));
+
+  return (
+    <div className="space-y-6">
+      <div className={`p-4 rounded-xl ${data.net_cash_flow >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}>
+        <p className="text-sm font-medium">Net Cash Flow: {fmt(data.net_cash_flow)}</p>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white rounded-2xl border border-stone-200 p-6">
+          <h3 className="text-lg font-bold text-stone-900 mb-4">Operating Activities</h3>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-stone-700">Cash In (Income)</span>
+              <span className="font-medium text-emerald-700">{fmt(data.operating_inflow)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-stone-700">Cash Out (Expenses)</span>
+              <span className="font-medium text-rose-700">{fmt(data.operating_outflow)}</span>
+            </div>
+            <div className="border-t border-stone-100 pt-2 mt-2">
+              <div className="flex justify-between text-sm font-bold">
+                <span>Net Operating</span>
+                <span className={data.operating_inflow - data.operating_outflow >= 0 ? "text-emerald-700" : "text-rose-700"}>
+                  {fmt(data.operating_inflow - data.operating_outflow)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="bg-white rounded-2xl border border-stone-200 p-6">
+          <h3 className="text-lg font-bold text-stone-900 mb-4">Financing Activities</h3>
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-stone-700">Funds In</span>
+              <span className="font-medium text-emerald-700">{fmt(data.financing_inflow)}</span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-stone-700">Funds Out</span>
+              <span className="font-medium text-rose-700">{fmt(data.financing_outflow)}</span>
+            </div>
+            <div className="border-t border-stone-100 pt-2 mt-2">
+              <div className="flex justify-between text-sm font-bold">
+                <span>Net Financing</span>
+                <span className={data.financing_inflow - data.financing_outflow >= 0 ? "text-emerald-700" : "text-rose-700"}>
+                  {fmt(data.financing_inflow - data.financing_outflow)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="bg-white rounded-2xl border border-stone-200 p-6">
+        <h3 className="text-lg font-bold text-stone-900 mb-4">Cash & Bank Balances</h3>
+        <div className="grid grid-cols-2 gap-4">
+          <div className="p-4 bg-stone-50 rounded-xl">
+            <div className="text-xs text-stone-500 uppercase tracking-wider font-semibold">Cash in Hand</div>
+            <div className="text-2xl font-bold text-stone-900 mt-1">{fmt(data.cash_balance)}</div>
+          </div>
+          <div className="p-4 bg-stone-50 rounded-xl">
+            <div className="text-xs text-stone-500 uppercase tracking-wider font-semibold">Bank Balance</div>
+            <div className="text-2xl font-bold text-stone-900 mt-1">{fmt(data.bank_balance)}</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
 export default function Reports() {
   const [range, setRange] = useState("monthly");
   const [date, setDate] = useState(todayISO());
@@ -806,7 +997,7 @@ export default function Reports() {
   }, [createReportOpen]);
 
   function openTxnModal(filterMode, title, subtitle) {
-    setModal({ open: true, title, subtitle: `${subtitle} · ${data?.label || ""}`, transactions: null, loading: true });
+    setModal({ open: true, title, subtitle: `${subtitle} · ${data && label || ""}`, transactions: null, loading: true });
     api.get("/reports/transactions?" + qs)
       .then((res) => {
         const all = res.data.result || [];
@@ -1010,6 +1201,23 @@ export default function Reports() {
     }
   }
 
+  async function loadFinancials() {
+    setFinancialsLoading(true);
+    try {
+      const [bs, pl, cf] = await Promise.all([
+        api.get("/reports/financials/balance-sheet"),
+        api.get("/reports/financials/profit-loss"),
+        api.get("/reports/financials/cash-flow"),
+      ]);
+      setBalanceSheet(bs.data.result);
+      setProfitLoss(pl.data.result);
+      setCashFlow(cf.data.result);
+    } catch {
+      // silent fail
+    }
+    setFinancialsLoading(false);
+  }
+
   async function handleSaveAsScheduled() {
     // Pre-fill the scheduled report form with current settings
     const scheduledForm = {
@@ -1060,10 +1268,13 @@ export default function Reports() {
 
   const tabs = [
     { id: "analytics", label: "Analytics", icon: FileBarChart },
+    { id: "balance-sheet", label: "Balance Sheet", icon: Landmark },
+    { id: "profit-loss", label: "Profit & Loss", icon: TrendingUp },
+    { id: "cash-flow", label: "Cash Flow", icon: Wallet },
     { id: "scheduled", label: "Scheduled Reports", icon: CalendarClock },
   ];
 
-  const ov = data?.overview || {};
+  const ov = data && overview || {};
 
   return (
     <>
@@ -1122,7 +1333,7 @@ export default function Reports() {
             <div className="flex items-center gap-2 mb-4">
               <Calendar size={16} className="text-saffron-500" />
               <span className="text-sm font-semibold text-stone-700">Select Period</span>
-              {data?.label && <span className="text-xs text-stone-400">({data.label})</span>}
+              {data && label && <span className="text-xs text-stone-400">({data.label})</span>}
             </div>
             <div className="flex flex-wrap gap-2 mb-4">
               {[{ k: "daily", l: "Daily" }, { k: "monthly", l: "Monthly" }, { k: "yearly", l: "Yearly" }, { k: "custom", l: "Custom Range" }].map((o) => (
@@ -1207,7 +1418,7 @@ export default function Reports() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
-                {data.trend?.length > 0 && (
+                {data.trend && length > 0 && (
                   <motion.div custom={4} variants={cardVariants} initial="hidden" animate="visible"
                     className="lg:col-span-2 bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover-lift">
                     <h2 className="text-sm font-semibold text-stone-700 mb-5 flex items-center gap-2">
@@ -1238,7 +1449,7 @@ export default function Reports() {
                   </motion.div>
                 )}
 
-                {data.category_breakdown?.length > 0 && (
+                {data.category_breakdown && length > 0 && (
                   <motion.div custom={5} variants={cardVariants} initial="hidden" animate="visible"
                     className="bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover-lift">
                     <h2 className="text-sm font-semibold text-stone-700 mb-5">Expense Categories</h2>
@@ -1265,13 +1476,13 @@ export default function Reports() {
                 )}
               </div>
 
-              {data.top_parties?.length > 0 && (
+              {data.top_parties && length > 0 && (
                 <motion.div custom={6} variants={cardVariants} initial="hidden" animate="visible"
                   className="bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover-lift mb-8">
                   <h2 className="text-sm font-semibold text-stone-700 mb-5">Top Parties by Volume</h2>
                   <div className="space-y-3">
                     {data.top_parties.slice(0, 8).map((party, i) => {
-                      const maxAmt = data.top_parties[0]?.amount || 1;
+                      const maxAmt = data.top_parties[0] && amount || 1;
                       const pct = (party.amount / maxAmt) * 100;
                       return (
                         <div key={i} className="space-y-1">
@@ -1302,9 +1513,15 @@ export default function Reports() {
             loading={modal.loading}
           />
         </>
+      ) : (activeTab === "balance-sheet" ? (
+        <BalanceSheetTab data={balanceSheet} loading={financialsLoading} />
+      ) : (activeTab === "profit-loss" ? (
+        <ProfitLossTab data={profitLoss} loading={financialsLoading} />
+      ) : (activeTab === "cash-flow" ? (
+        <CashFlowTab data={cashFlow} loading={financialsLoading} />
       ) : (activeTab === "scheduled" ? (
         <ScheduledReportsTab />
-      ) : null)}
+      ) : null))))}
     </AppLayout>
 
     <AnimatePresence>
@@ -1686,7 +1903,7 @@ function CreateReportTab() {
               <p className="text-lg font-bold text-stone-800">{fmt(crPreview.overview.net_balance)}</p>
             </div>
           </div>
-          {crPreview.category_breakdown?.length > 0 && (
+          {crPreview.category_breakdown && length > 0 && (
             <div className="mt-4">
               <p className="text-xs font-semibold text-stone-600 mb-2">Top Categories</p>
               <div className="flex flex-wrap gap-2">

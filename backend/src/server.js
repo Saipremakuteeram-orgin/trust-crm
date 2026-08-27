@@ -56,6 +56,7 @@ app.use('/api/accounts', require('./routes/accounts'));
 app.use('/api/trustees', require('./routes/trustees'));
 app.use('/api/compliance', require('./routes/compliance'));
 app.use('/api/receipts', require('./routes/receipts'));
+app.use('/api/bank-reconciliation', require('./routes/bankReconciliation'));
 app.use('/api/users', sensitiveLimiter, require('./routes/users'));
 app.use('/api/logs', require('./routes/logs'));
 app.use('/api/exports', require('./routes/exports'));

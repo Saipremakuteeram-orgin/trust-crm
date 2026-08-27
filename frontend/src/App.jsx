@@ -17,7 +17,10 @@ const Reports = lazy(() => import("./pages/Reports"));
 const FileSend = lazy(() => import("./pages/FileSend"));
 const Mail = lazy(() => import("./pages/Mail"));
 const RecurringTransactions = lazy(() => import("./pages/RecurringTransactions"));
-const Functions = lazy(() => import("./pages/Functions"));
+const Accounts = lazy(() => import("./pages/Accounts"));
+  const JournalEntries = lazy(() => import("./pages/JournalEntries"));
+  const TrialBalance = lazy(() => import("./pages/TrialBalance"));
+  const Functions = lazy(() => import("./pages/Functions"));
 const WhatsApp = lazy(() => import("./pages/WhatsAppPage"));
 
 function PageLoader() {
@@ -64,7 +67,10 @@ export default function App() {
         <Route path="/transactions" element={<Protected><Transactions /></Protected>} />
         <Route path="/recurring" element={<Protected><RecurringTransactions /></Protected>} />
         <Route path="/functions" element={<Protected><Functions /></Protected>} />
-        <Route path="/functions/:id" element={<Protected><Functions /></Protected>} />
+        <Route path="/accounts" element={<Protected><Accounts /></Protected>} />
+      <Route path="/journal" element={<Protected><JournalEntries /></Protected>} />
+      <Route path="/trial-balance" element={<Protected><TrialBalance /></Protected>} />
+      <Route path="/functions/:id" element={<Protected><Functions /></Protected>} />
         <Route path="/whatsapp" element={<Protected><WhatsApp /></Protected>} />
         <Route path="/contacts" element={<Protected><Contacts /></Protected>} />
         <Route path="/groups" element={<Protected><Groups /></Protected>} />

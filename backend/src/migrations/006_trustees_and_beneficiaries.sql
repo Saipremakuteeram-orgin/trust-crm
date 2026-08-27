@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS beneficiary_disbursements (
   purpose TEXT NOT NULL,
   mode TEXT NOT NULL DEFAULT 'cash' CHECK (mode IN ('cash', 'digital', 'cheque', 'bank_transfer')),
   reference_no TEXT,
-  receipt_file_id UUID REFERENCES drive_files(id),
+  receipt_file_id UUID,
   notes TEXT,
   created_by UUID REFERENCES profiles(id),
   created_at TIMESTAMPTZ DEFAULT NOW(),

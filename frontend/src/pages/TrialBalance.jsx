@@ -23,7 +23,7 @@ export default function TrialBalance() {
     }
     setLoading(false);
   }
-  useEffect(load, []);
+  useEffect(() => { let cancelled = false; load().finally(() => { cancelled = true; }); return () => { cancelled = true; }; }, []);
 
   function exportToExcel() {
     if (!data?.accounts?.length) return;

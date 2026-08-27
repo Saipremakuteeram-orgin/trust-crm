@@ -7,9 +7,6 @@ import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 import useEscToClose from "../hooks/useEscToClose";
 
-const fmt = (n) =>
-  new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n || 0));
-
 const ACCOUNT_TYPES = [
   { value: "asset", label: "Assets", color: "bg-emerald-100 text-emerald-700" },
   { value: "liability", label: "Liabilities", color: "bg-rose-100 text-rose-700" },
@@ -52,7 +49,7 @@ export default function Accounts() {
     }
     setLoading(false);
   }
-  useEffect(load, []);
+  useEffect(() => { let cancelled = false; load().finally(() => { cancelled = true; }); return () => { cancelled = true; }; }, []);
 
   function openAdd(parentId = "") {
     setEditing(null);

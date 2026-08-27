@@ -46,7 +46,7 @@ export default function JournalEntries() {
     }
     setLoading(false);
   }
-  useEffect(load, []);
+  useEffect(() => { let cancelled = false; load().finally(() => { cancelled = true; }); return () => { cancelled = true; }; }, []);
 
   function openAdd() {
     setEditing(null);

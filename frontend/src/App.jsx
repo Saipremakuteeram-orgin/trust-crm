@@ -18,15 +18,15 @@ const FileSend = lazy(() => import("./pages/FileSend"));
 const Mail = lazy(() => import("./pages/Mail"));
 const RecurringTransactions = lazy(() => import("./pages/RecurringTransactions"));
 const Accounts = lazy(() => import("./pages/Accounts"));
-  const JournalEntries = lazy(() => import("./pages/JournalEntries"));
-  const TrialBalance = lazy(() => import("./pages/TrialBalance"));
-  const GeneralLedger = lazy(() => import("./pages/GeneralLedger"));
-  const Trustees = lazy(() => import("./pages/Trustees"));
-  const Beneficiaries = lazy(() => import("./pages/Beneficiaries"));
-  const Compliance = lazy(() => import("./pages/Compliance"));
-  const Receipts = lazy(() => import("./pages/Receipts"));
-  const BankReconciliation = lazy(() => import("./pages/BankReconciliation"));
-  const Functions = lazy(() => import("./pages/Functions"));
+const JournalEntries = lazy(() => import("./pages/JournalEntries"));
+const TrialBalance = lazy(() => import("./pages/TrialBalance"));
+const GeneralLedger = lazy(() => import("./pages/GeneralLedger"));
+const Trustees = lazy(() => import("./pages/Trustees"));
+const Beneficiaries = lazy(() => import("./pages/Beneficiaries"));
+const Compliance = lazy(() => import("./pages/Compliance"));
+const Receipts = lazy(() => import("./pages/Receipts"));
+const BankReconciliation = lazy(() => import("./pages/BankReconciliation"));
+const Functions = lazy(() => import("./pages/Functions"));
 const WhatsApp = lazy(() => import("./pages/WhatsAppPage"));
 
 function PageLoader() {

@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
-import { Plus, X, Pencil, Trash2, Send, BookOpen, CheckCircle2 } from "lucide-react";
+import { Plus, X, Pencil, Trash2, Send, CheckCircle2, Clock, FileText, Calendar } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 import useEscToClose from "../hooks/useEscToClose";
@@ -10,12 +10,7 @@ import useEscToClose from "../hooks/useEscToClose";
 const fmt = (n) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n || 0));
 
-const emptyForm = {
-  entry_date: new Date().toISOString().slice(0, 10),
-  description: "",
-  reference: "",
-  lines: [{ account_id: "", description: "", debit: "", credit: "" }],
-};
+const emptyLine = { account_id: "", description: "", debit: "", credit: "" };
 
 export default function JournalEntries() {
   const { profile } = useAuth();
@@ -26,11 +21,11 @@ export default function JournalEntries() {
   const [entries, setEntries] = useState([]);
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [open, setOpen] = useState(false);
-  const [editing, setEditing] = useState(null);
-  const [form, setForm] = useState({ ...emptyForm });
+  const [modal, setModal] = useState({ open: false, editing: null });
+  const [form, setForm] = useState({ date: new Date().toISOString().slice(0, 10), description: "", reference: "", lines: [{ ...emptyLine }, { ...emptyLine }] });
   const [saving, setSaving] = useState(false);
-  useEscToClose(() => setOpen(false), open);
+  const [posting, setPosting] = useState(false);
+  useEscToClose(() => setModal({ open: false, editing: null }), modal.open);
 
   async function load() {
     setLoading(true);
@@ -40,130 +35,137 @@ export default function JournalEntries() {
         api.get("/accounts"),
       ]);
       setEntries(entriesRes.data.result || []);
-      setAccounts(accountsRes.data.result.flat || []);
+      setAccounts(accountsRes.data.result || []);
     } catch {
       addToast("Failed to load data", "error");
     }
     setLoading(false);
   }
-  useEffect(() => { let cancelled = false; load().finally(() => { cancelled = true; }); return () => { cancelled = true; }; }, []);
+  useEffect(() => { load(); }, []);
 
   function openAdd() {
-    setEditing(null);
-    setForm({ ...emptyForm });
+    setForm({ date: new Date().toISOString().slice(0, 10), description: "", reference: "", lines: [{ ...emptyLine }, { ...emptyLine }] });
+    setModal({ open: true, editing: null });
     setSaving(false);
-    setOpen(true);
   }
 
   function openEdit(entry) {
-    setEditing(entry);
-    const lines = entry.journal_entry_lines?.map(line => ({
-      account_id: line.account_id || "",
-      description: line.description || "",
-      debit: line.debit || "",
-      credit: line.credit || "",
-    })) || [{ account_id: "", description: "", debit: "", credit: "" }];
-
+    const lines = entry.journal_entry_lines?.map(l => ({
+      account_id: l.account_id || "",
+      description: l.description || "",
+      debit: l.debit || "",
+      credit: l.credit || "",
+    })) || [{ ...emptyLine }, { ...emptyLine }];
     setForm({
-      entry_date: entry.entry_date,
+      date: entry.date,
       description: entry.description,
       reference: entry.reference || "",
       lines,
     });
+    setModal({ open: true, editing: entry });
     setSaving(false);
-    setOpen(true);
   }
 
   function addLine() {
-    setForm(prev => ({
-      ...prev,
-      lines: [...prev.lines, { account_id: "", description: "", debit: "", credit: "" }]
-    }));
-  }
-
-  function removeLine(index) {
-    setForm(prev => ({
-      ...prev,
-      lines: prev.lines.filter((_, i) => i !== index)
-    }));
+    setForm({ ...form, lines: [...form.lines, { ...emptyLine }] });
   }
 
   function updateLine(index, field, value) {
-    setForm(prev => ({
-      ...prev,
-      lines: prev.lines.map((line, i) => i === index ? { ...line, [field]: value } : line)
-    }));
+    const newLines = [...form.lines];
+    newLines[index] = { ...newLines[index], [field]: value };
+    setForm({ ...form, lines: newLines });
   }
 
-  async function handleSubmit(e) {
+  function removeLine(index) {
+    if (form.lines.length <= 2) {
+      addToast("At least 2 lines are required", "error");
+      return;
+    }
+    const newLines = form.lines.filter((_, i) => i !== index);
+    setForm({ ...form, lines: newLines });
+  }
+
+  async function handleSave(e) {
     e.preventDefault();
     if (!form.description.trim()) {
       addToast("Description is required", "error");
       return;
     }
-
     const validLines = form.lines.filter(l => l.account_id);
-    if (validLines.length === 0) {
-      addToast("At least one account line is required", "error");
+    if (validLines.length < 2) {
+      addToast("At least 2 lines with accounts are required", "error");
+      return;
+    }
+
+    const totalDebit = form.lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
+    const totalCredit = form.lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
+    if (Math.abs(totalDebit - totalCredit) > 0.01) {
+      addToast("Debits must equal credits", "error");
       return;
     }
 
     setSaving(true);
     try {
       const payload = {
-        entry_date: form.entry_date,
+        date: form.date,
         description: form.description.trim(),
         reference: form.reference.trim() || null,
-        lines: validLines.map(l => ({
+        lines: form.lines.filter(l => l.account_id).map(l => ({
           account_id: l.account_id,
-          description: l.description.trim() || null,
+          description: l.description?.trim() || null,
           debit: Number(l.debit) || 0,
           credit: Number(l.credit) || 0,
         })),
       };
 
-      if (editing) {
-        await api.patch(`/journal-entries/${editing.id}`, payload);
-        addToast("Journal entry updated", "success");
+      if (modal.editing) {
+        await api.patch(`/journal-entries/${modal.editing.id}`, payload);
+        addToast("Entry updated", "success");
       } else {
         await api.post("/journal-entries", payload);
-        addToast("Journal entry created as draft", "success");
+        addToast("Entry created", "success");
       }
-      setOpen(false);
+      setModal({ open: false, editing: null });
       load();
     } catch (err) {
-      addToast(err.response?.data?.message || "Failed to save journal entry", "error");
+      addToast(err.response?.data?.message || "Failed to save entry", "error");
     }
     setSaving(false);
   }
 
   async function handlePost(id) {
+    setPosting(true);
     try {
       await api.post(`/journal-entries/${id}/post`);
-      addToast("Journal entry posted", "success");
+      addToast("Entry posted successfully", "success");
       load();
     } catch (err) {
       addToast(err.response?.data?.message || "Failed to post entry", "error");
     }
+    setPosting(false);
   }
 
   async function handleDelete(id) {
     if (!window.confirm("Delete this journal entry?")) return;
     try {
       await api.delete(`/journal-entries/${id}`);
-      addToast("Journal entry deleted", "success");
+      addToast("Entry deleted", "success");
       load();
     } catch (err) {
       addToast(err.response?.data?.message || "Failed to delete entry", "error");
     }
   }
 
+  const totalDebit = form.lines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
+  const totalCredit = form.lines.reduce((s, l) => s + (Number(l.credit) || 0), 0);
+  const isBalanced = Math.abs(totalDebit - totalCredit) < 0.01;
+
   return (
     <AppLayout>
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
-            <BookOpen className="text-royal-600" size={28} />
+            <FileText className="text-royal-600" size={28} />
             <div>
               <h1 className="text-2xl font-bold text-stone-900">Journal Entries</h1>
               <p className="text-sm text-stone-500">Record and manage double-entry transactions</p>
@@ -181,157 +183,153 @@ export default function JournalEntries() {
           <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-stone-400">
             <p>Loading journal entries...</p>
           </div>
+        ) : entries.length === 0 ? (
+          <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-stone-400">
+            <p>No journal entries yet.</p>
+          </div>
         ) : (
-          <div className="space-y-4">
-            {entries.length === 0 ? (
-              <div className="bg-white rounded-2xl border border-stone-200 p-12 text-center text-stone-400">
-                <p>No journal entries yet. Create your first entry to get started.</p>
-              </div>
-            ) : (
-              entries.map((entry) => (
-                <div key={entry.id} className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
-                  <div className="p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-stone-900">{entry.entry_number}</span>
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${entry.is_posted ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-                            {entry.is_posted ? "Posted" : "Draft"}
+          <div className="bg-white rounded-2xl border border-stone-200 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="text-left text-xs text-stone-400 uppercase tracking-wider bg-stone-50">
+                  <tr>
+                    <th className="py-3 px-4 font-semibold">Entry #</th>
+                    <th className="py-3 px-4 font-semibold">Date</th>
+                    <th className="py-3 px-4 font-semibold">Description</th>
+                    <th className="py-3 px-4 font-semibold text-right">Total Debit</th>
+                    <th className="py-3 px-4 font-semibold text-right">Total Credit</th>
+                    <th className="py-3 px-4 font-semibold">Status</th>
+                    <th className="py-3 px-4 font-semibold text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-stone-50">
+                  {entries.map((entry) => {
+                    const debitTotal = entry.journal_entry_lines?.reduce((s, l) => s + (Number(l.debit) || 0), 0) || 0;
+                    const creditTotal = entry.journal_entry_lines?.reduce((s, l) => s + (Number(l.credit) || 0), 0) || 0;
+                    return (
+                      <tr key={entry.id} className="hover:bg-stone-50">
+                        <td className="py-3 px-4 font-mono text-stone-600">{entry.entry_number}</td>
+                        <td className="py-3 px-4 text-stone-600">{entry.date}</td>
+                        <td className="py-3 px-4">
+                          <div className="text-stone-800">{entry.description}</div>
+                          {entry.reference && <div className="text-xs text-stone-400">Ref: {entry.reference}</div>}
+                        </td>
+                        <td className="py-3 px-4 text-right text-rose-700">{fmt(debitTotal)}</td>
+                        <td className="py-3 px-4 text-right text-emerald-700">{fmt(creditTotal)}</td>
+                        <td className="py-3 px-4">
+                          <span className={`text-xs font-semibold px-2 py-1 rounded-full ${entry.is_posted ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                            {entry.is_posted ? 'Posted' : 'Draft'}
                           </span>
-                        </div>
-                        <div className="text-xs text-stone-500 mt-0.5">{entry.description}</div>
-                        <div className="text-xs text-stone-400">{entry.entry_date} {entry.reference ? `- Ref: ${entry.reference}` : ""}</div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      {!entry.is_posted && canEdit && (
-                        <>
-                          <button onClick={() => handlePost(entry.id)} className="p-2 rounded-lg hover:bg-emerald-50 text-stone-400 hover:text-emerald-600" title="Post">
-                            <Send size={16} />
-                          </button>
-                          <button onClick={() => openEdit(entry)} className="p-2 rounded-lg hover:bg-royal-50 text-stone-400 hover:text-royal-600" title="Edit">
-                            <Pencil size={16} />
-                          </button>
-                          <button onClick={() => handleDelete(entry.id)} className="p-2 rounded-lg hover:bg-rose-50 text-stone-400 hover:text-rose-600" title="Delete">
-                            <Trash2 size={16} />
-                          </button>
-                        </>
-                      )}
-                      {entry.is_posted && (
-                        <CheckCircle2 size={18} className="text-emerald-600" />
-                      )}
-                    </div>
-                  </div>
-                  <div className="border-t border-stone-100 overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-left text-xs text-stone-400 uppercase tracking-wider bg-stone-50">
-                        <tr>
-                          <th className="py-2 px-4 font-semibold">Account</th>
-                          <th className="py-2 px-4 font-semibold">Description</th>
-                          <th className="py-2 px-4 font-semibold text-right">Debit</th>
-                          <th className="py-2 px-4 font-semibold text-right">Credit</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-stone-50">
-                        {entry.journal_entry_lines?.map((line, idx) => (
-                          <tr key={idx}>
-                            <td className="py-2 px-4 text-stone-700">{accounts.find(a => a.id === line.account_id)?.name || "-"}</td>
-                            <td className="py-2 px-4 text-stone-500">{line.description || "-"}</td>
-                            <td className="py-2 px-4 text-right font-medium text-stone-800">{line.debit ? fmt(line.debit) : "-"}</td>
-                            <td className="py-2 px-4 text-right font-medium text-stone-800">{line.credit ? fmt(line.credit) : "-"}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ))
-            )}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          {!entry.is_posted && canEdit && (
+                            <>
+                              <button onClick={() => openEdit(entry)} className="text-stone-400 hover:text-royal-600 mr-2">
+                                <Pencil size={14} />
+                              </button>
+                              <button onClick={() => handlePost(entry.id)} disabled={posting} className="text-stone-400 hover:text-emerald-600 mr-2" title="Post">
+                                <Send size={14} />
+                              </button>
+                              <button onClick={() => handleDelete(entry.id)} className="text-stone-400 hover:text-rose-600">
+                                <Trash2 size={14} />
+                              </button>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
 
-        {/* Add/Edit Modal */}
+        {/* Entry Modal */}
         <AnimatePresence>
-          {open && (
+          {modal.open && (
             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
               <motion.div initial={{ opacity: 0, scale: 0.92, y: 24 }} animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.92, y: 24 }} transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-                className="bg-white rounded-2xl p-6 w-full max-w-2xl shadow-2xl shadow-black/20 max-h-[90vh] overflow-y-auto">
+                className="bg-white rounded-2xl p-6 w-full max-w-3xl shadow-2xl shadow-black/20 max-h-[90vh] overflow-y-auto">
                 <div className="flex justify-between items-center mb-5">
-                  <h2 className="text-lg font-bold text-stone-900">{editing ? "Edit Journal Entry" : "New Journal Entry"}</h2>
+                  <h2 className="text-lg font-bold text-stone-900">{modal.editing ? "Edit Journal Entry" : "New Journal Entry"}</h2>
                   <motion.button whileHover={{ scale: 1.1, rotate: 90 }} whileTap={{ scale: 0.9 }}
-                    onClick={() => setOpen(false)} className="p-1.5 rounded-lg hover:bg-stone-100 transition-colors"><X size={18} /></motion.button>
+                    onClick={() => setModal({ open: false, editing: null })} className="p-1.5 rounded-lg hover:bg-stone-100 transition-colors"><X size={18} /></motion.button>
                 </div>
-                <form onSubmit={handleSubmit} className="space-y-4">
+                <form onSubmit={handleSave} className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-xs font-medium text-stone-500 mb-1">Date</label>
-                      <input type="date" required value={form.entry_date}
-                        onChange={(e) => setForm({ ...form, entry_date: e.target.value })}
+                      <input type="date" required value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })}
                         className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
                     </div>
                     <div>
-                      <label className="block text-xs font-medium text-stone-500 mb-1">Reference (optional)</label>
-                      <input type="text" placeholder="Invoice #, Receipt #" value={form.reference}
-                        onChange={(e) => setForm({ ...form, reference: e.target.value })}
+                      <label className="block text-xs font-medium text-stone-500 mb-1">Reference</label>
+                      <input type="text" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })}
                         className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
                     </div>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-stone-500 mb-1">Description</label>
-                    <input type="text" required placeholder="e.g., Payment for event supplies" value={form.description}
-                      onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    <input type="text" required value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
                       className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
                   </div>
 
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="text-xs font-medium text-stone-500">Lines</label>
-                      <button type="button" onClick={addLine} className="text-xs text-saffron-600 hover:text-saffron-700 font-medium">+ Add Line</button>
+                  <div className="border-2 border-stone-200 rounded-xl overflow-hidden">
+                    <div className="bg-stone-50 px-4 py-2 border-b border-stone-200">
+                      <h3 className="text-xs font-semibold text-stone-700 uppercase tracking-wider">Entry Lines</h3>
                     </div>
-                    <div className="space-y-2">
-                      {form.lines.map((line, idx) => (
-                        <div key={idx} className="grid grid-cols-12 gap-2 items-start">
-                          <div className="col-span-4">
-                            <select value={line.account_id} onChange={(e) => updateLine(idx, "account_id", e.target.value)}
-                              className="w-full border-2 border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-saffron-400 transition-colors">
-                              <option value="">Select account</option>
+                    <div className="divide-y divide-stone-100">
+                      {form.lines.map((line, index) => (
+                        <div key={index} className="p-3 grid grid-cols-12 gap-2 items-center">
+                          <div className="col-span-12 sm:col-span-4">
+                            <select value={line.account_id} onChange={(e) => updateLine(index, "account_id", e.target.value)}
+                              className="w-full border-2 border-stone-200 rounded-lg px-3 py-2 text-sm focus:border-saffron-400 transition-colors">
+                              <option value="">Select Account</option>
                               {accounts.map(a => (
-                                <option key={a.id} value={a.id}>{a.name} ({a.account_code})</option>
+                                <option key={a.id} value={a.id}>{a.account_code ? `${a.account_code} - ` : ''}{a.name}</option>
                               ))}
                             </select>
                           </div>
-                          <div className="col-span-3">
-                            <input type="text" placeholder="Description" value={line.description}
-                              onChange={(e) => updateLine(idx, "description", e.target.value)}
-                              className="w-full border-2 border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-saffron-400 transition-colors" />
+                          <div className="col-span-6 sm:col-span-3">
+                            <input type="text" placeholder="Description" value={line.description} onChange={(e) => updateLine(index, "description", e.target.value)}
+                              className="w-full border-2 border-stone-200 rounded-lg px-3 py-2 text-sm focus:border-saffron-400 transition-colors" />
                           </div>
-                          <div className="col-span-2">
-                            <input type="number" step="0.01" placeholder="Debit" value={line.debit}
-                              onChange={(e) => updateLine(idx, "debit", e.target.value)}
-                              className="w-full border-2 border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-saffron-400 transition-colors" />
+                          <div className="col-span-3 sm:col-span-2">
+                            <input type="number" step="0.01" placeholder="Debit" value={line.debit} onChange={(e) => updateLine(index, "debit", e.target.value)}
+                              className="w-full border-2 border-stone-200 rounded-lg px-3 py-2 text-sm focus:border-saffron-400 transition-colors" />
                           </div>
-                          <div className="col-span-2">
-                            <input type="number" step="0.01" placeholder="Credit" value={line.credit}
-                              onChange={(e) => updateLine(idx, "credit", e.target.value)}
-                              className="w-full border-2 border-stone-200 rounded-xl px-3 py-2 text-sm focus:border-saffron-400 transition-colors" />
+                          <div className="col-span-3 sm:col-span-2">
+                            <input type="number" step="0.01" placeholder="Credit" value={line.credit} onChange={(e) => updateLine(index, "credit", e.target.value)}
+                              className="w-full border-2 border-stone-200 rounded-lg px-3 py-2 text-sm focus:border-saffron-400 transition-colors" />
                           </div>
-                          <div className="col-span-1 flex items-center justify-center">
-                            {form.lines.length > 1 && (
-                              <button type="button" onClick={() => removeLine(idx)} className="p-1.5 rounded-lg hover:bg-rose-50 text-stone-400 hover:text-rose-600">
-                                <Trash2 size={14} />
-                              </button>
-                            )}
+                          <div className="col-span-12 sm:col-span-1 flex justify-end">
+                            <button type="button" onClick={() => removeLine(index)} className="p-1 rounded hover:bg-rose-50 text-stone-400 hover:text-rose-600">
+                              <Trash2 size={14} />
+                            </button>
                           </div>
                         </div>
                       ))}
                     </div>
+                    <div className="bg-stone-50 px-4 py-3 border-t border-stone-200 flex items-center justify-between">
+                      <button type="button" onClick={addLine} className="flex items-center gap-1 text-xs font-semibold text-saffron-600 hover:text-saffron-700">
+                        <Plus size={14} /> Add Line
+                      </button>
+                      <div className="flex items-center gap-4 text-sm">
+                        <span className="text-stone-600">Debit: <span className="font-semibold">{fmt(totalDebit)}</span></span>
+                        <span className="text-stone-600">Credit: <span className="font-semibold">{fmt(totalCredit)}</span></span>
+                        <span className={`font-semibold ${isBalanced ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {isBalanced ? 'Balanced' : 'Not Balanced'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
-                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} disabled={saving}
+                  <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} disabled={saving || !isBalanced}
                     className="w-full bg-gradient-to-r from-saffron-500 to-saffron-600 hover:from-saffron-400 hover:to-saffron-500 text-white rounded-xl py-2.5 text-sm font-semibold shadow-lg shadow-saffron-500/25 transition-all disabled:opacity-50">
-                    {saving ? "Saving..." : editing ? "Update Entry" : "Save as Draft"}
+                    {saving ? "Saving..." : modal.editing ? "Update Entry" : "Create Entry"}
                   </motion.button>
                 </form>
               </motion.div>

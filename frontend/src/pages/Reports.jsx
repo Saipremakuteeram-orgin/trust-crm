@@ -946,6 +946,10 @@ export default function Reports() {
   const [crCategoriesList, setCrCategoriesList] = useState([]);
   const [crContacts, setCrContacts] = useState([]);
   const [crGroups, setCrGroups] = useState([]);
+  const [balanceSheet, setBalanceSheet] = useState(null);
+  const [profitLoss, setProfitLoss] = useState(null);
+  const [cashFlow, setCashFlow] = useState(null);
+  const [financialsLoading, setFinancialsLoading] = useState(false);
 
   const query = useMemo(() => {
     const q = { range };
@@ -995,6 +999,14 @@ export default function Reports() {
       }).catch(() => {});
     }
   }, [createReportOpen]);
+
+  useEffect(() => {
+    if (activeTab === "balance-sheet" || activeTab === "profit-loss" || activeTab === "cash-flow") {
+      if (!balanceSheet && !financialsLoading) {
+        loadFinancials();
+      }
+    }
+  }, [activeTab]);
 
   function openTxnModal(filterMode, title, subtitle) {
     setModal({ open: true, title, subtitle: `${subtitle} · ${data && label || ""}`, transactions: null, loading: true });

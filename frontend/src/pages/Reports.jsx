@@ -36,7 +36,7 @@ const cardVariants = {
 };
 
 const CustomTooltip = ({ active, payload, label }) => {
-  if (!active || !payload && length) return null;
+  if (!active || !payload || !payload.length) return null;
   return (
     <div className="bg-white/95 backdrop-blur-sm border border-stone-200 rounded-xl px-4 py-3 shadow-xl">
       <p className="text-xs font-semibold text-stone-500 mb-1">{label}</p>
@@ -1274,7 +1274,7 @@ export default function Reports() {
     { id: "scheduled", label: "Scheduled Reports", icon: CalendarClock },
   ];
 
-  const ov = data && overview || {};
+  const ov = data && data.overview || {};
 
   return (
     <>
@@ -1333,7 +1333,7 @@ export default function Reports() {
             <div className="flex items-center gap-2 mb-4">
               <Calendar size={16} className="text-saffron-500" />
               <span className="text-sm font-semibold text-stone-700">Select Period</span>
-              {data && label && <span className="text-xs text-stone-400">({data.label})</span>}
+              {data && data.label && <span className="text-xs text-stone-400">({data.label})</span>}
             </div>
             <div className="flex flex-wrap gap-2 mb-4">
               {[{ k: "daily", l: "Daily" }, { k: "monthly", l: "Monthly" }, { k: "yearly", l: "Yearly" }, { k: "custom", l: "Custom Range" }].map((o) => (
@@ -1418,7 +1418,7 @@ export default function Reports() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
-                {data.trend && length > 0 && (
+                {data.trend && data.trend.length > 0 && (
                   <motion.div custom={4} variants={cardVariants} initial="hidden" animate="visible"
                     className="lg:col-span-2 bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover-lift">
                     <h2 className="text-sm font-semibold text-stone-700 mb-5 flex items-center gap-2">
@@ -1449,7 +1449,7 @@ export default function Reports() {
                   </motion.div>
                 )}
 
-                {data.category_breakdown && length > 0 && (
+                {data.category_breakdown && data.category_breakdown.length > 0 && (
                   <motion.div custom={5} variants={cardVariants} initial="hidden" animate="visible"
                     className="bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover-lift">
                     <h2 className="text-sm font-semibold text-stone-700 mb-5">Expense Categories</h2>
@@ -1476,7 +1476,7 @@ export default function Reports() {
                 )}
               </div>
 
-              {data.top_parties && length > 0 && (
+              {data.top_parties && data.top_parties.length > 0 && (
                 <motion.div custom={6} variants={cardVariants} initial="hidden" animate="visible"
                   className="bg-white rounded-2xl border border-stone-200/80 p-6 shadow-sm hover-lift mb-8">
                   <h2 className="text-sm font-semibold text-stone-700 mb-5">Top Parties by Volume</h2>
@@ -1798,7 +1798,7 @@ export default function Reports() {
                           <p className="text-lg font-bold text-stone-800">{fmt(crPreview.overview.net_balance)}</p>
                         </div>
                       </div>
-                      {crPreview.category_breakdown && length > 0 && (
+                      {crPreview.category_breakdown && crPreview.category_breakdown.length > 0 && (
                         <div className="mt-4">
                           <p className="text-xs font-semibold text-stone-600 mb-2">Top Categories</p>
                           <div className="flex flex-wrap gap-2">

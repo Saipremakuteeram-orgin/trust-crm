@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS chart_of_accounts (
 CREATE TABLE IF NOT EXISTS journal_entries (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   entry_number TEXT UNIQUE,
-  date DATE NOT NULL DEFAULT CURRENT_DATE,
+  entry_date DATE NOT NULL DEFAULT CURRENT_DATE,
   description TEXT NOT NULL,
   reference TEXT,
   is_posted BOOLEAN DEFAULT FALSE,
@@ -55,7 +55,7 @@ GROUP BY coa.id, coa.account_code, coa.name, coa.type;
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_chart_of_accounts_type ON chart_of_accounts(type);
 CREATE INDEX IF NOT EXISTS idx_chart_of_accounts_parent ON chart_of_accounts(parent_id);
-CREATE INDEX IF NOT EXISTS idx_journal_entries_date ON journal_entries(date);
+CREATE INDEX IF NOT EXISTS idx_journal_entries_date ON journal_entries(entry_date);
 CREATE INDEX IF NOT EXISTS idx_journal_entries_posted ON journal_entries(is_posted);
 CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_entry ON journal_entry_lines(journal_entry_id);
 CREATE INDEX IF NOT EXISTS idx_journal_entry_lines_account ON journal_entry_lines(account_id);

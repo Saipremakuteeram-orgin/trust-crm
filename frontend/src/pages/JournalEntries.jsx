@@ -57,7 +57,7 @@ export default function JournalEntries() {
       credit: l.credit || "",
     })) || [{ ...emptyLine }, { ...emptyLine }];
     setForm({
-      date: entry.date,
+      date: entry.entry_date,
       description: entry.description,
       reference: entry.reference || "",
       lines,
@@ -209,7 +209,7 @@ export default function JournalEntries() {
                     return (
                       <tr key={entry.id} className="hover:bg-stone-50">
                         <td className="py-3 px-4 font-mono text-stone-600">{entry.entry_number}</td>
-                        <td className="py-3 px-4 text-stone-600">{entry.date}</td>
+                            <td className="py-3 px-4 text-stone-600">{entry.entry_date}</td>
                         <td className="py-3 px-4">
                           <div className="text-stone-800">{entry.description}</div>
                           {entry.reference && <div className="text-xs text-stone-400">Ref: {entry.reference}</div>}

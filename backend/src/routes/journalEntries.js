@@ -16,7 +16,7 @@ router.get('/journal-entries', async (req, res) => {
     let query = supabaseAdmin
       .from('journal_entries')
       .select('*, profiles(full_name, email), journal_entry_lines(*, chart_of_accounts(name, account_code))', { count: 'exact' })
-      .order('date', { ascending: false })
+      .order('entry_date', { ascending: false })
       .range(offset, offset + Number(limit) - 1);
 
     if (is_posted !== undefined) query = query.eq('is_posted', is_posted === 'true');
@@ -51,7 +51,7 @@ router.post('/journal-entries', requireRole('admin', 'accountant'), async (req, 
       .from('journal_entries')
       .insert({
         entry_number: entryNumber,
-        date: date || new Date().toISOString().slice(0, 10),
+        entry_date: date || new Date().toISOString().slice(0, 10),
         description: description.trim(),
         reference: reference?.trim() || null,
         created_by: req.user.id,
@@ -104,7 +104,7 @@ router.patch('/journal-entries/:id', requireRole('admin', 'accountant'), async (
     if (entry.data?.is_posted) return res.status(400).json({ success: false, message: 'Cannot edit posted entry' });
 
     const updates = {};
-    if (date !== undefined) updates.date = date;
+    if (date !== undefined) updates.entry_date = date;
     if (description !== undefined) updates.description = description.trim();
     if (reference !== undefined) updates.reference = reference?.trim() || null;
 

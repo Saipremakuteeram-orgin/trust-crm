@@ -15,7 +15,7 @@ export default function TrialBalance() {
   async function load() {
     setLoading(true);
     try {
-      const res = await api.get("/trial-balance");
+      const res = await api.get("/accounts/trial-balance");
       setData(res.data.result || []);
       setTotals(res.data.totals || { total_debit: 0, total_credit: 0 });
     } catch {

@@ -38,7 +38,7 @@ CREATE TABLE IF NOT EXISTS journal_entry_lines (
 );
 
 -- Account Balances (running balance per account)
-CREATE OR REPLACE VIEW account_balances AS
+CREATE OR REPLACE VIEW v_account_balances AS
 SELECT
   coa.id AS account_id,
   coa.account_code,

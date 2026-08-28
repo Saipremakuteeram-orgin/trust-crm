@@ -37,7 +37,8 @@ CREATE TABLE IF NOT EXISTS journal_entry_lines (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Account Balances (running balance per account)
+-- Account Balances view (running balance per account)
+DROP VIEW IF EXISTS account_balances CASCADE;
 CREATE OR REPLACE VIEW v_account_balances AS
 SELECT
   coa.id AS account_id,
@@ -51,6 +52,9 @@ LEFT JOIN journal_entry_lines jel ON jel.account_id = coa.id
 LEFT JOIN journal_entries je ON je.id = jel.journal_entry_id AND je.is_posted = TRUE
 WHERE coa.is_active = TRUE
 GROUP BY coa.id, coa.account_code, coa.name, coa.type;
+
+-- Compatibility alias
+CREATE VIEW account_balances AS SELECT * FROM v_account_balances;
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_chart_of_accounts_type ON chart_of_accounts(type);

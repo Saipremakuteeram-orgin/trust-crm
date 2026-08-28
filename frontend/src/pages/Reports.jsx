@@ -1494,7 +1494,7 @@ export default function Reports() {
                   <h2 className="text-sm font-semibold text-stone-700 mb-5">Top Parties by Volume</h2>
                   <div className="space-y-3">
                     {data.top_parties.slice(0, 8).map((party, i) => {
-                      const maxAmt = data.top_parties[0] && amount || 1;
+                       const maxAmt = data.top_parties[0] && data.top_parties[0].amount || 1;
                       const pct = (party.amount / maxAmt) * 100;
                       return (
                         <div key={i} className="space-y-1">

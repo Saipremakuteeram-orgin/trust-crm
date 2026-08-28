@@ -96,27 +96,33 @@ ALTER TABLE journal_entries ENABLE ROW LEVEL SECURITY;
 ALTER TABLE journal_entry_lines ENABLE ROW LEVEL SECURITY;
 
 -- Chart of Accounts policies
+DROP POLICY IF EXISTS "Chart of accounts viewable by authenticated" ON chart_of_accounts;
 CREATE POLICY "Chart of accounts viewable by authenticated" ON chart_of_accounts
   FOR SELECT USING (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Chart of accounts manageable by admin" ON chart_of_accounts;
 CREATE POLICY "Chart of accounts manageable by admin" ON chart_of_accounts
   FOR ALL USING (
     EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role = 'admin')
   );
 
 -- Journal entries policies
+DROP POLICY IF EXISTS "Journal entries viewable by authenticated" ON journal_entries;
 CREATE POLICY "Journal entries viewable by authenticated" ON journal_entries
   FOR SELECT USING (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Journal entries manageable by admin/accountant" ON journal_entries;
 CREATE POLICY "Journal entries manageable by admin/accountant" ON journal_entries
   FOR ALL USING (
     EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin', 'accountant'))
   );
 
 -- Journal entry lines policies
+DROP POLICY IF EXISTS "Journal entry lines viewable by authenticated" ON journal_entry_lines;
 CREATE POLICY "Journal entry lines viewable by authenticated" ON journal_entry_lines
   FOR SELECT USING (auth.role() = 'authenticated');
 
+DROP POLICY IF EXISTS "Journal entry lines manageable by admin/accountant" ON journal_entry_lines;
 CREATE POLICY "Journal entry lines manageable by admin/accountant" ON journal_entry_lines
   FOR ALL USING (
     EXISTS (SELECT 1 FROM profiles p WHERE p.id = auth.uid() AND p.role IN ('admin', 'accountant'))

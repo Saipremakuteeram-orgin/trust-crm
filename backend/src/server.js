@@ -73,6 +73,10 @@ app.use('/api/recurring-transactions', require('./routes/recurringTransactions')
 app.use('/api/functions', require('./routes/functions'));
 app.use('/api/whatsapp', require('./routes/whatsapp'));
 
+// Website -> CRM bridge: when a new event is created on the trust website,
+// auto-create a budget Function here so its expenses can be tracked.
+app.use('/api/webhooks', require('./routes/webhookWebsiteEvent'));
+
 // WhatsApp Web reverse proxy — serves web.whatsapp.com from our own origin
 // so it can be embedded in an iframe (strips WhatsApp's frame-ancestors CSP).
 app.use('/wa', proxyHandler);

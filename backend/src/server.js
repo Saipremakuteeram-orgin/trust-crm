@@ -76,6 +76,11 @@ app.use('/api/whatsapp', require('./routes/whatsapp'));
 // Website -> CRM bridge: when a new event is created on the trust website,
 // auto-create a budget Function here so its expenses can be tracked.
 app.use('/api/webhooks', require('./routes/webhookWebsiteEvent'));
+// Website -> CRM bridge: when a donation is captured on the website, record it
+// as a digital-credit (income) transaction in the CRM ledger.
+app.use('/api/webhooks', require('./routes/webhookWebsiteDonation'));
+// Website -> CRM bridge: when a devotee registers/signs up, save a CRM contact.
+app.use('/api/webhooks', require('./routes/webhookWebsiteContact'));
 
 // WhatsApp Web reverse proxy — serves web.whatsapp.com from our own origin
 // so it can be embedded in an iframe (strips WhatsApp's frame-ancestors CSP).

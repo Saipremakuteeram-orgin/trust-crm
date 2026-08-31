@@ -46,7 +46,8 @@ router.post('/website-contact', async (req, res) => {
     return res.status(400).json({ success: false, message: 'consent is required to store a contact' });
   }
 
-  // 3) Upsert on email (merge name/phone/source if already present)
+  // 3) Upsert on email (merge name/phone/source if already present).
+  // The contacts.email unique index (migration 014) makes upsert safe.
   const email = String(c.email).trim().toLowerCase();
   const row = {
     name: (c.name || '').toString().trim() || null,
@@ -56,19 +57,45 @@ router.post('/website-contact', async (req, res) => {
     enabled: true,
   };
 
-  const { data, error } = await supabaseAdmin
+  // Check if a contact with this email already exists.
+  const { data: found } = await supabaseAdmin
     .from('contacts')
-    .upsert(row, { onConflict: 'email' })
-    .select()
-    .single();
+    .select('id')
+    .eq('email', email)
+    .maybeSingle();
+
+  let data, error;
+  if (found) {
+    const { data: upd, error: updErr } = await supabaseAdmin
+      .from('contacts')
+      .update({ name: row.name, phone: row.phone, source: row.source, enabled: true })
+      .eq('id', found.id)
+      .select()
+      .single();
+    data = upd; error = updErr;
+  } else {
+    const { data: ins, error: insErr } = await supabaseAdmin
+      .from('contacts')
+      .insert(row)
+      .select()
+      .single();
+    data = ins; error = insErr;
+  }
 
   if (error) {
     const missingTable = error.code === '42P01' || /does not exist/.test(error.message || '');
     const missingCol = error.code === '42703' || /column/.test(error.message || '');
+    const noUnique = error.code === '42P10' || /unique|upsert|on conflict/i.test(error.message || '');
     if (missingTable || missingCol) {
       return res.status(500).json({
         success: false,
-        message: 'contacts table missing. Ensure the CRM database is migrated (run backend migrations).',
+        message: 'contacts table/columns missing. Ensure the CRM database is migrated (run backend migrations).',
+      });
+    }
+    if (noUnique) {
+      return res.status(500).json({
+        success: false,
+        message: 'contacts.email unique index missing. Run migration 014_contacts_email_unique.sql in the Supabase SQL editor.',
       });
     }
     return res.status(400).json({ success: false, message: error.message });
@@ -77,14 +104,14 @@ router.post('/website-contact', async (req, res) => {
   await logActivity({
     userId: null,
     userEmail: 'website-automation@saidharmasamrakshanapremakuteeram.qzz.io',
-    action: 'create',
+    action: found ? 'update' : 'create',
     entity: 'contact',
     entityId: data.id,
     details: { email: data.email, source: 'website_registration' },
     ipAddress: req.ip,
   });
 
-  return res.json({ success: true, contactId: data.id, merged: !!data.updated_at });
+  return res.json({ success: true, contactId: data.id, merged: !!found });
 });
 
 module.exports = router;

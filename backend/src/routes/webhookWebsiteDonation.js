@@ -76,7 +76,6 @@ router.post('/website-donation', async (req, res) => {
     description: description,
     txn_date: txnDate,
     reference_no: String(d.payment_id),
-    digital_method: d.method === 'auto' ? 'razorpay_autopay' : 'razorpay',
     source: 'website_donation',
     source_payment_id: String(d.payment_id),
     created_by: null,
@@ -92,6 +91,10 @@ router.post('/website-donation', async (req, res) => {
       .maybeSingle();
     if (fn) insertData.function_id = fn.id;
   }
+
+  // digital_method must be a valid enum value:
+  // ('upi','bank_transfer','card','cheque','other')
+  insertData.digital_method = d.method === 'auto' ? 'other' : 'upi';
 
   const { data, error } = await supabaseAdmin
     .from('transactions')

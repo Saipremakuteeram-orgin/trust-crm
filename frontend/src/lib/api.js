@@ -42,11 +42,16 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401 && window.location.pathname !== '/login') {
-      cachedToken = null;
-      tokenExpiry = 0;
-      refreshPromise = null;
-      window.location.href = '/login';
+    if (error.response?.status === 401) {
+      const path = window.location.pathname;
+      const isAuthRoute = path === '/login' || path === '/m/login' || path.startsWith('/m/login');
+      if (!isAuthRoute) {
+        cachedToken = null;
+        tokenExpiry = 0;
+        refreshPromise = null;
+        const target = path.startsWith('/m') ? '/m/login' : '/login';
+        window.location.href = target;
+      }
     }
     return Promise.reject(error);
   }

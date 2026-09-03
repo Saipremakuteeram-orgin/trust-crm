@@ -1,7 +1,8 @@
 import { lazy, Suspense } from "react";
-import { Routes, Route, Navigate } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "./lib/AuthContext";
+import MobileApp from "./mobile/MobileApp";
 
 const Login = lazy(() => import("./pages/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -65,6 +66,10 @@ function AdminProtected({ children }) {
 }
 
 export default function App() {
+  const location = useLocation();
+  if (location.pathname.startsWith("/m")) {
+    return <MobileApp />;
+  }
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
@@ -94,6 +99,7 @@ export default function App() {
         <Route path="/file-send" element={<Protected><FileSend /></Protected>} />
         <Route path="/mail" element={<Protected><Mail /></Protected>} />
         <Route path="/reports" element={<Protected><Reports /></Protected>} />
+        <Route path="/m/*" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Suspense>

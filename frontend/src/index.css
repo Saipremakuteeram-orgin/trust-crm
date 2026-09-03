@@ -324,3 +324,31 @@ input:focus, select:focus, textarea:focus {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ===== MOBILE UTILITIES ===== */
+
+.m-safe-top { padding-top: env(safe-area-inset-top); }
+.m-safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+
+.m-tap { min-height: 44px; min-width: 44px; }
+
+.m-card {
+  background: #fff;
+  border: 1px solid rgba(214, 211, 209, 0.6);
+  border-radius: 1rem;
+  padding: 1rem;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.m-list > * + * { border-top: 1px solid #f5f5f4; }
+
+.m-sheet { border-top-left-radius: 1.5rem; border-top-right-radius: 1.5rem; }
+
+.m-snap-x { scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; }
+.m-snap-x > * { scroll-snap-align: start; }
+
+.m-no-select { user-select: none; -webkit-user-select: none; }
+
+/* Hide scrollbar inside swipe rows but keep functionality */
+.m-snap-x::-webkit-scrollbar { display: none; }
+.m-snap-x { scrollbar-width: none; }

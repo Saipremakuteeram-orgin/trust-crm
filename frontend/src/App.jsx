@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "./lib/AuthContext";
-import MobileApp from "./mobile/MobileApp";
+import MobileApp from "./mobile2/MobileApp";
 
 const Login = lazy(() => import("./pages/Login"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -67,7 +67,7 @@ function AdminProtected({ children }) {
 
 export default function App() {
   const location = useLocation();
-  if (location.pathname.startsWith("/m")) {
+  if (location.pathname.startsWith("/mobile")) {
     return <MobileApp />;
   }
   return (
@@ -99,7 +99,7 @@ export default function App() {
         <Route path="/file-send" element={<Protected><FileSend /></Protected>} />
         <Route path="/mail" element={<Protected><Mail /></Protected>} />
         <Route path="/reports" element={<Protected><Reports /></Protected>} />
-        <Route path="/m/*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="/mobile/*" element={<Navigate to="/dashboard" replace />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </Suspense>

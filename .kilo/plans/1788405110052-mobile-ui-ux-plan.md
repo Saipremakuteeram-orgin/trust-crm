@@ -1,164 +1,174 @@
-# Mobile-Optimized UI/UX Layer for Trust CRM
+# Mobile Redesign for Trust CRM (v2)
 
 ## Goal
-Ship a separate, phone-first UI/UX for the existing Trust CRM, sharing the same backend, auth, and API client. Desktop app stays untouched. Mobile users get a fast, thumb-friendly experience; dense desktop pages get a focused summary view with a clear handoff to desktop.
+Replace the existing `/m/*` mobile layer with a clean, phone-first design. The new layer is not a stripped-down port of the desktop pages — it has its own information architecture, its own visual language, and its own capture flow optimized for one-handed use. Desktop app is untouched.
 
-## Architectural decisions (resolved)
-- **Relationship:** Same repo, separate route layer under `/m/*`. No backend changes.
-- **Routing:** New `MobileApp.jsx` mounted in `App.jsx` with `useMatch("/m/*")` to render the mobile tree for any URL starting with `/m`.
-- **Auth:** Reuse `useAuth` / `api` / `supabase` from `src/lib/*`. Mobile login is `/m/login`; protected routes share the same Supabase session.
-- **Layout:** `MobileShell` = `SafeArea` top + `MobileHeader` (title, back, profile) + page content + `BottomTabBar` (fixed). Detected via `(window.matchMedia('(max-width: 768px)').matches || /Mobi|Android/i.test(navigator.userAgent))`; non-phones that hit `/m` are auto-redirected to the matching desktop route.
-- **Navigation pattern:** Bottom tab bar (Dashboard, Transactions, Contacts, Reports, More). `More` opens an action sheet grouped by category (Accounting, Trust, Communication, Admin, Tools).
-- **Home (mobile Dashboard):** Action-first cards.
-  - Top: swipeable KPI strip (4 tiles: Balance, Income, Expense, Net Change). Tap opens `TransactionListModal` (reuse).
-  - Middle: horizontal "Quick actions" row (New transaction, Add contact, Send file, WhatsApp, Spreadsheet, New receipt).
-  - Bottom: one compact sparkline (income vs expense, last 6 months) + one category pie, then a 5-row "Recent activity" feed.
-- **Dense desktop pages on mobile:** Read-only summary + deep link.
-  - `TrialBalance`, `GeneralLedger` (per-account), `Spreadsheet`, `Reports` get a `MobileDensePlaceholder` component that calls the same read endpoint, shows 5-10 most relevant rows in a mobile card list, shows key totals, and renders a "Open full view on desktop" card with a copyable URL and QR code (optional, SVG, no dep).
-  - Mutations (edit cells, run reports, generate PDFs) are hidden, not broken.
+## Resolved decisions
+- **Auth:** email + password (Supabase). After successful login, prompt to enable biometric (Face ID / fingerprint). After that, the app unlocks via biometric once per 30 days; otherwise the email+password screen reappears.
+- **Primary jobs supported:** all four — capture, status check, contact lookup, function review. Home is action-first but also shows balance + recent activity.
+- **Capture speed:** one-tap Log. The center of the bottom tab bar is a raised Log button. Tapping it opens a 3-step inline quick-log form (Type, Amount, Details) with a custom in-app numeric pad and pre-filled values from the last transaction.
+- **Navigation:** bottom tab bar — Home, Money, People, Inbox, More. Center is a raised Log button (not a real tab).
+- **Home composition:** action-first. Greeting + balance → huge Log CTA + 2 secondary actions → 5 most-recent transactions → "This month" row with income/expense/net.
+- **Lists:** sticky filter chips at the top (Today / This week / This month / Custom) + virtualized feed of cards. Tap a card to expand inline (no full-page detail). Long-press for quick actions.
+- **Detail/edit:** inline. No full-page detail routes for routine items. Long-press or pencil icon switches the row into edit mode.
+- **Form:** 3-step inline. Step 1: Type (credit/debit big toggle). Step 2: Amount (custom numeric pad, auto-focused). Step 3: Party/Category/Mode/Function/Voucher/Receipt/Notes in one scrollable area. Sticky bottom Save button.
+- **Numeric pad:** custom 3x4 in-app pad, larger targets, no predictive text interference.
+- **Receipts:** camera-first. In step 3, a "Camera" button opens the device camera, snaps a photo, auto-attaches. Upload happens in the background after Save.
+- **Modules:**
+  - WhatsApp: keep iframe, dedicated screen with back button.
+  - Mail / File Send / Drive: send-only on mobile. Pick recipients, attach a file, send. No inbox browsing, no drive browsing.
+  - Spreadsheet, Trial Balance, Reports, Bank Reconciliation: hard-decline with a "Open on desktop" deep-link card. No fake preview.
+- **Role handling:** role-aware empty states. No in-app role switcher. Viewer sees read-only home with a "Request access" placeholder.
+- **Pre-fill:** remember last party, category, mode, function. Stored in `localStorage` under a versioned key.
+- **Offline:** cache home KPIs and last 100 transactions in `localStorage` on every successful load. Offline banner if `navigator.onLine === false`. Writes are disabled when offline (no queue to keep scope small). On reconnect, the banner clears and the next load re-fetches.
+- **Backend:** use existing endpoints. No new routes.
+- **Cutover:** atomic. Remove the old `/m` pages and components, install the new design in the same files/dirs, one commit, one push.
+- **Look & feel:** calm, generous whitespace, `rounded-3xl` cards, soft shadows, subtle gradient accents on KPI tiles, indigo/violet background tones, saffron as accent only.
 
-## File layout (all new)
+## File layout (final state)
 ```
-frontend/src/
-  mobile/
-    MobileApp.jsx                       # /m/* route tree
-    MobileShell.jsx                     # header + content + bottom tabs
-    MobileHeader.jsx                    # title, back, profile menu
-    BottomTabBar.jsx                    # 5 tabs + More sheet
-    MoreSheet.jsx                       # grouped secondary nav
-    hooks/
-      useIsMobile.js                    # SSR-safe viewport check
-      useApi.js                         # thin wrapper over api w/ mobile loading states
-    components/
-      KPITile.jsx
-      KPISwiper.jsx                     # horizontal swipe via scroll-snap
-      QuickAction.jsx
-      QuickActionRow.jsx
-      Sparkline.jsx                     # lightweight inline SVG
-      CategoryDonut.jsx                 # compact pie
-      RecentActivityList.jsx
-      SectionHeader.jsx
-      EmptyState.jsx
-      MobileDensePlaceholder.jsx        # dense-page summary + deep-link
-      MobileCard.jsx                    # base card
-      MobileListItem.jsx                # tappable list row
-      SwipeableRow.jsx                  # left/right swipe actions
-      PullToRefresh.jsx                 # touch-based refresh
-    pages/
-      MobileLogin.jsx                   # reuses Login logic
-      MobileDashboard.jsx
-      MobileTransactions.jsx            # list + filters + bottom-sheet form
-      MobileTransactionDetail.jsx
-      MobileContacts.jsx                # list + search + bottom-sheet
-      MobileContactDetail.jsx
-      MobileRecurring.jsx               # list only, edit deep-links desktop
-      MobileAccounts.jsx                # tree view, edit deep-links desktop
-      MobileJournal.jsx                 # list, new entry in bottom sheet
-      MobileReceipts.jsx                # list + camera/upload
-      MobileFunctions.jsx               # list + cards
-      MobileGroups.jsx
-      MobileReportSummary.jsx           # uses MobileDensePlaceholder
-      MobileTrialBalanceSummary.jsx
-      MobileLedgerSummary.jsx           # per account
-      MobileSpreadsheetSummary.jsx
-      MobileComplianceSummary.jsx
-      MobileTrustees.jsx
-      MobileBeneficiaries.jsx
-      MobileWhatsApp.jsx                # full WhatsApp UI, mobile-first
-      MobileFileSend.jsx                # file picker + send
-      MobileMail.jsx                    # compose + inbox
-      MobileDrive.jsx                   # browse + upload
-      MobileUsers.jsx                   # admin only
-      MobileActivityLog.jsx
-      MobileBackupLogs.jsx
-    lib/
-      mobileNav.js                      # tab + more-sheet config w/ roles
-  index.css (additive)                  # mobile utilities, see Styles
+frontend/src/mobile/
+  MobileApp.jsx                    # route tree, all /m/* paths
+  MobileShell.jsx                  # header + content + bottom tab bar
+  MobileHeader.jsx                 # safe-area top bar
+  BottomTabBar.jsx                 # Home / Money / People / [Log] / Inbox / More
+  CenterLogButton.jsx              # raised Log action that opens quick-log sheet
+  design/
+    tokens.js                      # spacing, radius, shadow, motion tokens
+  hooks/
+    useBiometric.js                # WebAuthn-style biometric (where supported) fallback to localStorage
+    useOnlineStatus.js             # navigator.onLine + window events
+    usePreFill.js                  # last-used form values
+    useCachedFeed.js               # in-memory + localStorage feed cache
+  components/
+    Card.jsx                       # rounded-3xl soft-shadow container
+    Chip.jsx                       # pill button (used for filter chips)
+    KpiRow.jsx                     # small KPI row (3 numbers)
+    BalanceHero.jsx                # big balance tile
+    LogButton.jsx                  # giant primary action
+    SecondaryActions.jsx           # Add contact, New receipt
+    SectionTitle.jsx
+    EmptyState.jsx                 # role-aware empty state
+    OfflineBanner.jsx
+    FilterChips.jsx                # horizontal filter chip strip
+    FeedCard.jsx                   # transaction card (expandable inline)
+    ContactCard.jsx
+    FunctionCard.jsx
+    NumericPad.jsx                 # custom 3x4 amount entry
+    QuickLogSheet.jsx              # bottom-sheet quick-log (3-step)
+    CameraButton.jsx               # input capture=environment, posts to /transactions/:id/receipt
+    ProfileMenu.jsx                # avatar dropdown (kept from v1, refined)
+    InboxList.jsx                  # notifications + activity + approvals feed
+    MoreGrid.jsx                   # grouped sections (admin/accountant scope)
+    DeepLinkCard.jsx               # "Open on desktop" CTA
+  pages/
+    MobileLogin.jsx
+    MobileHome.jsx                 # the new action-first home
+    MobileMoney.jsx                # transactions: filter chips + virtualized feed
+    MobilePeople.jsx               # contacts: search + alphabetical sections
+    MobileInbox.jsx                # notifications + activity + approvals
+    MobileMore.jsx                 # grouped secondary sections
+    MobileFunctions.jsx            # list
+    MobileFunctionDetail.jsx       # inline summary + recent transactions
+    MobileRecurring.jsx
+    MobileWhatsApp.jsx             # iframe inside a screen
+    MobileMail.jsx                 # send-only
+    MobileFileSend.jsx             # send-only
+    MobileDrive.jsx                # send-only (upload a file at root)
+    MobileUsers.jsx                # admin only, mobile-friendly list
+    MobileBackupLogs.jsx           # admin only, mobile-friendly
+    MobileNotAvailable.jsx         # deep-link placeholder for Spreadsheet / Trial Balance / Reports / Bank Reconciliation
 ```
 
-## Routing rules
-- `/m/login` -> `MobileLogin` (unauthed)
-- `/m` and `/m/` -> redirect to `/m/dashboard` if authed, else `/m/login`
-- `/m/dashboard` -> `MobileDashboard`
-- `/m/transactions`, `/m/transactions/:id`
-- `/m/contacts`, `/m/contacts/:id`
-- `/m/recurring`, `/m/accounts`, `/m/journal`, `/m/receipts`, `/m/functions`, `/m/groups`
-- `/m/reports`, `/m/trial-balance`, `/m/ledger/:accountId`, `/m/spreadsheet`, `/m/compliance`
-- `/m/trustees`, `/m/beneficiaries`
-- `/m/whatsapp`, `/m/file-send`, `/m/mail`, `/m/drive`
-- `/m/users` (admin), `/m/activity`, `/m/backup`
-- Unknown `/m/*` -> `/m/dashboard`
-- If a non-mobile UA lands on `/m/*`, redirect to matching desktop route (e.g. `/m/transactions` -> `/transactions`).
+## Routing (final)
+- `/m/login` — MobileLogin
+- `/m/` and `/m` — redirect to `/m/home` (or `/m/login` if no session)
+- `/m/home` — MobileHome
+- `/m/money` — MobileMoney
+- `/m/people` — MobilePeople
+- `/m/inbox` — MobileInbox
+- `/m/more` — MobileMore
+- `/m/functions` — MobileFunctions
+- `/m/functions/:id` — MobileFunctionDetail
+- `/m/recurring` — MobileRecurring
+- `/m/whatsapp` — MobileWhatsApp
+- `/m/mail` — MobileMail
+- `/m/file-send` — MobileFileSend
+- `/m/drive` — MobileDrive
+- `/m/users` — MobileUsers (admin)
+- `/m/backup` — MobileBackupLogs (admin)
+- `/m/spreadsheet`, `/m/trial-balance`, `/m/ledger`, `/m/ledger/:id`, `/m/reports`, `/m/bank-reconciliation`, `/m/compliance` — MobileNotAvailable (with deep link)
+- Unknown `/m/*` → `/m/home`
 
 ## Component contracts (concise)
-- `MobileShell` props: `{ title, showBack, rightAction, children, scrollable=true }`. Renders safe-area, header, scroll container, bottom tab bar.
-- `BottomTabBar` reads role from `useAuth`, filters tabs, opens `MoreSheet` for the 5th tab.
-- `KPITile` props: `{ label, value, sub, tone, onClick }`. 120x110 min, 44px touch target.
-- `MobileDensePlaceholder` props: `{ title, desktopPath, fetcher, renderSummary, renderRows }`. Shows summary, then a banner card with "Open full view" link, plus a "Copy desktop link" button. No mutation affordances.
-- `PullToRefresh` wraps a scroll region; uses `touchstart`/`touchmove`/`touchend` and a 60px threshold to call `onRefresh`. No library.
-- `SwipeableRow` props: `{ leftActions, rightActions, children }`. Uses pointer events; default 80px action width.
-- `EmptyState` props: `{ icon, title, message, action }`. Used everywhere data may be empty.
+- `MobileShell` — renders `MobileHeader` (title from route, no logo in chrome) + `<main>` + `BottomTabBar`. Owns the `OfflineBanner` and the `QuickLogSheet` mount. `QuickLogSheet` is mounted once at the shell and triggered by a global `openLog()` from `useQuickLog()`.
+- `BottomTabBar` — 6 slots, 5 labels. The center slot is a `CenterLogButton` (raised, saffron). Tabs: Home, Money, People, Inbox, More. `aria-current` on the active item.
+- `NumericPad` — controlled component with value + onChange. Buttons: 1-9, 0, ., ⌫. Long-press ⌫ clears. Has a Done button to dismiss the pad.
+- `QuickLogSheet` — 3 visible steps in one scrollable area; sticky header shows the current step and a progress dot row; sticky bottom Save. Uses `NumericPad` for the amount field.
+- `FeedCard` — props: `txn`, `onLongPress`, `expanded` (controlled), `onToggleExpand`, `onEdit`, `onDelete`. Expanded state shows full detail + Edit pencil inline.
+- `ContactCard` — props: `contact`, `onTap` (call/message/email), `onLongPress` (edit/delete).
+- `EmptyState` — props: `icon`, `title`, `message`, `role` (admin/accountant/viewer). Renders a different CTA based on role and the empty context.
+- `OfflineBanner` — listens to `useOnlineStatus`. Renders a top-anchored ribbon when offline.
 
-## Data flow / API usage
-- All mobile pages use the existing `api` axios instance and `useAuth`. No new endpoints.
-- `MobileDashboard` reuses `/dashboard/summary` and `/analytics` (same payload the desktop uses); if `analytics` fails, render a single skeleton sparkline and continue.
-- Mutations (create/update/delete) are POSTed through the same endpoints used on desktop; responses feed the same `useToast` component (mounted once in `MobileShell`).
-- File uploads (`MobileReceipts`, `MobileFileSend`, `MobileDrive`) use `FormData` via the existing `api` instance; mobile pages add an explicit loading bar on the trigger button.
+## Data flow
+- Auth: existing Supabase flow. New `useBiometric` checks `localStorage.biometricEnabled` and, when true, attempts `navigator.credentials.get` with a publicKey credential created at enrollment. On success, reuses the existing Supabase session from `localStorage`. On failure (no support / denied), fall back to password.
+- API: existing `api` axios client. No new endpoints. The home reads `/dashboard/summary`, `/analytics`, `/dashboard/recurring-commitment`, `/transactions?limit=20` in parallel.
+- Pre-fill: `usePreFill()` writes last-used `{ type, party, category_id, mode, function_id }` to `localStorage.trustCrmPreFill` after every successful save.
+- Cache: `useCachedFeed()` stores `homePayload` and `txnsLast20` in `localStorage.trustCrmFeedCache` with a timestamp. On load, hydrate from cache instantly, then refetch in the background and re-render when the response arrives.
+- Offline: writes are disabled when offline. The Save button is replaced with an "Offline" pill that explains why.
+- Camera: `CameraButton` uses `<input type="file" accept="image/*" capture="environment">`. On select, posts the file as `multipart/form-data` to the existing `/transactions/:id/receipt` endpoint after the transaction is saved. If the user snaps a photo before saving, hold the file in component state and upload after save.
 
-## States to design for
-- Loading (skeleton cards, shimmer, never the full page spinner alone)
-- Empty (per-page `EmptyState`)
-- Error (toast + retry; no silent failures)
-- Offline (banner at top: "You are offline. Cached data shown.")
-- Session expired (catch 401 from `api` interceptor, redirect to `/m/login` with `?next=`).
-
-## Styles (additive to `index.css`)
-Add a `mobile` theme layer, not a rewrite:
-- `.m-safe-top` / `.m-safe-bottom` -> `env(safe-area-inset-*)` padding
-- `.m-tap` -> `min-height: 44px; min-width: 44px`
-- `.m-card` -> `bg-white rounded-2xl border border-stone-200/80 p-4 shadow-sm`
-- `.m-list` -> `divide-y divide-stone-100`
-- `.m-sheet` -> `rounded-t-3xl` with slide-up keyframe (reuse existing `slideUp`)
-- `.m-snap-x` -> `scroll-snap-type: x mandatory; > * { scroll-snap-align: start }`
-- `.m-no-select` -> `user-select: none; -webkit-user-select: none`
-- All animations gated to `prefers-reduced-motion: reduce`.
+## Visual tokens (`design/tokens.js`)
+- Spacing: 4, 8, 12, 16, 20, 24, 32, 40, 48
+- Radius: `xl=16`, `2xl=20`, `3xl=28`, `full`
+- Shadow: `soft = 0 8px 24px -8px rgba(67,56,202,0.10)`, `lift = 0 16px 40px -12px rgba(67,56,202,0.18)`
+- Motion: 180ms ease-out for hovers, 280ms spring for sheets, 120ms for taps
+- Colors: keep existing saffron/royal/emerald/rose from `index.css`. Background `#f8fafc` (stone-50) by default. Surface `#ffffff`. Subtle gradient `from-royal-50/40 to-saffron-50/30` for the balance hero.
 
 ## Accessibility
-- Every interactive element is a real `<button>` or `<a>` (not a `<div onClick>`).
-- Tab order mirrors visual order; focus ring uses `focus-visible:ring-2 ring-saffron-500`.
-- Color contrast minimum AA; saffron-on-white is borderline so use saffron-700 for body text.
-- Bottom tab bar is a `<nav>` with `aria-label="Primary"`; active tab uses `aria-current="page"`.
+- 44x44px minimum tap targets everywhere.
+- `aria-current` on active tabs and the active filter chip.
+- `aria-label` on icon-only buttons; visible labels on the bottom tab bar.
+- Reduced-motion: already handled globally in `index.css`.
+- Numeric Pad has both visual and `aria-live` updates for screen readers.
 
 ## Out of scope (explicit)
-- No backend changes.
-- No new endpoints.
-- No PWA install / service worker / offline cache (defer to a follow-up plan).
-- No new dependencies. Everything implemented with React, existing framer-motion, recharts, lucide-react, and the existing CSS utilities.
-- No redesign of the desktop app.
+- No backend changes. No new endpoints.
+- No PWA / install / service worker.
+- No new third-party dependencies. Custom numeric pad is plain React + Tailwind.
+- No changes to the desktop app.
+- No new analytics or telemetry.
 
 ## Risks
-- Role visibility matrix in `Nav.jsx` must be mirrored in `mobile/lib/mobileNav.js`; if a route is added later, both files need updates. Mitigation: export `allItems` from `Nav.jsx` and reuse it inside `mobileNav.js` (single source of truth).
-- Bottom tab + "More" sheet duplication: only one source of truth via `mobileNav.js`.
-- `MobileDashboard` charts must not regress desktop analytics if the payload shape changes; wrap access in `?.` and add a `analyticsError` path that matches the desktop implementation.
-- Supabase session sharing: `supabase.auth.getSession` is global, so a desktop-tab and mobile-tab on the same browser share sessions. Acceptable; do not change.
+- WebAuthn biometric is not supported in all browsers (Safari iOS requires HTTPS, some Android browsers don't ship it). Fallback to a "remember me" toggle + password is mandatory.
+- Camera capture from `<input capture="environment">` opens the native camera on most devices but presents a file picker on a few. Acceptable.
+- Removing the old mobile layer breaks the `/m/*` URLs for users on the current build until the new build is deployed. Since `/m` is gated by `getIsMobile()` and the desktop redirect exists, the blast radius is small.
+- Pre-fill from the last transaction may surprise users who expect a clean form. Mitigate with a "Reset" link in the form.
+- Offline writes are disabled (not queued) to keep scope honest. Document this in the empty-state copy and the offline banner.
 
 ## Validation
-- `npm run build` (frontend) succeeds.
-- Manual: log in at `/m/login`, confirm bottom tabs, swipe KPIs, open `More` sheet, open Transactions list, create a transaction, open Reports summary card, tap "Open full view" and confirm it routes to `/reports` while auth persists.
-- Lighthouse mobile run on `/m/dashboard` for Performance and Accessibility (target >90).
-- Resize test: open desktop at 360px viewport hitting `/dashboard` -> still works (unchanged). Open `/m/dashboard` at 1440px -> still renders mobile shell (intentional for design QA).
-- Reduce-motion test: all animations disabled.
-- Offline test: toggle DevTools "Offline", confirm banner appears and reads work from cached axios responses where available.
+- `npm run build` succeeds. Each mobile page is its own code-split chunk.
+- Smoke (manual): log in → home renders → tap center Log → quick-log a transaction → success toast + new card appears at the top of Money. Re-open the app → biometric prompts. Toggle airplane mode → offline banner appears; Save button disables.
+- Density: home weighs < 12 KB gzip, Money < 10 KB gzip, quick-log sheet < 6 KB gzip.
+- Reduced-motion: open DevTools "Emulate prefers-reduced-motion: reduce" → no animated transitions, sheets appear instantly.
+- Desktop redirect: load `/m/home` on a 1440px window → redirects to `/dashboard`.
 
 ## Implementation task order
-1. Add `mobile/` skeleton: `useIsMobile`, `MobileApp`, `MobileShell`, `BottomTabBar`, `MoreSheet`, `mobileNav` sourced from `Nav.jsx`.
-2. Wire `/m/*` into `App.jsx` with the auto-redirect for non-mobile UAs.
-3. Implement `MobileLogin` reusing `Login`'s form.
-4. Implement `MobileDashboard` (KPI strip, quick actions, sparkline, donut, recent activity).
-5. Implement list+detail+create flows: `MobileTransactions`, `MobileContacts`, `MobileJournal`, `MobileReceipts`, `MobileGroups`, `MobileRecurring`, `MobileFunctions`, `MobileAccounts`.
-6. Implement trust/compliance: `MobileTrustees`, `MobileBeneficiaries`, `MobileComplianceSummary`.
-7. Implement `MobileDensePlaceholder` and wire it into `MobileReportSummary`, `MobileTrialBalanceSummary`, `MobileLedgerSummary`, `MobileSpreadsheetSummary`.
-8. Implement `MobileWhatsApp`, `MobileFileSend`, `MobileMail`, `MobileDrive`.
-9. Admin/tools: `MobileUsers`, `MobileActivityLog`, `MobileBackupLogs`.
-10. Add `index.css` mobile utilities and verify reduced-motion behavior.
-11. Build, smoke test, run Lighthouse on `/m/dashboard`.
+1. Delete old `/m` pages and components (keep `MobileApp.jsx`, `MobileShell.jsx`, `MobileHeader.jsx`, `BottomTabBar.jsx`, `ProfileMenu.jsx` to be rewritten, drop the rest).
+2. Add `design/tokens.js`, `hooks/useBiometric.js`, `hooks/useOnlineStatus.js`, `hooks/usePreFill.js`, `hooks/useCachedFeed.js`, plus a `useQuickLog()` global trigger.
+3. Add base components: `Card`, `Chip`, `KpiRow`, `BalanceHero`, `LogButton`, `SecondaryActions`, `SectionTitle`, `EmptyState`, `OfflineBanner`, `FilterChips`, `DeepLinkCard`, `NumericPad`, `QuickLogSheet`, `CameraButton`.
+4. Rewrite `MobileHeader` for the new design (no logo in chrome, refined back button, profile menu on the right).
+5. Rewrite `BottomTabBar` with 5 real tabs + center raised Log button.
+6. Rewrite `MobileShell` to mount `QuickLogSheet` once and wire `OfflineBanner`.
+7. Build `MobileLogin` (with biometric enrollment prompt on first success).
+8. Build `MobileHome`.
+9. Build `MobileMoney` (filter chips + virtualized feed + inline expand + inline edit).
+10. Build `MobilePeople`.
+11. Build `MobileInbox` (combines notifications, activity log, approvals into one feed; admin/accountant only).
+12. Build `MobileMore` (grouped sections; deep-link items render `MobileNotAvailable`).
+13. Build `MobileFunctions`, `MobileFunctionDetail`, `MobileRecurring`.
+14. Build `MobileWhatsApp` (iframe + back), `MobileMail` (send-only), `MobileFileSend` (send-only), `MobileDrive` (upload at root).
+15. Build `MobileUsers` (admin) and `MobileBackupLogs` (admin) as mobile-friendly lists.
+16. Build `MobileNotAvailable` and wire it to the 6 deep-link-only routes.
+17. Add CSS tokens to `index.css` under a new mobile section (or rely on Tailwind utilities referencing the existing palette).
+18. `npm run build`, fix any issues, smoke test.

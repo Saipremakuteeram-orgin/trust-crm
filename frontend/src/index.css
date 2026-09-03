@@ -352,3 +352,12 @@ input:focus, select:focus, textarea:focus {
 /* Hide scrollbar inside swipe rows but keep functionality */
 .m-snap-x::-webkit-scrollbar { display: none; }
 .m-snap-x { scrollbar-width: none; }
+
+/* ===== MOBILE2 DESIGN TOKENS ===== */
+
+.m2-card {
+  background: #fff;
+  border-radius: 1.5rem;
+  box-shadow: 0 8px 24px -8px rgba(67, 56, 202, 0.10);
+  border: 1px solid rgba(214, 211, 209, 0.6);
+}

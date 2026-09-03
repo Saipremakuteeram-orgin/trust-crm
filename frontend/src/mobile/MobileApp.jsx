@@ -32,6 +32,7 @@ const MobileUsers = lazy(() => import("./pages/MobileUsers"));
 const MobileActivityLog = lazy(() => import("./pages/MobileActivityLog"));
 const MobileBackupLogs = lazy(() => import("./pages/MobileBackupLogs"));
 const MobileBankReconciliation = lazy(() => import("./pages/MobileBankReconciliation"));
+const MobileMore = lazy(() => import("./pages/MobileMore"));
 
 function PageLoader() {
   return (
@@ -100,6 +101,7 @@ export default function MobileApp() {
           <Route path="/users" element={<Protected><MobileUsers /></Protected>} />
           <Route path="/activity" element={<Protected><MobileActivityLog /></Protected>} />
           <Route path="/backup" element={<Protected><MobileBackupLogs /></Protected>} />
+          <Route path="/more" element={<Protected><MobileMore /></Protected>} />
           <Route path="*" element={<Navigate to="/m/dashboard" replace />} />
         </Routes>
       </Suspense>

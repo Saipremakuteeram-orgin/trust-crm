@@ -16,8 +16,7 @@ export default function BottomTabBar() {
     >
       <ul className="flex items-stretch justify-around">
         {tabs.map(({ to, label, icon: Icon }) => {
-          const isMore = to === "/m/more";
-          const active = isMore ? pathname.startsWith("/m/") && !["/m/dashboard", "/m/transactions", "/m/contacts", "/m/reports"].includes(pathname) : pathname === to || (to !== "/m/dashboard" && pathname.startsWith(to));
+          const active = pathname === to || (to !== "/m/dashboard" && to !== "/m/more" && pathname.startsWith(to));
           return (
             <li key={to} className="flex-1">
               <NavLink

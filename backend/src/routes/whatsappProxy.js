@@ -101,7 +101,6 @@ function buildForwardHeaders(req) {
 }
 
 function proxyHandler(req, res) {
-  console.log(`[wa-proxy] >>> ${req.method} ${req.url} origin=${req.headers.origin || '-'} cookie=${req.headers.cookie ? 'len=' + req.headers.cookie.length : 'no'} jar=${cookieJar ? 'len=' + cookieJar.length : 'empty'}`);
   const s = getSession();
   let fwd;
   try {
@@ -110,7 +109,6 @@ function proxyHandler(req, res) {
     if (!res.headersSent) res.writeHead(500);
     return res.end('wa-proxy header error');
   }
-  console.log('[wa-proxy] fwd-headers:', JSON.stringify(fwd));
 
   let stream;
   try {
@@ -149,8 +147,7 @@ function proxyHandler(req, res) {
         out[k] = v;
       }
     }
-    if (setCookieDebug.length) console.log(`[wa-proxy] <<< set-cookie: ${setCookieDebug.join(', ')}`);
-    console.log(`[wa-proxy] <<< ${req.method} ${req.url} -> ${status} (${out['content-type'] || '?'})`);
+    // removed verbose logging
     try {
       res.writeHead(status, out);
     } catch (e) {
@@ -158,10 +155,6 @@ function proxyHandler(req, res) {
     }
     stream.on('data', (d) => { chunks.push(d); res.write(d); });
     stream.on('end', () => {
-      const body = Buffer.concat(chunks).toString('utf8');
-      if (status >= 400) {
-        console.error(`[wa-proxy] <<< UPSTREAM ERROR BODY (${body.length} bytes): ${body.slice(0, 600)}`);
-      }
       res.end();
     });
   });

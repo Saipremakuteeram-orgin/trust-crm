@@ -14,14 +14,12 @@ const app = express();
 
 const CORS_ORIGINS = (process.env.CORS_ORIGINS || 'https://crmsaidharmasamrakshanapremakuteeram.dpdns.org,https://crm.saidharmasamrakshanapremakuteeram.qzz.io,https://trust-crm.vercel.app').split(',').map((s) => s.trim());
 
-// Allow configured origins, localhost dev origins, and any https origin.
-// Safe because the API authenticates via Bearer tokens (not cookies), so
-// reflecting the origin does not expose credentialed cross-site requests.
+// Allow configured origins and localhost dev origins only.
+// Reflecting arbitrary HTTPS origins with credentials: true is a risk; pin to known origins.
 function isAllowedOrigin(origin) {
   if (!origin) return true; // server-to-server / non-browser
   if (CORS_ORIGINS.includes(origin)) return true;
   if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
-  if (/^https:\/\//.test(origin)) return true; // any https origin (production frontends)
   return false;
 }
 
@@ -57,7 +55,6 @@ app.use('/api/trustees', require('./routes/trustees'));
 app.use('/api/compliance', require('./routes/compliance'));
 app.use('/api/receipts', require('./routes/receipts'));
 app.use('/api/bank-reconciliation', require('./routes/bankReconciliation'));
-app.use('/api/accounts', require('./routes/accounts'));
 app.use('/api/journal-entries', require('./routes/journalEntries'));
 app.use('/api/users', sensitiveLimiter, require('./routes/users'));
 app.use('/api/logs', require('./routes/logs'));
@@ -84,7 +81,8 @@ app.use('/api/webhooks', require('./routes/webhookWebsiteContact'));
 
 // WhatsApp Web reverse proxy — serves web.whatsapp.com from our own origin
 // so it can be embedded in an iframe (strips WhatsApp's frame-ancestors CSP).
-app.use('/wa', proxyHandler);
+// PROTECTED: require auth + admin role to prevent unauthenticated session hijack.
+app.use('/wa', requireAuth, requireRole('admin'), proxyHandler);
 
 app.post('/api/reports/monthly/send-now', requireAuth, sensitiveLimiter, requireRole('admin', 'accountant'), async (req, res) => {
   const { generateAndSendMonthlyReport } = require('./cron/monthlyReport');

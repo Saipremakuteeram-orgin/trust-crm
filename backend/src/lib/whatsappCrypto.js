@@ -3,10 +3,15 @@ const fs = require('fs');
 const path = require('path');
 
 const SESSION_DIR = path.join(__dirname, '..', '..', '.wa-sessions');
-const RAW_KEY = process.env.WA_SESSION_ENCRYPTION_KEY || '';
-const ENC_KEY = RAW_KEY
-  ? (RAW_KEY.length === 64 ? Buffer.from(RAW_KEY, 'hex') : crypto.createHash('sha256').update(RAW_KEY).digest())
-  : crypto.createHash('sha256').update('fallback-dev-key-change-me').digest();
+const RAW_KEY = process.env.WA_SESSION_ENCRYPTION_KEY;
+
+if (!RAW_KEY) {
+  throw new Error('WA_SESSION_ENCRYPTION_KEY is required — set a 64-char hex key (openssl rand -hex 32) in your environment');
+}
+if (RAW_KEY.length !== 64) {
+  throw new Error('WA_SESSION_ENCRYPTION_KEY must be exactly 64 hex characters (32 bytes)');
+}
+const ENC_KEY = Buffer.from(RAW_KEY, 'hex');
 
 function ensureDir() {
   try {

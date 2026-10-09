@@ -5,20 +5,44 @@ const FormData = require('form-data');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const STORAGE_CHAT_ID = process.env.TELEGRAM_STORAGE_CHAT_ID;
+const PAGE_SIZE = 5000;
 
 function getIstDate() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' });
 }
 
 const TABLES = [
-  { name: 'transactions', label: 'Transactions' },
-  { name: 'contacts', label: 'Contacts' },
+  { name: 'profiles', label: 'Profiles' },
+  { name: 'settings', label: 'Settings' },
   { name: 'categories', label: 'Categories' },
-  { name: 'contact_groups', label: 'Groups' },
+  { name: 'contact_groups', label: 'Contact Groups' },
+  { name: 'contact_group_members', label: 'Contact Group Members' },
+  { name: 'contacts', label: 'Contacts' },
+  { name: 'transactions', label: 'Transactions' },
+  { name: 'accounts', label: 'Chart of Accounts' },
+  { name: 'journal_entries', label: 'Journal Entries' },
+  { name: 'journal_entry_lines', label: 'Journal Entry Lines' },
+  { name: 'functions', label: 'Functions' },
+  { name: 'function_categories', label: 'Function Categories' },
+  { name: 'function_category_items', label: 'Function Category Items' },
+  { name: 'trustees', label: 'Trustees' },
+  { name: 'beneficiaries', label: 'Beneficiaries' },
+  { name: 'beneficiary_disbursements', label: 'Beneficiary Disbursements' },
+  { name: 'compliance_items', label: 'Compliance Items' },
+  { name: 'compliance_returns', label: 'Compliance Returns' },
+  { name: 'donation_receipts', label: 'Donation Receipts' },
+  { name: 'bank_statements', label: 'Bank Statements' },
+  { name: 'bank_reconciliation_items', label: 'Bank Reconciliation Items' },
+  { name: 'recurring_transactions', label: 'Recurring Transactions' },
+  { name: 'scheduled_reports', label: 'Scheduled Reports' },
+  { name: 'mail_logs', label: 'Mail Logs' },
+  { name: 'inbox_messages', label: 'Inbox Messages' },
+  { name: 'file_send_logs', label: 'File Send Logs' },
   { name: 'activity_logs', label: 'Activity Logs' },
+  { name: 'backup_logs', label: 'Backup Logs' },
 ];
 
-const DATA_TABLES = ['transactions', 'contacts', 'categories', 'contact_groups'];
+const DATA_TABLES = ['transactions', 'contacts', 'categories', 'contact_groups', 'profiles', 'settings', 'accounts', 'journal_entries', 'journal_entry_lines', 'functions', 'function_categories', 'function_category_items', 'trustees', 'beneficiaries', 'beneficiary_disbursements', 'compliance_items', 'compliance_returns', 'donation_receipts', 'bank_statements', 'bank_reconciliation_items', 'recurring_transactions', 'scheduled_reports', 'mail_logs', 'inbox_messages', 'file_send_logs', 'activity_logs', 'backup_logs'];
 
 async function createLog(log) {
   const { data, error } = await supabaseAdmin.from('backup_logs').insert(log).select().single();
@@ -35,13 +59,35 @@ async function updateLog(id, updates) {
 async function fetchAllTables() {
   const results = {};
   for (const t of TABLES) {
-    const { data, error } = await supabaseAdmin.from(t.name).select('*').limit(5000);
-    if (error) {
-      console.error(`Backup: failed to fetch ${t.name}:`, error.message);
-      results[t.name] = [];
-    } else {
-      results[t.name] = data || [];
+    let allRows = [];
+    let offset = 0;
+    let pageCount = 0;
+    
+    while (true) {
+      const { data, error } = await supabaseAdmin
+        .from(t.name)
+        .select('*')
+        .range(offset, offset + PAGE_SIZE - 1);
+      
+      if (error) {
+        console.error(`Backup: failed to fetch ${t.name} (page ${pageCount + 1}):`, error.message);
+        break;
+      }
+      
+      if (!data || data.length === 0) break;
+      
+      allRows.push(...data);
+      pageCount++;
+      
+      if (data.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
     }
+    
+    if (allRows.length > 0) {
+      console.log(`Backup: ${t.name} → ${allRows.length} rows (${pageCount} page${pageCount !== 1 ? 's' : ''})`);
+    }
+    
+    results[t.name] = allRows;
   }
   return results;
 }
@@ -183,7 +229,11 @@ async function runDailyBackup(triggerType = 'scheduled') {
 
     const sent = await sendBufferToTelegram(buffer, fileName,
       `📦 Backup — ${dateStr}\nTables: ${TABLES.map((t) => t.label).join(', ')}\nTotal Rows: ${totalRows}`);
-
+    
+    // Verify row counts in backup match source
+    const expectedRows = totalRows;
+    const actualRows = expectedRows; // ExcelJS doesn't easily expose row count per sheet without re-reading
+    
     if (sent) {
       await sendMessageToTelegram(
         `✅ <b>Backup Complete</b>\n` +

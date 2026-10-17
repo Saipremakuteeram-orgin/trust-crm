@@ -68,6 +68,7 @@ app.use('/api/scheduled-reports', require('./routes/scheduledReports'));
 app.use('/api/profile', require('./routes/profile'));
 app.use('/api/recurring-transactions', require('./routes/recurringTransactions'));
 app.use('/api/functions', require('./routes/functions'));
+app.use('/api/expense-scans', require('./routes/expenseScans'));
 app.use('/api/whatsapp', require('./routes/whatsapp'));
 
 // Website -> CRM bridge: when a new event is created on the trust website,

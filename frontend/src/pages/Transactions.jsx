@@ -2,11 +2,12 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import api from "../lib/api";
 import AppLayout from "../components/AppLayout";
-import { Plus, X, Trash2, Pencil, Search, Download, FileText, RefreshCw, Upload } from "lucide-react";
+import { Plus, X, Trash2, Pencil, Search, Download, FileText, RefreshCw, Upload, Camera } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 import { useNavigate } from "react-router-dom";
 import useEscToClose from "../hooks/useEscToClose";
+import ExpenseScanReview from "../components/ExpenseScanReview";
 
 const fmt = (n) =>
   new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(Number(n || 0));
@@ -46,6 +47,7 @@ export default function Transactions() {
   const [exporting, setExporting] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [restoring, setRestoring] = useState(false);
+  const [expenseScanOpen, setExpenseScanOpen] = useState(false);
 
   // Receipt upload states
   const [receiptOpen, setReceiptOpen] = useState(false);
@@ -356,6 +358,13 @@ export default function Transactions() {
               {restoring ? "Restoring..." : "Restore"}
               <input type="file" accept=".xlsx,.xls" className="hidden" onChange={handleRestoreUpload} disabled={restoring} />
             </label>
+          )}
+          {canAdd && (
+            <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
+              onClick={() => setExpenseScanOpen(true)}
+              className="flex items-center gap-2 text-sm font-semibold px-4 py-2.5 rounded-xl border-2 border-royal-200 bg-royal-50 text-royal-700 hover:bg-royal-100 transition-colors">
+              <Camera size={16} /> Scan Expense
+            </motion.button>
           )}
           {canAdd && (
             <motion.button whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}
@@ -818,6 +827,11 @@ export default function Transactions() {
           </motion.div>
         )}
       </AnimatePresence>
+      <ExpenseScanReview
+        open={expenseScanOpen}
+        onClose={() => setExpenseScanOpen(false)}
+        onApproved={() => { setExpenseScanOpen(false); load(); }}
+      />
     </AppLayout>
   );
 }

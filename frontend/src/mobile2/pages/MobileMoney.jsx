@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Search, Plus, X } from "lucide-react";
+import { Search, Plus, X, Camera } from "lucide-react";
 import api from "../../lib/api";
 import MobileShell from "../MobileShell";
 import FilterChips from "../components/FilterChips";
@@ -10,6 +10,7 @@ import SectionTitle from "../components/SectionTitle";
 import EmptyState from "../components/EmptyState";
 import { useAuth } from "../../lib/AuthContext";
 import { useToast } from "../../components/Toast";
+import ExpenseScanReview from "../../components/ExpenseScanReview";
 
 const FILTERS = [
   { value: "all", label: "All" },
@@ -31,6 +32,7 @@ export default function MobileMoney() {
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState(null);
   const [editing, setEditing] = useState(null);
+  const [scanOpen, setScanOpen] = useState(false);
 
   useEffect(() => { load(); }, []);
   useEffect(() => {
@@ -78,9 +80,14 @@ export default function MobileMoney() {
 
   return (
     <MobileShell title="Money" subtitle={`${filtered.length} transactions`} rightAction={canAdd ? (
-      <button onClick={() => document.querySelector('[aria-label="Log transaction"]')?.click()} aria-label="Add" className="m-tap w-10 h-10 rounded-xl bg-saffron-500 text-white flex items-center justify-center shadow-md active:scale-95">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
-      </button>
+      <div className="flex items-center gap-1.5">
+        <button onClick={() => setScanOpen(true)} aria-label="Scan expense" className="m-tap w-10 h-10 rounded-xl border border-royal-200 bg-royal-50 text-royal-700 flex items-center justify-center active:scale-95">
+          <Camera size={18} />
+        </button>
+        <button onClick={() => document.querySelector('[aria-label="Log transaction"]')?.click()} aria-label="Add" className="m-tap w-10 h-10 rounded-xl bg-saffron-500 text-white flex items-center justify-center shadow-md active:scale-95">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
+        </button>
+      </div>
     ) : null}>
       <div className="px-4 pt-3 space-y-3">
         <FilterChips options={FILTERS} value={filter} onChange={setFilter} />
@@ -112,6 +119,12 @@ export default function MobileMoney() {
       {editing && (
         <InlineEditModal txn={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); load(); }} />
       )}
+      <ExpenseScanReview
+        open={scanOpen}
+        initialMode="cash"
+        onClose={() => setScanOpen(false)}
+        onApproved={() => { setScanOpen(false); load(); }}
+      />
     </MobileShell>
   );
 }

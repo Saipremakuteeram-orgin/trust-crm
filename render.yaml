@@ -2,7 +2,10 @@ services:
   - type: web
     name: trust-crm-backend
     runtime: node
+    branch: main
     rootDir: backend
+    autoDeployTrigger: commit
+    healthCheckPath: /health
     buildCommand: npm install && npx @puppeteer/browsers install chrome@stable --path /root/.cache/puppeteer/chrome
     startCommand: node src/server.js
     envVars:

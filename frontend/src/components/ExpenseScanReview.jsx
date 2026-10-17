@@ -3,9 +3,18 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Camera, Check, Loader2, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import api from "../lib/api";
 import { useToast } from "./Toast";
-import { analyzeExpenseImage, prewarmExpenseOcr } from "../lib/ocr/client";
+import {
+  analyzeExpenseImage,
+  getExpenseOcrEstimateSeconds,
+  prewarmExpenseOcr,
+} from "../lib/ocr/client";
 
 const EMPTY_ITEM = { item_name: "", source_text: "", quantity: 1, amount: "", confidence: null, category_id: "" };
+const OCR_PHASES = {
+  model: { start: 0, weight: 0.55 },
+  image: { start: 0.55, weight: 0.1 },
+  inference: { start: 0.65, weight: 0.35 },
+};
 
 const fmt = (value) => new Intl.NumberFormat("en-IN", {
   style: "currency",
@@ -24,12 +33,28 @@ function normalizeItems(items) {
   }));
 }
 
+function formatSeconds(seconds) {
+  if (!Number.isFinite(seconds) || seconds <= 0) return "calculating…";
+  if (seconds < 60) return `${Math.max(1, Math.ceil(seconds))} sec`;
+  return `${Math.floor(seconds / 60)} min ${Math.ceil(seconds % 60)} sec`;
+}
+
+function progressPercent(progress) {
+  const phase = OCR_PHASES[progress?.phase] || OCR_PHASES.model;
+  const value = phase.start + phase.weight * Math.max(0, Math.min(1, Number(progress?.progress) || 0));
+  return Math.round(value * 100);
+}
+
 export default function ExpenseScanReview({ open, onClose, onApproved, initialMode = "cash" }) {
   const { addToast } = useToast();
   const fileInputRef = useRef(null);
   const [step, setStep] = useState("capture");
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
+  const [ocrProgress, setOcrProgress] = useState({ phase: "model", progress: 0, label: "Preparing OCR engine…" });
+  const [ocrEtaSeconds, setOcrEtaSeconds] = useState(null);
+  const [ocrElapsedSeconds, setOcrElapsedSeconds] = useState(0);
+  const ocrStartedAtRef = useRef(0);
   const [error, setError] = useState("");
   const [scan, setScan] = useState(null);
   const [draft, setDraft] = useState(null);
@@ -74,6 +99,18 @@ export default function ExpenseScanReview({ open, onClose, onApproved, initialMo
   }, [open]);
 
   useEffect(() => {
+    if (step !== "analyzing" || !ocrStartedAtRef.current) return undefined;
+    const updateEta = () => {
+      const elapsed = (Date.now() - ocrStartedAtRef.current) / 1000;
+      setOcrElapsedSeconds(elapsed);
+      setOcrEtaSeconds((current) => Math.max(0, Math.ceil((current ?? 1) - 0.25)));
+    };
+    updateEta();
+    const timer = window.setInterval(updateEta, 250);
+    return () => window.clearInterval(timer);
+  }, [step]);
+
+  useEffect(() => {
     if (!open) return undefined;
     void prewarmExpenseOcr().catch(() => {
       // The upload flow will retry and can fall back to manual entry.
@@ -99,6 +136,10 @@ export default function ExpenseScanReview({ open, onClose, onApproved, initialMo
       setDraft(null);
       setError("");
       setPersisting(false);
+      ocrStartedAtRef.current = 0;
+      setOcrProgress({ phase: "model", progress: 0, label: "Preparing OCR engine…" });
+      setOcrEtaSeconds(null);
+      setOcrElapsedSeconds(0);
       setFunctionDetail(null);
       setApproval({
         party: "",
@@ -128,12 +169,23 @@ export default function ExpenseScanReview({ open, onClose, onApproved, initialMo
     setFile(fileToRead);
     setError("");
     setStep("analyzing");
+    ocrStartedAtRef.current = Date.now();
+    setOcrProgress({ phase: "model", progress: 0, label: "Preparing OCR engine…" });
+    setOcrEtaSeconds(getExpenseOcrEstimateSeconds({ fileSize: fileToRead.size }));
+    setOcrElapsedSeconds(0);
 
     let parsed;
     try {
       // Let the browser paint the preview before OCR starts on the worker.
       await new Promise((resolve) => window.requestAnimationFrame(resolve));
-      parsed = await analyzeExpenseImage(fileToRead);
+      parsed = await analyzeExpenseImage(fileToRead, {
+        onProgress: (progress) => {
+          setOcrProgress(progress);
+          if (progress.phase === "model" && progress.progress === 1) {
+            setOcrEtaSeconds(getExpenseOcrEstimateSeconds({ fileSize: fileToRead.size }));
+          }
+        },
+      });
     } catch {
       const fallback = {
         items: [{ ...EMPTY_ITEM }],
@@ -302,6 +354,10 @@ export default function ExpenseScanReview({ open, onClose, onApproved, initialMo
     setDraft(null);
     setError("");
     setPersisting(false);
+    ocrStartedAtRef.current = 0;
+    setOcrProgress({ phase: "model", progress: 0, label: "Preparing OCR engine…" });
+    setOcrEtaSeconds(null);
+    setOcrElapsedSeconds(0);
   }
 
   if (!open) return null;
@@ -360,12 +416,21 @@ export default function ExpenseScanReview({ open, onClose, onApproved, initialMo
             {step === "analyzing" && (
               <div className="min-h-[300px] flex flex-col items-center justify-center text-center gap-4">
                 {previewUrl && <img src={previewUrl} alt="Expense note preview" className="max-h-48 max-w-full rounded-2xl object-contain border border-stone-200" />}
-                <Loader2 size={28} className="animate-spin text-saffron-500" />
-                <div>
-                  <h3 className="font-bold text-stone-900">Reading the note…</h3>
-                  <p className="text-sm text-stone-500 mt-1">Analyzing image…</p>
-                  <p className="text-xs text-stone-400 mt-1">The preview is ready. Text extraction continues in the background.</p>
-                </div>
+                  <Loader2 size={28} className="animate-spin text-saffron-500" />
+                  <div>
+                    <h3 className="font-bold text-stone-900">Reading the note…</h3>
+                    <p className="text-sm text-stone-500 mt-1">{ocrProgress.label}</p>
+                    <div className="w-full max-w-sm mt-3">
+                      <div className="h-2 rounded-full bg-stone-100 overflow-hidden">
+                        <div className="h-full rounded-full bg-saffron-500 transition-all duration-300" style={{ width: `${progressPercent(ocrProgress)}%` }} />
+                      </div>
+                      <div className="flex items-center justify-between gap-3 mt-2 text-[11px] text-stone-400">
+                        <span>{progressPercent(ocrProgress)}% complete · elapsed {formatSeconds(ocrElapsedSeconds)}</span>
+                        <span>ETA ~{formatSeconds(ocrEtaSeconds)}</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-stone-400 mt-2">The preview is ready. Text extraction continues in the background. The first scan may take longer while the OCR engine is cached.</p>
+                  </div>
               </div>
             )}
 

@@ -18,10 +18,29 @@ const ALLOWED_MIMES = new Set(['image/jpeg', 'image/png', 'image/webp']);
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_IMAGE_SIZE, files: 1 },
-  fileFilter: (_req, file, cb) => cb(null, ALLOWED_MIMES.has(file.mimetype)),
+  fileFilter: (_req, file, cb) => {
+    if (ALLOWED_MIMES.has(file.mimetype)) return cb(null, true);
+    return cb(new Error('Only JPEG, PNG, and WebP images are supported'));
+  },
 });
 
 router.use(requireAuth);
+
+function uploadExpenseImage(req, res, next) {
+  upload.single('file')(req, res, (error) => {
+    if (!error) return next();
+
+    if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ success: false, message: 'The expense image must be smaller than 10 MB' });
+    }
+
+    console.error('Expense scan upload parsing error:', error.message);
+    return res.status(400).json({
+      success: false,
+      message: error.message || 'The expense image upload is invalid',
+    });
+  });
+}
 
 function parseJsonField(value, fallback) {
   if (value === undefined || value === null || value === '') return fallback;
@@ -89,7 +108,7 @@ async function signedImageUrl(scan) {
 
 // Create an OCR review draft. OCR happens in the browser; the backend stores
 // the original image and treats all extracted fields as untrusted user input.
-router.post('/', requireRole('admin', 'accountant'), upload.single('file'), async (req, res) => {
+router.post('/', requireRole('admin', 'accountant'), uploadExpenseImage, async (req, res) => {
   let storagePath = null;
   try {
     if (!req.file) {

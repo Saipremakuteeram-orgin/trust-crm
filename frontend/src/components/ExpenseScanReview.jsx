@@ -33,6 +33,16 @@ function normalizeItems(items) {
   }));
 }
 
+function expenseUploadErrorMessage(error) {
+  const status = error?.response?.status;
+  const serverMessage = error?.response?.data?.message;
+  if (serverMessage) return serverMessage;
+  if (status === 404) return "The expense upload service is not deployed yet. Deploy the latest backend and try again.";
+  if (status) return `The expense image could not be saved (HTTP ${status}). Please try again.`;
+  if (error?.code === "ERR_NETWORK") return "The backend could not be reached. Check the backend deployment and try again.";
+  return "The image loaded, but it could not be saved. Please try again.";
+}
+
 function formatSeconds(seconds) {
   if (!Number.isFinite(seconds) || seconds <= 0) return "calculating…";
   if (seconds < 60) return `${Math.max(1, Math.ceil(seconds))} sec`;
@@ -205,7 +215,7 @@ export default function ExpenseScanReview({ open, onClose, onApproved, initialMo
         setPersisting(true);
         await persistDraft(fileToRead, fallback, items);
       } catch (persistError) {
-        setError(persistError?.response?.data?.message || "The image loaded, but it could not be saved. Please try again.");
+        setError(expenseUploadErrorMessage(persistError));
       } finally {
         setPersisting(false);
       }
@@ -225,7 +235,7 @@ export default function ExpenseScanReview({ open, onClose, onApproved, initialMo
       setPersisting(true);
       await persistDraft(fileToRead, parsed, items);
     } catch (persistError) {
-      setError(persistError?.response?.data?.message || "The image loaded, but it could not be saved. Please try again.");
+      setError(expenseUploadErrorMessage(persistError));
     } finally {
       setPersisting(false);
     }
@@ -240,9 +250,9 @@ export default function ExpenseScanReview({ open, onClose, onApproved, initialMo
     body.append("detected_party", parsed.detected_party || "");
     body.append("detected_date", parsed.detected_date || "");
     body.append("detected_total", parsed.detected_total ?? "");
-    const response = await api.post("/expense-scans", body, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+    // Let the browser set the multipart boundary. Setting this header manually
+    // can make multer reject the request in some browsers/adapters.
+    const response = await api.post("/expense-scans", body);
     setScan(response.data.result);
   }
 

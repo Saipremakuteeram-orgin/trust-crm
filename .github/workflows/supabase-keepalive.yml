@@ -1,0 +1,44 @@
+name: Keep Supabase active
+
+on:
+  schedule:
+    # Run once per day, well inside Supabase Free Plan's seven-day inactivity window.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  keepalive:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Query Supabase through PostgREST
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          if [[ -z "${SUPABASE_URL}" || -z "${SUPABASE_ANON_KEY}" ]]; then
+            printf '%s\n' 'Missing SUPABASE_URL or SUPABASE_ANON_KEY repository secret.' >&2
+            exit 1
+          fi
+
+          base_url="${SUPABASE_URL%/}"
+          curl \
+            --fail \
+            --silent \
+            --show-error \
+            --retry 5 \
+            --retry-all-errors \
+            --retry-delay 10 \
+            --max-time 30 \
+            -H "apikey: ${SUPABASE_ANON_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+            -H 'Accept: application/json' \
+            "${base_url}/rest/v1/profiles?select=id&limit=1" \
+            --output /dev/null
+
+          printf 'Supabase activity check completed at %s\n' "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"

@@ -359,7 +359,7 @@ Database:  Supabase RLS policies on every table
 
 - Node.js 18+
 - Python 3.10+ (for analytics module)
-- Supabase project (free tier works)
+- Supabase project (the free tier can be kept active with the scheduled workflow below)
 - Gmail App Password (for email notifications)
 - Telegram Bot Token (for Telegram notifications)
 
@@ -419,6 +419,26 @@ Fill in your `.env` files with your own credentials:
 | `VITE_API_URL` | `http://localhost:8888/api` (dev) or your Render URL (prod) |
 
 > **Warning:** Never commit `.env` files to git. They are excluded via `.gitignore`.
+
+### Keeping the Supabase Free project active
+
+Supabase may pause Free Plan projects after seven days of low activity. This repository
+includes [`supabase-keepalive.yml`](.github/workflows/supabase-keepalive.yml), which makes
+a small read-only PostgREST request once per day. It does not expose a service-role key and
+does not write business data.
+
+Configure these **GitHub repository secrets** before relying on the workflow:
+
+1. Open the repository's **Settings → Secrets and variables → Actions**.
+2. Add `SUPABASE_URL` with the Project URL from **Supabase → Settings → API**.
+3. Add `SUPABASE_ANON_KEY` with the `anon`/public key from the same page.
+4. Open **Actions → Keep Supabase active → Run workflow** once to verify the setup.
+5. Confirm the daily scheduled run is successful.
+
+This is a best-effort Free Plan workaround, not a platform guarantee. GitHub can delay or
+disable scheduled workflows, and Supabase can still pause a project for reasons other than
+inactivity. Supabase's only guaranteed no-inactivity-pause option is a paid plan. Keep a
+database export/backup before depending on any free-tier workaround.
 
 ### 4. Install and run
 

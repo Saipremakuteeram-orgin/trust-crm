@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "test": "node --test src/lib/ocr/expenseParser.test.js",
+    "test": "node --test src/lib/ocr/expenseParser.test.js src/lib/authMessages.test.js",
     "preview": "vite preview"
   },
   "dependencies": {

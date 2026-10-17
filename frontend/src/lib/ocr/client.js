@@ -1,12 +1,13 @@
 import { mergeOcrResults, parseExpenseOcrItems } from './expenseParser';
 
 const ORT_WASM_PATH = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/';
-const TAMIL_MODEL_URL = import.meta.env.VITE_OCR_TAMIL_REC_MODEL_URL || '';
+const DET_MODEL_URL = '/ocr-models/PP-OCRv5_mobile_det.tar';
+const DEFAULT_REC_MODEL_URL = '/ocr-models/ta_PP-OCRv5_mobile_rec.tar';
+const REC_MODEL_URL = import.meta.env.VITE_OCR_TAMIL_REC_MODEL_URL || DEFAULT_REC_MODEL_URL;
+const MAX_INFERENCE_SIDE = 1600;
 
-let englishPipeline = null;
-let tamilPipeline = null;
-let englishPromise = null;
-let tamilPromise = null;
+let ocrPipeline = null;
+let ocrPromise = null;
 
 function ocrOptions() {
   return {
@@ -14,76 +15,72 @@ function ocrOptions() {
     ortOptions: {
       backend: 'wasm',
       wasmPaths: ORT_WASM_PATH,
-      numThreads: 1,
+      numThreads: 2,
       simd: true,
     },
+    textDetectionBatchSize: 1,
+    textRecognitionBatchSize: 6,
   };
 }
 
-async function loadEnglish(onStatus) {
-  if (englishPipeline) return englishPipeline;
-  if (!englishPromise) {
-    englishPromise = (async () => {
-      onStatus?.('Loading English OCR model…');
+async function loadPipeline(onStatus) {
+  if (ocrPipeline) return ocrPipeline;
+  if (!ocrPromise) {
+    ocrPromise = (async () => {
+      onStatus?.('Preparing image analysis…');
       const { PaddleOCR } = await import('@paddleocr/paddleocr-js');
-      englishPipeline = await PaddleOCR.create({
-        ...ocrOptions(),
-        lang: 'en',
-        ocrVersion: 'PP-OCRv5',
-      });
-      return englishPipeline;
-    })().catch((error) => {
-      englishPromise = null;
-      throw error;
-    });
-  }
-  return englishPromise;
-}
-
-async function loadTamil(onStatus) {
-  if (!TAMIL_MODEL_URL) return null;
-  if (tamilPipeline) return tamilPipeline;
-  if (!tamilPromise) {
-    tamilPromise = (async () => {
-      onStatus?.('Loading Tamil OCR model…');
-      const { PaddleOCR } = await import('@paddleocr/paddleocr-js');
-      tamilPipeline = await PaddleOCR.create({
+      ocrPipeline = await PaddleOCR.create({
         ...ocrOptions(),
         textDetectionModelName: 'PP-OCRv5_mobile_det',
+        textDetectionModelAsset: { url: DET_MODEL_URL },
         textRecognitionModelName: 'ta_PP-OCRv5_mobile_rec',
-        textRecognitionModelAsset: { url: TAMIL_MODEL_URL },
+        textRecognitionModelAsset: { url: REC_MODEL_URL },
       });
-      return tamilPipeline;
+      return ocrPipeline;
     })().catch((error) => {
-      tamilPromise = null;
+      ocrPromise = null;
       throw error;
     });
   }
-  return tamilPromise;
+  return ocrPromise;
+}
+
+async function prepareImageForOcr(file) {
+  if (typeof createImageBitmap !== 'function') return file;
+
+  const bitmap = await createImageBitmap(file);
+  const longestSide = Math.max(bitmap.width, bitmap.height);
+  if (longestSide <= MAX_INFERENCE_SIDE) {
+    bitmap.close();
+    return file;
+  }
+
+  const scale = MAX_INFERENCE_SIDE / longestSide;
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+  canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+  const context = canvas.getContext('2d', { alpha: false });
+  if (!context) {
+    bitmap.close();
+    return file;
+  }
+  context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  bitmap.close();
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.86));
+  return blob || file;
 }
 
 export async function analyzeExpenseImage(file, { onStatus } = {}) {
   if (!file) throw new Error('An image is required');
-  const english = await loadEnglish(onStatus);
-  onStatus?.('Reading handwritten lines…');
-  const englishResults = await english.predict(file);
-  const resultSets = [...englishResults];
-  let tamilAvailable = Boolean(TAMIL_MODEL_URL);
-  let tamilError = null;
-
-  if (TAMIL_MODEL_URL) {
-    try {
-      const tamil = await loadTamil(onStatus);
-      if (tamil) {
-        const tamilResults = await tamil.predict(file);
-        resultSets.push(...tamilResults);
-      }
-    } catch (error) {
-      tamilAvailable = false;
-      tamilError = error?.message || 'Tamil OCR model could not be loaded';
-      console.warn('[expense-ocr] Tamil model unavailable:', tamilError);
-    }
-  }
+  const pipeline = await loadPipeline(onStatus);
+  const inferenceImage = await prepareImageForOcr(file);
+  onStatus?.('Analyzing image…');
+  const resultSets = await pipeline.predict(inferenceImage, {
+    textDetLimitSideLen: MAX_INFERENCE_SIDE,
+    textDetLimitType: 'max',
+    textDetMaxSideLimit: MAX_INFERENCE_SIDE,
+  });
 
   const mergedItems = mergeOcrResults(resultSets);
   const parsed = parseExpenseOcrItems(mergedItems);
@@ -92,28 +89,27 @@ export async function analyzeExpenseImage(file, { onStatus } = {}) {
     ocr_payload: {
       items: mergedItems,
       metrics: resultSets.map((result) => result.metrics).filter(Boolean),
-      tamil_available: tamilAvailable,
-      tamil_error: tamilError,
+      tamil_available: true,
     },
-    warning: tamilError || (!TAMIL_MODEL_URL ? 'Tamil model is not configured; review Tamil lines manually.' : null),
   };
 }
 
+export async function prewarmExpenseOcr() {
+  await loadPipeline();
+}
+
 export async function disposeExpenseOcr() {
-  const pipelines = [englishPipeline, tamilPipeline].filter(Boolean);
-  englishPipeline = null;
-  tamilPipeline = null;
-  englishPromise = null;
-  tamilPromise = null;
-  await Promise.all(pipelines.map(async (pipeline) => {
-    try {
-      await pipeline.dispose?.();
-    } catch {
-      // OCR disposal is best-effort during route changes.
-    }
-  }));
+  const pipeline = ocrPipeline;
+  ocrPipeline = null;
+  ocrPromise = null;
+  if (!pipeline) return;
+  try {
+    await pipeline.dispose?.();
+  } catch {
+    // OCR disposal is best-effort during route changes.
+  }
 }
 
 export function isTamilModelConfigured() {
-  return Boolean(TAMIL_MODEL_URL);
+  return Boolean(REC_MODEL_URL);
 }

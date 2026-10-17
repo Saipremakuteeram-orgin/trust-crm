@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { AlertTriangle, Camera, Check, Loader2, Plus, RotateCcw, Trash2, X } from "lucide-react";
 import api from "../lib/api";
 import { useToast } from "./Toast";
-import { analyzeExpenseImage } from "../lib/ocr/client";
+import { analyzeExpenseImage, prewarmExpenseOcr } from "../lib/ocr/client";
 
 const EMPTY_ITEM = { item_name: "", source_text: "", quantity: 1, amount: "", confidence: null, category_id: "" };
 
@@ -30,7 +30,6 @@ export default function ExpenseScanReview({ open, onClose, onApproved, initialMo
   const [step, setStep] = useState("capture");
   const [file, setFile] = useState(null);
   const [previewUrl, setPreviewUrl] = useState("");
-  const [statusText, setStatusText] = useState("");
   const [error, setError] = useState("");
   const [scan, setScan] = useState(null);
   const [draft, setDraft] = useState(null);
@@ -40,6 +39,7 @@ export default function ExpenseScanReview({ open, onClose, onApproved, initialMo
   const [contacts, setContacts] = useState([]);
   const [functionLoading, setFunctionLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [persisting, setPersisting] = useState(false);
   const [approval, setApproval] = useState({
     party: "",
     txn_date: new Date().toISOString().slice(0, 10),
@@ -74,6 +74,14 @@ export default function ExpenseScanReview({ open, onClose, onApproved, initialMo
   }, [open]);
 
   useEffect(() => {
+    if (!open) return undefined;
+    void prewarmExpenseOcr().catch(() => {
+      // The upload flow will retry and can fall back to manual entry.
+    });
+    return undefined;
+  }, [open]);
+
+  useEffect(() => {
     if (!file) {
       setPreviewUrl("");
       return undefined;
@@ -90,7 +98,7 @@ export default function ExpenseScanReview({ open, onClose, onApproved, initialMo
       setScan(null);
       setDraft(null);
       setError("");
-      setStatusText("");
+      setPersisting(false);
       setFunctionDetail(null);
       setApproval({
         party: "",
@@ -120,21 +128,54 @@ export default function ExpenseScanReview({ open, onClose, onApproved, initialMo
     setFile(fileToRead);
     setError("");
     setStep("analyzing");
+
+    let parsed;
     try {
-      const parsed = await analyzeExpenseImage(fileToRead, { onStatus: setStatusText });
-      const items = normalizeItems(parsed.items.length ? parsed.items : [{ ...EMPTY_ITEM }]);
-      setDraft({ ...parsed, items });
-      setApproval((current) => ({
-        ...current,
-        party: parsed.detected_party || "",
-        txn_date: parsed.detected_date || current.txn_date,
-      }));
+      // Let the browser paint the preview before OCR starts on the worker.
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+      parsed = await analyzeExpenseImage(fileToRead);
+    } catch {
+      const fallback = {
+        items: [{ ...EMPTY_ITEM }],
+        raw_lines: [],
+        ocr_payload: {},
+        detected_party: "",
+        detected_date: null,
+        detected_total: null,
+        total_mismatch: false,
+        average_confidence: 0,
+      };
+      const items = normalizeItems(fallback.items);
+      setDraft({ ...fallback, items });
       setStep("review");
-      if (parsed.warning) addToast(parsed.warning, "info");
+      setError("Text extraction was unavailable. The image is loaded; enter the expense details manually.");
+      try {
+        setPersisting(true);
+        await persistDraft(fileToRead, fallback, items);
+      } catch (persistError) {
+        setError(persistError?.response?.data?.message || "The image loaded, but it could not be saved. Please try again.");
+      } finally {
+        setPersisting(false);
+      }
+      return;
+    }
+
+    const items = normalizeItems(parsed.items.length ? parsed.items : [{ ...EMPTY_ITEM }]);
+    setDraft({ ...parsed, items });
+    setApproval((current) => ({
+      ...current,
+      party: parsed.detected_party || "",
+      txn_date: parsed.detected_date || current.txn_date,
+    }));
+    setStep("review");
+    if (parsed.warning) addToast(parsed.warning, "info");
+    try {
+      setPersisting(true);
       await persistDraft(fileToRead, parsed, items);
-    } catch (err) {
-      setError(err?.message || "OCR could not read this image. You can enter the expense manually.");
-      setStep("capture");
+    } catch (persistError) {
+      setError(persistError?.response?.data?.message || "The image loaded, but it could not be saved. Please try again.");
+    } finally {
+      setPersisting(false);
     }
   }
 
@@ -260,7 +301,7 @@ export default function ExpenseScanReview({ open, onClose, onApproved, initialMo
     setScan(null);
     setDraft(null);
     setError("");
-    setStatusText("");
+    setPersisting(false);
   }
 
   if (!open) return null;
@@ -322,7 +363,8 @@ export default function ExpenseScanReview({ open, onClose, onApproved, initialMo
                 <Loader2 size={28} className="animate-spin text-saffron-500" />
                 <div>
                   <h3 className="font-bold text-stone-900">Reading the note…</h3>
-                  <p className="text-sm text-stone-500 mt-1">{statusText || "Preparing OCR"}</p>
+                  <p className="text-sm text-stone-500 mt-1">Analyzing image…</p>
+                  <p className="text-xs text-stone-400 mt-1">The preview is ready. Text extraction continues in the background.</p>
                 </div>
               </div>
             )}
@@ -453,10 +495,10 @@ export default function ExpenseScanReview({ open, onClose, onApproved, initialMo
                 {error && <div className="rounded-xl bg-rose-50 border border-rose-200 text-rose-700 px-3 py-2.5 text-sm">{error}</div>}
                 <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2 border-t border-stone-100">
                   <button type="button" onClick={onClose} className="px-4 py-2.5 rounded-xl border-2 border-stone-200 text-stone-700 text-sm font-semibold">Cancel</button>
-                  <button type="button" onClick={handleApprove} disabled={saving} className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-saffron-500 hover:bg-saffron-600 text-white text-sm font-bold disabled:opacity-50">
-                    {saving ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
-                    {saving ? "Approving…" : `Approve ${draft.items.length} expense${draft.items.length === 1 ? "" : "s"}`}
-                  </button>
+                   <button type="button" onClick={handleApprove} disabled={saving || persisting || !scan?.id} className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-saffron-500 hover:bg-saffron-600 text-white text-sm font-bold disabled:opacity-50">
+                     {saving || persisting ? <Loader2 size={16} className="animate-spin" /> : <Check size={16} />}
+                     {saving ? "Approving…" : persisting ? "Saving image…" : `Approve ${draft.items.length} expense${draft.items.length === 1 ? "" : "s"}`}
+                   </button>
                 </div>
               </div>
             )}

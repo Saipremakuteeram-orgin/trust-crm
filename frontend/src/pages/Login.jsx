@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { supabase } from "../lib/supabase";
+import { checkSupabaseConnection, supabase } from "../lib/supabase";
+import { formatAuthError, isNetworkAuthError } from "../lib/authMessages";
 import PasswordInput from "../components/PasswordInput";
 
 export default function Login() {
@@ -15,11 +16,23 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (signInError) return setError(signInError.message);
-    if (data?.session) {
-      navigate("/dashboard", { replace: true });
+    try {
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+      if (signInError) {
+        const health = isNetworkAuthError(signInError)
+          ? await checkSupabaseConnection()
+          : null;
+        setError(formatAuthError(signInError, health));
+        return;
+      }
+      if (data?.session) {
+        navigate("/dashboard", { replace: true });
+      }
+    } catch (signInError) {
+      const health = await checkSupabaseConnection();
+      setError(formatAuthError(signInError, health));
+    } finally {
+      setLoading(false);
     }
   }
 

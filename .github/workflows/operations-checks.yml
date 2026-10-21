@@ -1,0 +1,50 @@
+name: Operations checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  offline-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+
+      - name: Install backend dependencies
+        run: npm --prefix backend ci
+
+      - name: Run compatibility test
+        run: node --test backend/test/operationsCompatibility.test.js
+
+      - name: Validate migration set without executing SQL
+        run: |
+          node backend/src/migrations/run-migrations.js --dry-run
+          node backend/src/migrations/run-migrations.js --contract
+
+      - name: Run the repository test contract
+        run: npm test
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Build frontend
+        run: npm run build

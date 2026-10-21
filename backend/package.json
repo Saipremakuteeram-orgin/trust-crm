@@ -8,6 +8,7 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
+    "test": "node --test test/**/*.test.js",
     "postinstall": "node -e \"try{require('puppeteer').execPath()}catch(e){console.log('puppeteer postinstall: Chromium already available or will be downloaded on first run')}\""
   },
   "dependencies": {

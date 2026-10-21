@@ -14,11 +14,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 const express = require('express');
-const router = express.Router();
-const supabaseAdmin = require('@/config/supabaseAdmin');
 const { logActivity } = require('@/lib/logger');
-
-const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET;
+const { isOperationsEnabled } = require('../operations/featureFlags');
+const { createDonationService } = require('../operations/donationService');
 
 function safeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string') return false;
@@ -30,16 +28,42 @@ function safeEqual(a, b) {
   return mismatch === 0;
 }
 
-router.post('/website-donation', async (req, res) => {
-  // 1) Authenticate
-  if (!WEBHOOK_SECRET) {
-    console.error('[webhook/website-donation] WEBHOOK_SECRET is not configured');
-    return res.status(500).json({ success: false, message: 'Webhook secret not configured' });
+function createWebsiteDonationRouter({ client, donationService, env = process.env, webhookSecret } = {}) {
+  const router = express.Router();
+  let resolvedDonationService = donationService;
+  const getClient = () => client || require('../config/supabaseAdmin');
+  const getDonationService = () => {
+    if (!resolvedDonationService) resolvedDonationService = createDonationService();
+    return resolvedDonationService;
+  };
+
+  async function processAdditiveDonation(req, existingTransactionId) {
+    if (!isOperationsEnabled('donationsAutomation', env)) return;
+    try {
+      await getDonationService().processVerifiedDonation({
+        payload: req.body,
+        request: req,
+        existingTransactionId,
+      });
+    } catch (error) {
+      // The legacy transaction is the webhook contract. Additive operations
+      // failures remain retryable through the same payment event and must not
+      // turn a successful payment webhook into a PDF/email dependency.
+      console.error('[webhook/website-donation] operations processing failed:', error?.code || 'OPERATIONS_ERROR');
+    }
   }
-  const provided = req.headers['x-trust-webhook-key'] || '';
-  if (!safeEqual(provided, WEBHOOK_SECRET)) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
-  }
+
+  router.post('/website-donation', async (req, res) => {
+    // 1) Authenticate
+    const secret = webhookSecret === undefined ? env.WEBHOOK_SECRET : webhookSecret;
+    if (!secret) {
+      console.error('[webhook/website-donation] WEBHOOK_SECRET is not configured');
+      return res.status(500).json({ success: false, message: 'Webhook secret not configured' });
+    }
+    const provided = req.headers['x-trust-webhook-key'] || '';
+    if (!safeEqual(provided, secret)) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
 
   // 2) Validate payload
   const d = req.body && req.body.donation;
@@ -52,6 +76,7 @@ router.post('/website-donation', async (req, res) => {
   }
 
   // 3) Idempotency — skip if this Razorpay payment already recorded
+  const supabaseAdmin = getClient();
   const { data: existing } = await supabaseAdmin
     .from('transactions')
     .select('id')
@@ -59,6 +84,7 @@ router.post('/website-donation', async (req, res) => {
     .maybeSingle();
 
   if (existing) {
+    await processAdditiveDonation(req, existing.id);
     return res.json({ success: true, alreadyExists: true, transactionId: existing.id });
   }
 
@@ -125,7 +151,16 @@ router.post('/website-donation', async (req, res) => {
     ipAddress: req.ip,
   });
 
+  await processAdditiveDonation(req, data.id);
+
   return res.json({ success: true, transactionId: data.id });
-});
+  });
+
+  return router;
+}
+
+const router = createWebsiteDonationRouter();
+router.createWebsiteDonationRouter = createWebsiteDonationRouter;
+router.safeEqual = safeEqual;
 
 module.exports = router;

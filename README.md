@@ -357,7 +357,7 @@ Database:  Supabase RLS policies on every table
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 24.19.0 (see [`.nvmrc`](.nvmrc))
 - Python 3.10+ (for analytics module)
 - Supabase project (the free tier can be kept active with the scheduled workflow below)
 - Gmail App Password (for email notifications)
@@ -440,17 +440,118 @@ disable scheduled workflows, and Supabase can still pause a project for reasons 
 inactivity. Supabase's only guaranteed no-inactivity-pause option is a paid plan. Keep a
 database export/backup before depending on any free-tier workaround.
 
-### 4. Install and run
+### 4. Install and check from the repository root
+
+Install the root tooling and both applications from their lockfiles:
+
+```bash
+npm ci
+npm --prefix frontend ci
+npm --prefix backend ci
+```
+
+Run the reproducible checks from the repository root:
+
+```bash
+npm test
+npm run lint
+npm run build
+```
+
+`npm test` runs frontend tests, backend tests, frontend lint, and frontend
+build in that order and stops at the first failure. The backend test command is
+ready for Node's built-in test runner; existing backend integration helpers
+remain separate because they require external services and credentials.
+
+The Operations application features are disabled by default. The additive
+Operations schema is supplied through migrations `016_operations_foundation.sql`,
+`017_operations_security.sql`, `018_operations_sequences.sql`, and
+`019_operations_posting.sql`; it does not
+replace or alter the existing CRM tables. The existing CRM does not require new
+credentials to use the offline checks. Inspect and validate the complete
+migration set without executing SQL:
+
+```bash
+node backend/src/migrations/run-migrations.js --dry-run
+node backend/src/migrations/run-migrations.js --contract
+```
+
+Applying migrations requires the configured backend Supabase environment:
+
+```bash
+node backend/src/migrations/run-migrations.js up
+```
+
+Operations flags and any related credentials should only be supplied explicitly
+when the Operations application module is enabled.
+
+### Operations rollout and exact command contract
+
+Operations is disabled by default. Follow [`docs/operations-rollout.md`](docs/operations-rollout.md) for the staged sequence, rollback steps, test mode, monitoring, and configuration-only trust/legal/branding/payment/email/statutory values. The exact repository setup, test, run, and deploy commands are:
+
+```bash
+# From the repository root
+nvm use
+npm ci
+npm --prefix frontend ci
+npm --prefix backend ci
+
+# Offline verification
+npm test
+npm run lint
+npm run build
+node --test backend/test/operationsCompatibility.test.js
+node backend/src/migrations/run-migrations.js --dry-run
+node backend/src/migrations/run-migrations.js --contract
+```
+
+Run the applications locally with separate terminals:
+
+```bash
+npm --prefix backend run dev
+npm --prefix frontend run dev
+```
+
+Deploy the backend using the existing container or Render flow, and deploy the frontend using the existing Vercel flow:
+
+```bash
+docker build -t trust-crm .
+docker run --env-file backend/.env -p 8888:8888 trust-crm
+git push origin main
+cd frontend
+vercel --prod
+```
+
+`npm test` is the single root test command. It runs frontend tests, backend tests,
+frontend lint, and frontend build in order. `docs/operations-test-matrix.md` maps
+each compatibility and Operations acceptance criterion to the command that checks it.
+
+### Current known limitations
+
+- The default frontend package test script covers the existing OCR and authentication tests. The Operations page contract file is preserved and tracked, but the current Node-only frontend test script does not execute `.jsx` files.
+- Offline tests use injected/fake adapters and do not prove a real payment gateway signature, SMTP/HTTPS mail delivery, Supabase availability, or WhatsApp, Telegram, or Google provider delivery.
+- Migration dry-run and contract checks validate file discovery and additive/destructive-DDL rules without executing SQL. Applying migrations, Auth, RLS, triggers, and provider behavior require an authorized disposable or staging environment.
+- Trust legal identifiers, branding, payment settings, sender email, and statutory payroll rules are configuration-only inputs and require validation by the Trust's accountant/operator before official use.
+- Repository lint now completes without errors. It still reports non-blocking warnings from legacy screens and shared components; review those warnings during normal maintenance. The production build also reports existing Vite browser-externalization and large-chunk warnings.
+
+To build and run the backend container after configuring `backend/.env`:
+
+```bash
+docker build -t trust-crm .
+docker run --env-file backend/.env -p 8888:8888 trust-crm
+```
+
+### 5. Install and run
 
 ```bash
 # Backend
 cd backend
-npm install
+npm ci
 npm run dev          # Runs on port 8888
 
 # Frontend (new terminal)
 cd frontend
-npm install
+npm ci
 npm run dev          # Runs on port 3000
 
 # Python analytics (if needed)
@@ -458,7 +559,7 @@ cd backend
 pip install -r requirements.txt
 ```
 
-### 5. Create your admin user
+### 6. Create your admin user
 
 Go to **Supabase Dashboard → Authentication → Users → Add User**. The migration's trigger auto-creates a profile with `accountant` role. To make them admin:
 

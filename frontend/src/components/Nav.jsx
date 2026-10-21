@@ -1,7 +1,9 @@
 ﻿import { useState, useEffect, useCallback } from "react";
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, ArrowDownCircle, Users, Shield, History, Table2, UsersRound, FolderCog, Database, FileBarChart, Send, Mail, Repeat, PartyPopper, MessageCircle, GripVertical, BookOpen, TrendingUp, ScrollText, Heart, CalendarDays, Receipt, Scale, FolderTree, FileText, BarChart3 } from "lucide-react";
+import { LayoutDashboard, ArrowDownCircle, Users, Shield, History, Table2, UsersRound, FolderCog, Database, FileBarChart, Send, Mail, Repeat, PartyPopper, MessageCircle, GripVertical, BookOpen, TrendingUp, ScrollText, Heart, CalendarDays, Receipt, Scale, ChevronDown, Landmark, FileText, WalletCards, CheckSquare, Bot, Building2, BarChart3 } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
+import { useOperations } from "../lib/OperationsContext";
+import { isOperationsEnabled } from "../lib/operationsFlags";
 import api from "../lib/api";
 
 const allItems = [
@@ -37,6 +39,12 @@ function isVisible(item, role) {
 
 export default function Nav() {
   const { profile } = useAuth();
+  const { enabled: operationsEnabled } = useOperations();
+  const fundsEnabled = isOperationsEnabled("funds");
+  const invoicesEnabled = isOperationsEnabled("invoices");
+  const payrollEnabled = isOperationsEnabled("payroll");
+  const approvalsEnabled = isOperationsEnabled("approvals");
+  const automationEnabled = isOperationsEnabled("automationMonitor");
   const role = profile?.role || "viewer";
   const canReorder = role === "admin" || role === "accountant";
 
@@ -44,6 +52,7 @@ export default function Nav() {
   const [order, setOrder] = useState([]);
   const [loading, setLoading] = useState(true);
   const [dragIndex, setDragIndex] = useState(null);
+  const [operationsExpanded, setOperationsExpanded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -187,6 +196,149 @@ export default function Nav() {
               </NavLink>
             </div>
           ))
+        )}
+        {(operationsEnabled || fundsEnabled || invoicesEnabled || payrollEnabled) && (
+          <div className="mt-4 border-t border-white/10 pt-3">
+            <button
+              type="button"
+              aria-expanded={operationsExpanded}
+              onClick={() => setOperationsExpanded((expanded) => !expanded)}
+              className="flex w-full items-center justify-between rounded-xl px-4 py-2.5 text-sm font-semibold text-royal-200 transition-colors hover:bg-white/10 hover:text-white"
+            >
+              <span className="flex items-center gap-3"><Landmark size={18} /> Operations</span>
+              <ChevronDown size={16} className={`transition-transform ${operationsExpanded ? "rotate-180" : ""}`} />
+            </button>
+            {operationsExpanded && (
+              <div className="space-y-1">
+                {operationsEnabled && (
+                  <NavLink
+                    to="/operations"
+                    className={({ isActive }) =>
+                      `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
+                        isActive
+                          ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
+                          : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
+                      }`
+                    }
+                  >
+                    <Landmark size={18} className="transition-transform group-hover:scale-110" /> Trust operations
+                  </NavLink>
+                )}
+                {approvalsEnabled && (
+                  <NavLink
+                    to="/operations/approvals"
+                    className={({ isActive }) =>
+                      `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
+                        isActive
+                          ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
+                          : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
+                      }`
+                    }
+                  >
+                    <CheckSquare size={18} className="transition-transform group-hover:scale-110" /> Approvals
+                  </NavLink>
+                )}
+                {automationEnabled && (
+                  <NavLink
+                    to="/operations/automation"
+                    className={({ isActive }) =>
+                      `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
+                        isActive
+                          ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
+                          : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
+                      }`
+                    }
+                  >
+                    <Bot size={18} className="transition-transform group-hover:scale-110" /> Automation
+                  </NavLink>
+                )}
+                {operationsEnabled && (
+                  <>
+                    <NavLink
+                      to="/operations/reports"
+                      className={({ isActive }) =>
+                        `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
+                          isActive
+                            ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
+                            : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
+                        }`
+                      }
+                    >
+                      <BarChart3 size={18} className="transition-transform group-hover:scale-110" /> Reports
+                    </NavLink>
+                    <NavLink
+                      to="/operations/audit"
+                      className={({ isActive }) =>
+                        `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
+                          isActive
+                            ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
+                            : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
+                        }`
+                      }
+                    >
+                      <History size={18} className="transition-transform group-hover:scale-110" /> Audit & health
+                    </NavLink>
+                  </>
+                )}
+                {operationsEnabled && (
+                  <NavLink
+                    to="/operations/trusts"
+                    className={({ isActive }) =>
+                      `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
+                        isActive
+                          ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
+                          : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
+                      }`
+                    }
+                  >
+                    <Building2 size={18} className="transition-transform group-hover:scale-110" /> Trusts
+                  </NavLink>
+                )}
+                {fundsEnabled && (
+                  <NavLink
+                    to="/operations/funds"
+                    className={({ isActive }) =>
+                      `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
+                        isActive
+                          ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
+                          : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
+                      }`
+                    }
+                  >
+                    <Landmark size={18} className="transition-transform group-hover:scale-110" /> Funds
+                  </NavLink>
+                )}
+                {invoicesEnabled && (
+                  <NavLink
+                    to="/operations/invoices"
+                    className={({ isActive }) =>
+                      `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
+                        isActive
+                          ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
+                          : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
+                      }`
+                    }
+                  >
+                    <FileText size={18} className="transition-transform group-hover:scale-110" /> Invoices
+                  </NavLink>
+                )}
+                {payrollEnabled && (
+                  <NavLink
+                    to="/operations/payroll"
+                    className={({ isActive }) =>
+                      `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
+                        isActive
+                          ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
+                          : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
+                      }`
+                    }
+                  >
+                    <WalletCards size={18} className="transition-transform group-hover:scale-110" /> Payroll
+                  </NavLink>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </div>
 

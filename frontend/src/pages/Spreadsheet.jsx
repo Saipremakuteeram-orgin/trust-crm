@@ -18,6 +18,46 @@ export default function Spreadsheet() {
   const role = profile?.role || "viewer";
   const canEdit = role === "admin" || role === "accountant";
 
+  useEffect(() => {
+    if (!canEdit || !containerRef.current || univerRef.current) return undefined;
+
+    let disposed = false;
+
+    async function init() {
+      const { createUniver, LocaleType, mergeLocales } = await import("@univerjs/presets");
+      const { UniverSheetsCorePreset } = await import("@univerjs/preset-sheets-core");
+      const UniverPresetSheetsCoreEnUS = (await import("@univerjs/preset-sheets-core/locales/en-US")).default;
+      await import("@univerjs/preset-sheets-core/lib/index.css");
+
+      if (disposed || !containerRef.current) return;
+
+      const { univerAPI } = createUniver({
+        locale: LocaleType.EN_US,
+        locales: {
+          [LocaleType.EN_US]: mergeLocales(UniverPresetSheetsCoreEnUS),
+        },
+        presets: [
+          UniverSheetsCorePreset({
+            container: containerRef.current,
+          }),
+        ],
+      });
+
+      univerAPI.createWorkbook({});
+      univerRef.current = univerAPI;
+    }
+
+    init();
+
+    return () => {
+      disposed = true;
+      if (univerRef.current) {
+        univerRef.current.dispose();
+        univerRef.current = null;
+      }
+    };
+  }, [canEdit]);
+
   if (!canEdit) {
     return (
       <AppLayout>
@@ -87,46 +127,6 @@ export default function Spreadsheet() {
       setDownloading(false);
     }
   }
-
-  useEffect(() => {
-    if (!containerRef.current || univerRef.current) return;
-
-    let disposed = false;
-
-    async function init() {
-      const { createUniver, LocaleType, mergeLocales } = await import("@univerjs/presets");
-      const { UniverSheetsCorePreset } = await import("@univerjs/preset-sheets-core");
-      const UniverPresetSheetsCoreEnUS = (await import("@univerjs/preset-sheets-core/locales/en-US")).default;
-      await import("@univerjs/preset-sheets-core/lib/index.css");
-
-      if (disposed || !containerRef.current) return;
-
-      const { univerAPI } = createUniver({
-        locale: LocaleType.EN_US,
-        locales: {
-          [LocaleType.EN_US]: mergeLocales(UniverPresetSheetsCoreEnUS),
-        },
-        presets: [
-          UniverSheetsCorePreset({
-            container: containerRef.current,
-          }),
-        ],
-      });
-
-      univerAPI.createWorkbook({});
-      univerRef.current = univerAPI;
-    }
-
-    init();
-
-    return () => {
-      disposed = true;
-      if (univerRef.current) {
-        univerRef.current.dispose();
-        univerRef.current = null;
-      }
-    };
-  }, []);
 
   return (
     <AppLayout>

@@ -30,6 +30,11 @@ export default function Users() {
   useEscToClose(() => setShowAdd(false), showAdd);
   useEscToClose(() => setResetModal(null), !!resetModal);
 
+  function load() {
+    api.get("/users").then((res) => setUsers(res.data.result)).catch(() => {});
+  }
+  useEffect(load, []);
+
   if (profile && profile.role !== "admin") {
     return (
       <AppLayout>
@@ -41,11 +46,6 @@ export default function Users() {
       </AppLayout>
     );
   }
-
-  function load() {
-    api.get("/users").then((res) => setUsers(res.data.result)).catch(() => {});
-  }
-  useEffect(load, []);
 
   async function syncUsers() {
     setSyncing(true);

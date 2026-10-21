@@ -183,6 +183,33 @@ async function sendEmail({ to, subject, html, text, attachments, replyTo }) {
   }
 }
 
+// Operations donation automation uses this helper so receipt and invoice are
+// always delivered through the existing Resend/SMTP abstraction in one message.
+async function sendDonationDocumentsEmail({
+  to,
+  trustName,
+  receiptNumber,
+  invoiceNumber,
+  receiptBuffer,
+  invoiceBuffer,
+  attachments,
+}) {
+  const resolvedAttachments = Array.isArray(attachments) && attachments.length > 0
+    ? attachments
+    : [
+      { filename: `receipt-${receiptNumber || 'document'}.pdf`, content: receiptBuffer, contentType: 'application/pdf' },
+      { filename: `invoice-${invoiceNumber || 'document'}.pdf`, content: invoiceBuffer, contentType: 'application/pdf' },
+    ];
+  const resolvedTrustName = String(trustName || 'Trust').trim();
+  return sendEmail({
+    to,
+    subject: `Donation receipt and invoice – ${resolvedTrustName}`,
+    html: `<div style="font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#333"><p>Thank you for your donation to <strong>${resolvedTrustName}</strong>.</p><p>Your receipt and invoice are attached to this email.</p></div>`,
+    text: `Thank you for your donation to ${resolvedTrustName}. Your receipt and invoice are attached.`,
+    attachments: resolvedAttachments,
+  });
+}
+
 async function sendTelegram({ chatId, text }) {
   const botToken = process.env.TELEGRAM_BOT_TOKEN;
   if (!botToken || !chatId) return { ok: false, reason: 'no-token-or-chatid' };
@@ -234,4 +261,4 @@ async function notifyContactsOfTransaction(txn, contacts) {
   );
 }
 
-module.exports = { sendEmail, sendTelegram, notifyContactsOfTransaction, fmt, getTransporter, buildBrandedHtml, buildBrandedText, LOGO_ATTACHMENT, LOGO_SRC };
+module.exports = { sendEmail, sendDonationDocumentsEmail, sendTelegram, notifyContactsOfTransaction, fmt, getTransporter, buildBrandedHtml, buildBrandedText, LOGO_ATTACHMENT, LOGO_SRC };

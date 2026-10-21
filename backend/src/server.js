@@ -35,7 +35,7 @@ app.use(cors({
   origin: (origin, cb) => cb(null, isAllowedOrigin(origin) ? origin : false),
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Operations-Trust-Id', 'X-Trust-Id'],
 }));
 app.use(express.json({ limit: '1mb' }));
 
@@ -70,6 +70,20 @@ app.use('/api/recurring-transactions', require('./routes/recurringTransactions')
 app.use('/api/functions', require('./routes/functions'));
 app.use('/api/expense-scans', require('./routes/expenseScans'));
 app.use('/api/whatsapp', require('./routes/whatsapp'));
+
+// Additive Operations trust surface. The router returns 404 while its feature
+// flag is disabled and does not change any existing API route.
+app.use('/api/v2/operations/trusts', require('./routes/operationsTrusts'));
+app.use('/api/v2/operations/approvals', require('./routes/operationsApprovals'));
+app.use('/api/v2/operations/donations', require('./routes/operationsDonations'));
+app.use('/api/v2/operations/funds', require('./routes/operationsFunds'));
+app.use('/api/v2/operations/invoices', require('./routes/operationsInvoices'));
+app.use('/api/v2/operations/payroll', require('./routes/operationsPayroll'));
+app.use('/api/v2/operations/reports', require('./routes/operationsReports'));
+
+const operationsAuditRoutes = require('./routes/operationsAudit');
+app.use('/api/v2/operations/audit', operationsAuditRoutes);
+app.use('/api/v2/operations/automation/events', operationsAuditRoutes.createOperationsAutomationRouter());
 
 // Website -> CRM bridge: when a new event is created on the trust website,
 // auto-create a budget Function here so its expenses can be tracked.
@@ -117,6 +131,9 @@ startScheduledReportsCron();
 
 const { startRecurringTransactionsCron } = require('./cron/recurringTransactions');
 startRecurringTransactionsCron();
+
+const { startOperationsAutomationMonitor } = require('./cron/operationsAutomation');
+startOperationsAutomationMonitor();
 
 process.on('unhandledRejection',(err)=>{console.error('[unhandledRejection]',err.message||err);});
 process.on('uncaughtException',(err)=>{console.error('[uncaughtException]',err.message||err);});

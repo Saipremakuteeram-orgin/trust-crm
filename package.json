@@ -1,0 +1,16 @@
+{
+  "name": "trust-crm",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Repository-level checks for Trust CRM",
+  "engines": {
+    "node": "24.19.0"
+  },
+  "scripts": {
+    "test": "node scripts/test-all.mjs",
+    "test:frontend": "npm --prefix frontend test",
+    "test:backend": "npm --prefix backend test",
+    "lint": "npm --prefix frontend run lint",
+    "build": "npm --prefix frontend run build"
+  }
+}

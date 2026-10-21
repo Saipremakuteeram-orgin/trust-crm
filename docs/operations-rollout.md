@@ -61,6 +61,16 @@ versions in `public.schema_migrations`. Do not use this bundle for a database
 that already contains migration history; use the runner so already-applied
 versions are skipped safely.
 
+If the existing CRM database already has baseline migrations `000` through
+`015`, the SQL Editor alternative is the Operations-only bundle:
+
+```bash
+npm run db:bundle:operations
+```
+
+Paste `supabase/operations-schema.sql` into the SQL Editor. It applies only
+`016` through `019` and records those versions in `public.schema_migrations`.
+
 The Operations migrations are additive and use the `operations_` namespace. Keep a database backup/export according to the existing operational policy before applying them.
 
 ### 2. Existing checks

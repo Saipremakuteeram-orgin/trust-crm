@@ -11,6 +11,7 @@
     "test:frontend": "npm --prefix frontend test",
     "test:backend": "npm --prefix backend test",
     "db:bundle": "node scripts/build-supabase-bundle.mjs",
+    "db:bundle:operations": "node scripts/build-supabase-bundle.mjs --operations",
     "lint": "npm --prefix frontend run lint",
     "build": "npm --prefix frontend run build"
   }

@@ -493,6 +493,17 @@ once. This bundle contains migrations `000` through `019` in order and records
 each version in `public.schema_migrations`. Use the migration runner instead for
 an existing database; the bundle is intentionally marked clean-database-only.
 
+If the existing CRM database already contains migrations `000` through `015`,
+generate the Operations-only bundle instead:
+
+```bash
+npm run db:bundle:operations
+```
+
+Then paste `supabase/operations-schema.sql` into Supabase SQL Editor. It contains
+only Operations migrations `016` through `019` and is safe to rerun because the
+Operations DDL uses guarded tables, indexes, policies, and functions.
+
 Operations flags and any related credentials should only be supplied explicitly
 when the Operations application module is enabled.
 

@@ -4,11 +4,19 @@ import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const migrationsDirectory = path.join(repositoryRoot, 'backend', 'src', 'migrations');
-const outputPath = path.join(repositoryRoot, 'supabase', 'combined-schema.sql');
+const operationsOnly = process.argv.includes('--operations');
+const outputPath = path.join(
+  repositoryRoot,
+  'supabase',
+  operationsOnly ? 'operations-schema.sql' : 'combined-schema.sql',
+);
 
-const migrationFiles = fs.readdirSync(migrationsDirectory)
+const allMigrationFiles = fs.readdirSync(migrationsDirectory)
   .filter((fileName) => /^\d{3}_.+\.sql$/.test(fileName))
   .sort((left, right) => Number(left.slice(0, 3)) - Number(right.slice(0, 3)));
+const migrationFiles = operationsOnly
+  ? allMigrationFiles.filter((fileName) => Number(fileName.slice(0, 3)) >= 16)
+  : allMigrationFiles;
 
 const sections = migrationFiles.map((fileName) => {
   const version = fileName.slice(0, 3);
@@ -31,9 +39,13 @@ const sections = migrationFiles.map((fileName) => {
 });
 
 const bundle = [
-  '-- Trust CRM combined Supabase schema bundle',
+  operationsOnly
+    ? '-- Trust CRM Operations Supabase schema bundle'
+    : '-- Trust CRM combined Supabase schema bundle',
   '-- Generated from backend/src/migrations/*.sql in numeric order.',
-  '-- CLEAN DATABASE ONLY: use the migration runner for an existing database.',
+  operationsOnly
+    ? '-- EXISTING CRM DATABASE: apply after baseline migrations 000 through 015.'
+    : '-- CLEAN DATABASE ONLY: use the migration runner for an existing database.',
   '-- The bundle records versions in public.schema_migrations after each section.',
   '',
   'BEGIN;',

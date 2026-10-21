@@ -69,7 +69,8 @@ npm run db:bundle:operations
 ```
 
 Paste `supabase/operations-schema.sql` into the SQL Editor. It applies only
-`016` through `019` and records those versions in `public.schema_migrations`.
+`016` through `019`, creates `public.schema_migrations` when the legacy CRM is
+missing it, and records those versions in the tracking table.
 
 The Operations migrations are additive and use the `operations_` namespace. Keep a database backup/export according to the existing operational policy before applying them.
 

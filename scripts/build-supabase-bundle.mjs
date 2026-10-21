@@ -50,6 +50,16 @@ const bundle = [
   '',
   'BEGIN;',
   'SET LOCAL search_path = public;',
+  ...(operationsOnly
+    ? [
+        '',
+        '-- The legacy CRM may not have migration tracking yet.',
+        'CREATE TABLE IF NOT EXISTS public.schema_migrations (',
+        '  version VARCHAR(3) PRIMARY KEY,',
+        '  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()',
+        ');',
+      ]
+    : []),
   '',
   sections.join('\n\n'),
   '',

@@ -502,7 +502,9 @@ npm run db:bundle:operations
 
 Then paste `supabase/operations-schema.sql` into Supabase SQL Editor. It contains
 only Operations migrations `016` through `019` and is safe to rerun because the
-Operations DDL uses guarded tables, indexes, policies, and functions.
+Operations DDL uses guarded tables, indexes, policies, and functions. It also
+creates `public.schema_migrations` if the legacy CRM does not have that tracking
+table yet.
 
 Operations flags and any related credentials should only be supplied explicitly
 when the Operations application module is enabled.

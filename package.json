@@ -10,6 +10,7 @@
     "test": "node scripts/test-all.mjs",
     "test:frontend": "npm --prefix frontend test",
     "test:backend": "npm --prefix backend test",
+    "db:bundle": "node scripts/build-supabase-bundle.mjs",
     "lint": "npm --prefix frontend run lint",
     "build": "npm --prefix frontend run build"
   }

@@ -48,6 +48,19 @@ In the authorized database environment, apply the migrations through the existin
 node backend/src/migrations/run-migrations.js up
 ```
 
+For a completely new Supabase project, generate the one-file SQL Editor bundle
+instead:
+
+```bash
+npm run db:bundle
+```
+
+Paste `supabase/combined-schema.sql` into the Supabase SQL Editor and run it
+once. It contains all migrations `000` through `019` in order and records the
+versions in `public.schema_migrations`. Do not use this bundle for a database
+that already contains migration history; use the runner so already-applied
+versions are skipped safely.
+
 The Operations migrations are additive and use the `operations_` namespace. Keep a database backup/export according to the existing operational policy before applying them.
 
 ### 2. Existing checks

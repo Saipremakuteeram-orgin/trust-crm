@@ -107,11 +107,21 @@ app.post('/api/reports/monthly/send-now', requireAuth, sensitiveLimiter, require
   res.json({ success: true, message: 'Monthly report sent' });
 });
 
-app.get('/health', (req, res) => res.json({
-  status: 'ok',
-  commit: process.env.RENDER_GIT_COMMIT || process.env.APP_COMMIT || 'unknown',
-  expense_scan_route: true,
-}));
+app.get('/health', (req, res) => {
+  let whatsappSecret = { initialized: false, source: null };
+  try {
+    whatsappSecret = require('./lib/whatsappCrypto').getEncryptionStatus();
+  } catch (err) {
+    console.error('[health] WhatsApp secret status unavailable:', err.message);
+  }
+
+  res.json({
+    status: 'ok',
+    commit: process.env.RENDER_GIT_COMMIT || process.env.APP_COMMIT || 'unknown',
+    expense_scan_route: true,
+    whatsapp_secret: whatsappSecret,
+  });
+});
 
 const PORT = process.env.PORT || 8888;
 const server = app.listen(PORT, '0.0.0.0', () => console.log(`Express running → On PORT : ${PORT}`));

@@ -45,7 +45,13 @@ router.post('/connect', async (req, res) => {
     res.json({ success: true, result: result });
   } catch (err) {
     console.error('[whatsapp] connect error:', safeErrorMessage(err));
-    res.status(500).json({ success: false, message: 'Failed to initialize WhatsApp client' });
+    const configurationError = /WA_SESSION_ENCRYPTION_KEY|Google Secret Manager|encryption secret/i.test(err?.message || '');
+    res.status(configurationError ? 503 : 500).json({
+      success: false,
+      message: configurationError
+        ? 'WhatsApp is not configured. Ask an administrator to configure its encryption secret.'
+        : 'Failed to initialize WhatsApp client',
+    });
   }
 });
 

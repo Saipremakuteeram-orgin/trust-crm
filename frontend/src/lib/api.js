@@ -44,12 +44,12 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       const path = window.location.pathname;
-      const isAuthRoute = path === '/login' || path === '/m/login' || path.startsWith('/m/login');
+      const isAuthRoute = path === '/login' || path === '/mobile/login' || path.startsWith('/mobile/login');
       if (!isAuthRoute) {
         cachedToken = null;
         tokenExpiry = 0;
         refreshPromise = null;
-        const target = path.startsWith('/m') ? '/m/login' : '/login';
+        const target = path.startsWith('/mobile') ? '/mobile/login' : '/login';
         window.location.href = target;
       }
     }

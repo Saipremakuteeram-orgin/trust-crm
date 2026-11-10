@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Search, Plus, X } from "lucide-react";
 import api from "../../lib/api";
 import MobileShell from "../MobileShell";

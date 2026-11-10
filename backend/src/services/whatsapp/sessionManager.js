@@ -3,7 +3,13 @@ const path = require('path');
 const fs = require('fs');
 const { logActivity } = require('@/lib/logger');
 const { safeErrorMessage } = require('@/lib/security');
-const { saveEncryptedSession, loadEncryptedSession, deleteEncryptedSession, getSessionPath } = require('@/lib/whatsappCrypto');
+const {
+  initializeEncryptionKey,
+  saveEncryptedSession,
+  loadEncryptedSession,
+  deleteEncryptedSession,
+  getSessionPath,
+} = require('@/lib/whatsappCrypto');
 const supabaseAdmin = require('@/config/supabaseAdmin');
 
 const PUPPETEER_EXECUTABLE = process.env.PUPPETEER_EXECUTABLE_PATH;
@@ -234,6 +240,7 @@ class WhatsAppSessionManager {
   }
 
   async createClient(userId) {
+    await initializeEncryptionKey();
     if (this.clients.has(userId)) {
       return { status: 'already_exists' };
     }
@@ -314,6 +321,7 @@ class WhatsAppSessionManager {
 
   async restoreSessions() {
     try {
+      await initializeEncryptionKey();
       const sessionDir = path.dirname(getSessionPath('placeholder'));
       if (!fs.existsSync(sessionDir)) return;
       const files = fs.readdirSync(sessionDir).filter(f => f.endsWith('.enc'));

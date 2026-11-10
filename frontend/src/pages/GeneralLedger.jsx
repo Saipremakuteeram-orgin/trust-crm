@@ -20,7 +20,7 @@ export default function GeneralLedger() {
     setLoading(true);
     try {
       const [ledgerRes, accountsRes] = await Promise.all([
-        api.get(`/ledger/${accountId}`),
+        api.get(`/reports/ledger/${accountId}`),
         api.get("/accounts"),
       ]);
       setData(ledgerRes.data.result);

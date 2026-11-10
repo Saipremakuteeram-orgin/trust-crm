@@ -5,7 +5,7 @@ import {
   FolderCog, Database, FileBarChart, Send, Mail, Repeat, PartyPopper,
   MessageCircle, BookOpen, TrendingUp, ScrollText, Heart, CalendarDays,
   Receipt, Scale, ChevronDown, Landmark, FileText, WalletCards, CheckSquare,
-  Bot, Building2, BarChart3, ChevronRight,
+  Bot, Building2, BarChart3, ChevronRight, Target,
 } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useOperations } from "../lib/OperationsContext";
@@ -66,6 +66,10 @@ const groups = [
   {
     label: "Events",
     items: [item("/events", "Events", CalendarDays, ["admin", "accountant"])],
+  },
+  {
+    label: "Fundraising",
+    items: [item("/campaigns", "Campaigns", Target, ["admin", "accountant"])],
   },
   {
     label: "Reports",

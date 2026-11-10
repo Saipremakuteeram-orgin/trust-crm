@@ -72,6 +72,7 @@ app.use('/api/recurring-transactions', require('./routes/recurringTransactions')
 app.use('/api/functions', require('./routes/functions'));
 app.use('/api/expense-scans', require('./routes/expenseScans'));
 app.use('/api/whatsapp', require('./routes/whatsapp'));
+app.use('/api/events', require('./routes/events'));
 app.use('/api/search', require('./routes/search'));
 
 // Additive Operations trust surface. The router returns 404 while its feature

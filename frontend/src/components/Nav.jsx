@@ -82,6 +82,7 @@ const groups = [
       item("/users", "User Management", Shield, ["admin"]),
       item("/backup", "Backup & Restore", Database, ["admin"]),
       item("/assets", "Assets", Database, ["admin", "accountant"]),
+      item("/security", "Security", Shield, ["admin"]),
     ],
   },
 ];

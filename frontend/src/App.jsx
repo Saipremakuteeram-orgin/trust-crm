@@ -34,6 +34,7 @@ const Events = lazy(() => import("./pages/Events"));
 const Campaigns = lazy(() => import("./pages/Campaigns"));
 const Volunteers = lazy(() => import("./pages/Volunteers"));
 const Assets = lazy(() => import("./pages/Assets"));
+const Security = lazy(() => import("./pages/Security"));
 const Functions = lazy(() => import("./pages/Functions"));
 const WhatsApp = lazy(() => import("./pages/WhatsAppPage"));
 const OperationsFunds = lazy(() => import("./pages/operations/OperationsFunds"));
@@ -182,6 +183,7 @@ export default function App() {
       <Route path="/campaigns" element={<Protected><Campaigns /></Protected>} />
       <Route path="/volunteers" element={<Protected><Volunteers /></Protected>} />
       <Route path="/assets" element={<Protected><Assets /></Protected>} />
+      <Route path="/security" element={<Protected><Security /></Protected>} />
       <Route path="/functions/:id" element={<Protected><Functions /></Protected>} />
         <Route path="/whatsapp" element={<Protected><WhatsApp /></Protected>} />
         <Route path="/contacts" element={<Protected><Contacts /></Protected>} />

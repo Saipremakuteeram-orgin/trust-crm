@@ -7,7 +7,7 @@ import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
 import useEscToClose from "../hooks/useEscToClose";
 
-const emptyForm = { name: "", email: "", telegram_chat_id: "", phone: "", subscribe_monthly_report: false };
+const emptyForm = { name: "", email: "", telegram_chat_id: "", phone: "", subscribe_monthly_report: false, tags: [] };
 
 export default function Contacts() {
   const { profile } = useAuth();
@@ -61,7 +61,7 @@ export default function Contacts() {
 
   function openEdit(contact) {
     setEditing(contact);
-    setForm({ name: contact.name, email: contact.email || "", telegram_chat_id: contact.telegram_chat_id || "", phone: contact.phone || "", subscribe_monthly_report: contact.subscribe_monthly_report || false });
+    setForm({ name: contact.name, email: contact.email || "", telegram_chat_id: contact.telegram_chat_id || "", phone: contact.phone || "", subscribe_monthly_report: contact.subscribe_monthly_report || false, tags: contact.tags || [] });
     setOpen(true);
   }
 
@@ -200,6 +200,7 @@ export default function Contacts() {
               <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Email</th>
               <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Phone</th>
               <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Telegram</th>
+              <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Tags</th>
               <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider">Monthly Report</th>
               {(canEdit || canDelete) && <th className="px-5 py-3.5 font-semibold text-xs uppercase tracking-wider text-right">Actions</th>}
             </tr>
@@ -213,6 +214,11 @@ export default function Contacts() {
                   <td className="px-5 py-3.5 text-stone-600">{c.email || "-"}</td>
                   <td className="px-5 py-3.5 text-stone-600">{c.phone || "-"}</td>
                   <td className="px-5 py-3.5 text-stone-600 font-mono text-xs">{c.telegram_chat_id || "-"}</td>
+                  <td className="px-5 py-3.5">
+                    <div className="flex flex-wrap gap-1">
+                      {(c.tags || []).map((t, i) => <span key={i} className="px-1.5 py-0.5 text-[10px] rounded-full bg-royal-100 text-royal-700">{t}</span>)}
+                    </div>
+                  </td>
                   <td className="px-5 py-3.5">
                     {c.subscribe_monthly_report
                       ? <span className="text-xs font-semibold px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">Yes</span>
@@ -268,6 +274,18 @@ export default function Contacts() {
                 <input placeholder="Telegram Chat ID" value={form.telegram_chat_id} onChange={(e) => setForm({ ...form, telegram_chat_id: e.target.value })}
                   className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
                 <input placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
+                <div className="flex flex-wrap gap-1.5">
+                  {(form.tags || []).map((t, i) => (
+                    <span key={i} className="px-2 py-0.5 text-xs rounded-full bg-saffron-100 text-saffron-700 flex items-center gap-1">
+                      {t}
+                      <button type="button" onClick={() => setForm({ ...form, tags: form.tags.filter((_, j) => j !== i) })} className="hover:text-rose-600">×</button>
+                    </span>
+                  ))}
+                </div>
+                <input placeholder="Add tag (press Enter)" onKeyDown={(e) => {
+                  if (e.key === 'Enter') { e.preventDefault(); const v = e.target.value.trim(); if (v && !(form.tags || []).includes(v)) setForm({ ...form, tags: [...(form.tags || []), v] }); e.target.value = ''; }
+                }}
                   className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
                 <label className="flex items-center gap-2.5 text-sm text-stone-700 cursor-pointer p-2 rounded-xl hover:bg-stone-50 transition-colors">
                   <input type="checkbox" checked={form.subscribe_monthly_report} onChange={(e) => setForm({ ...form, subscribe_monthly_report: e.target.checked })}

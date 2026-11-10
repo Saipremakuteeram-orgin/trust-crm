@@ -73,8 +73,11 @@ export default function Nav() {
   const visibleDefault = allItems.filter((item) => isVisible(item, role));
   const visiblePaths = new Set(visibleDefault.map((i) => i.to));
   const savedVisible = (order || []).filter((to) => visiblePaths.has(to));
+  const missingVisible = visibleDefault
+    .map((i) => i.to)
+    .filter((to) => !savedVisible.includes(to));
   const renderedOrder = savedVisible.length > 0
-    ? savedVisible
+    ? [...savedVisible, ...missingVisible]
     : visibleDefault.map((i) => i.to);
 
   const itemByPath = Object.fromEntries(allItems.map((i) => [i.to, i]));

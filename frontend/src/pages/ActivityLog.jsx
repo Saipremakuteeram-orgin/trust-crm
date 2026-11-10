@@ -232,6 +232,25 @@ export default function ActivityLog() {
                     {detail.reason && (
                       <p className="text-xs text-stone-400 mt-0.5 italic">Reason: "{detail.reason}"</p>
                     )}
+                    {log.details && log.details.before && log.details.after && (
+                      <details className="mt-2 text-xs text-stone-600">
+                        <summary className="cursor-pointer text-stone-500 hover:text-stone-700">View changes</summary>
+                        <div className="mt-1 space-y-0.5 pl-2 border-l-2 border-stone-200">
+                          {Object.keys({ ...log.details.before, ...log.details.after }).map((k) => {
+                            const b = log.details.before?.[k];
+                            const a = log.details.after?.[k];
+                            if (JSON.stringify(b) === JSON.stringify(a)) return null;
+                            return (
+                              <div key={k}>
+                                <span className="font-semibold">{k}:</span>{" "}
+                                <span className="text-rose-600 line-through">{String(b ?? "")}</span>{" → "}
+                                <span className="text-emerald-600">{String(a ?? "")}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </details>
+                    )}
                   </div>
                   <div className="text-xs text-stone-400 whitespace-nowrap mt-1">
                     {timeAgo(log.created_at)}

@@ -76,6 +76,7 @@ app.use('/api/events', require('./routes/events'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/campaigns', require('./routes/campaigns'));
 app.use('/api/volunteers', require('./routes/volunteers'));
+app.use('/api/assets', require('./routes/assets'));
 app.use('/api/search', require('./routes/search'));
 
 // Additive Operations trust surface. The router returns 404 while its feature

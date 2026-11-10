@@ -1,6 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { LogOut, ChevronDown } from "lucide-react";
+import GlobalSearch from "./GlobalSearch";
 import { useAuth } from "../lib/AuthContext";
 import { useState, useRef, useEffect } from "react";
 
@@ -36,7 +37,7 @@ export default function Header() {
 
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between px-8 py-3 bg-white/80 backdrop-blur-md border-b border-stone-200/60">
-      <div />
+      <GlobalSearch />
       <div className="relative" ref={ref}>
         <button
           onClick={() => setOpen(!open)}

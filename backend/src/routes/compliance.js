@@ -8,7 +8,7 @@ const { getCached, invalidate } = require('@/lib/cache');
 router.use(requireAuth);
 
 // COMPLIANCE ITEMS CRUD
-router.get('/compliance', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('compliance_items')
@@ -21,7 +21,7 @@ router.get('/compliance', async (req, res) => {
   }
 });
 
-router.post('/compliance', requireRole('admin', 'accountant'), async (req, res) => {
+router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
   try {
     const { name, category, frequency, due_date, responsible_person, status, notes } = req.body;
     if (!name || !due_date) return res.status(400).json({ success: false, message: 'Name and due date are required' });
@@ -60,7 +60,7 @@ router.post('/compliance', requireRole('admin', 'accountant'), async (req, res) 
   }
 });
 
-router.patch('/compliance/:id', requireRole('admin', 'accountant'), async (req, res) => {
+router.patch('/:id', requireRole('admin', 'accountant'), async (req, res) => {
   try {
     const updates = {};
     const { name, category, frequency, due_date, responsible_person, status, notes } = req.body;
@@ -99,7 +99,7 @@ router.patch('/compliance/:id', requireRole('admin', 'accountant'), async (req, 
   }
 });
 
-router.delete('/compliance/:id', requireRole('admin'), async (req, res) => {
+router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('compliance_items')
@@ -128,7 +128,7 @@ router.delete('/compliance/:id', requireRole('admin'), async (req, res) => {
 });
 
 // COMPLIANCE RETURNS CRUD
-router.get('/compliance/:itemId/returns', async (req, res) => {
+router.get('/:itemId/returns', async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('compliance_returns')
@@ -142,7 +142,7 @@ router.get('/compliance/:itemId/returns', async (req, res) => {
   }
 });
 
-router.post('/compliance/:itemId/returns', requireRole('admin', 'accountant'), async (req, res) => {
+router.post('/:itemId/returns', requireRole('admin', 'accountant'), async (req, res) => {
   try {
     const { period, due_date, filed_date, status, acknowledgement_number, file_url, notes } = req.body;
     if (!period || !due_date) return res.status(400).json({ success: false, message: 'Period and due date are required' });
@@ -181,7 +181,7 @@ router.post('/compliance/:itemId/returns', requireRole('admin', 'accountant'), a
   }
 });
 
-router.patch('/compliance/returns/:returnId', requireRole('admin', 'accountant'), async (req, res) => {
+router.patch('/returns/:returnId', requireRole('admin', 'accountant'), async (req, res) => {
   try {
     const updates = {};
     const { period, due_date, filed_date, status, acknowledgement_number, file_url, notes } = req.body;
@@ -220,7 +220,7 @@ router.patch('/compliance/returns/:returnId', requireRole('admin', 'accountant')
   }
 });
 
-router.delete('/compliance/returns/:returnId', requireRole('admin'), async (req, res) => {
+router.delete('/returns/:returnId', requireRole('admin'), async (req, res) => {
   try {
     const { error } = await supabaseAdmin
       .from('compliance_returns')

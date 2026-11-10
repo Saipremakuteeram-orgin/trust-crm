@@ -8,7 +8,7 @@ const { getCached, invalidate } = require('@/lib/cache');
 router.use(requireAuth);
 
 // JOURNAL ENTRIES CRUD
-router.get('/journal-entries', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { page = 1, limit = 50, is_posted } = req.query;
     const offset = (Number(page) - 1) * Number(limit);
@@ -30,7 +30,7 @@ router.get('/journal-entries', async (req, res) => {
   }
 });
 
-router.post('/journal-entries', requireRole('admin', 'accountant'), async (req, res) => {
+router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
   try {
     const { date, description, reference, lines } = req.body;
 
@@ -95,7 +95,7 @@ router.post('/journal-entries', requireRole('admin', 'accountant'), async (req, 
   }
 });
 
-router.patch('/journal-entries/:id', requireRole('admin', 'accountant'), async (req, res) => {
+router.patch('/:id', requireRole('admin', 'accountant'), async (req, res) => {
   try {
     const { date, description, reference, lines } = req.body;
     const entry = await supabaseAdmin.from('journal_entries').select('is_posted').eq('id', req.params.id).single();
@@ -155,7 +155,7 @@ router.patch('/journal-entries/:id', requireRole('admin', 'accountant'), async (
   }
 });
 
-router.post('/journal-entries/:id/post', requireRole('admin', 'accountant'), async (req, res) => {
+router.post('/:id/post', requireRole('admin', 'accountant'), async (req, res) => {
   try {
     const { data: entry, error } = await supabaseAdmin
       .from('journal_entries')
@@ -190,7 +190,7 @@ router.post('/journal-entries/:id/post', requireRole('admin', 'accountant'), asy
   }
 });
 
-router.delete('/journal-entries/:id', requireRole('admin'), async (req, res) => {
+router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {
     const { data: entry } = await supabaseAdmin.from('journal_entries').select('is_posted').eq('id', req.params.id).single();
 

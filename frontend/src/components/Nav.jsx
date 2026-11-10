@@ -64,6 +64,10 @@ const groups = [
     ],
   },
   {
+    label: "Events",
+    items: [item("/events", "Events", CalendarDays, ["admin", "accountant"])],
+  },
+  {
     label: "Reports",
     items: [item("/reports", "Reports", FileBarChart, ["admin", "accountant"])],
   },

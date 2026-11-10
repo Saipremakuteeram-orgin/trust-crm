@@ -1,14 +1,16 @@
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import { LogOut, ChevronDown, Bell } from "lucide-react";
+import { LogOut, ChevronDown, Bell, Moon, Sun } from "lucide-react";
 import GlobalSearch from "./GlobalSearch";
 import api from "../lib/api";
+import { useTheme } from "../lib/ThemeContext";
 import { useAuth } from "../lib/AuthContext";
 import { useState, useRef, useEffect } from "react";
 
 export default function Header() {
   const navigate = useNavigate();
   const { profile } = useAuth();
+  const { theme, toggle: toggleTheme } = useTheme();
   const [open, setOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
   const [notifs, setNotifs] = useState([]);
@@ -54,6 +56,9 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between px-8 py-3 bg-white/80 backdrop-blur-md border-b border-stone-200/60">
       <GlobalSearch />
+      <button onClick={toggleTheme} className="p-2 rounded-xl hover:bg-stone-100" title="Toggle theme">
+        {theme === "dark" ? <Sun size={18} className="text-stone-600" /> : <Moon size={18} className="text-stone-600" />}
+      </button>
       <div className="relative" ref={notifRef}>
         <button onClick={() => setNotifOpen(!notifOpen)} className="relative p-2 rounded-xl hover:bg-stone-100">
           <Bell size={18} className="text-stone-600" />

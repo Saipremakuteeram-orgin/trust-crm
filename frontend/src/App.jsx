@@ -32,6 +32,7 @@ const Receipts = lazy(() => import("./pages/Receipts"));
 const BankReconciliation = lazy(() => import("./pages/BankReconciliation"));
 const Events = lazy(() => import("./pages/Events"));
 const Campaigns = lazy(() => import("./pages/Campaigns"));
+const Volunteers = lazy(() => import("./pages/Volunteers"));
 const Functions = lazy(() => import("./pages/Functions"));
 const WhatsApp = lazy(() => import("./pages/WhatsAppPage"));
 const OperationsFunds = lazy(() => import("./pages/operations/OperationsFunds"));
@@ -178,6 +179,7 @@ export default function App() {
       <Route path="/bank-reconciliation" element={<Protected><BankReconciliation /></Protected>} />
       <Route path="/events" element={<Protected><Events /></Protected>} />
       <Route path="/campaigns" element={<Protected><Campaigns /></Protected>} />
+      <Route path="/volunteers" element={<Protected><Volunteers /></Protected>} />
       <Route path="/functions/:id" element={<Protected><Functions /></Protected>} />
         <Route path="/whatsapp" element={<Protected><WhatsApp /></Protected>} />
         <Route path="/contacts" element={<Protected><Contacts /></Protected>} />

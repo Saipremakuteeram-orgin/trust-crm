@@ -7,13 +7,15 @@ const { requireAuth, requireRole } = require('@/middlewares/auth');
 const { logActivity } = require('@/lib/logger');
 const { safeErrorMessage } = require('@/lib/security');
 
-const CONTACT_FIELDS = ['name', 'email', 'phone', 'telegram_chat_id', 'enabled', 'subscribe_monthly_report', 'notes'];
+const CONTACT_FIELDS = ['name', 'email', 'phone', 'telegram_chat_id', 'enabled', 'subscribe_monthly_report', 'notes', 'tags'];
 const CSV_UPLOAD = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024, files: 1 } });
 
 router.use(requireAuth);
 
 router.get('/', async (req, res) => {
-  const { data, error } = await supabaseAdmin.from('contacts').select('id, name, email, phone, telegram_chat_id, enabled, subscribe_monthly_report, notes, created_by, created_at').order('name');
+  let query = supabaseAdmin.from('contacts').select('id, name, email, phone, telegram_chat_id, enabled, subscribe_monthly_report, notes, tags, created_by, created_at').order('name');
+  if (req.query.tag) query = query.contains('tags', [req.query.tag]);
+  const { data, error } = await query;
   if (error) return res.status(400).json({ success: false, message: 'Failed to fetch contacts' });
   res.set('Cache-Control', 'private, max-age=30');
   res.json({ success: true, result: data });

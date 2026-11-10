@@ -32,6 +32,7 @@ const groups = [
       item("/groups", "Groups", UsersRound),
       item("/trustees", "Trustees", Shield, ["admin", "accountant"]),
       item("/beneficiaries", "Beneficiaries", Heart, ["admin", "accountant"]),
+      item("/volunteers", "Volunteers", Users, ["admin", "accountant"]),
     ],
   },
   {

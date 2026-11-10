@@ -54,6 +54,7 @@ router.patch('/:id', requireRole('admin', 'accountant'), async (req, res) => {
   if (Object.keys(fields).length === 0) {
     return res.status(400).json({ success: false, message: 'No valid fields to update' });
   }
+  const { data: before } = await supabaseAdmin.from('contacts').select('*').eq('id', req.params.id).maybeSingle();
   const { data, error } = await supabaseAdmin
     .from('contacts')
     .update(fields)
@@ -69,6 +70,8 @@ router.patch('/:id', requireRole('admin', 'accountant'), async (req, res) => {
     entity: 'contact',
     entityId: req.params.id,
     details: fields,
+    before,
+    after: data,
     ipAddress: req.ip,
   });
 

@@ -73,6 +73,7 @@ app.use('/api/functions', require('./routes/functions'));
 app.use('/api/expense-scans', require('./routes/expenseScans'));
 app.use('/api/whatsapp', require('./routes/whatsapp'));
 app.use('/api/events', require('./routes/events'));
+app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/search', require('./routes/search'));
 
 // Additive Operations trust surface. The router returns 404 while its feature
@@ -147,7 +148,9 @@ const { startRecurringTransactionsCron } = require('./cron/recurringTransactions
 startRecurringTransactionsCron();
 
 const { startOperationsAutomationMonitor } = require('./cron/operationsAutomation');
+const { startComplianceAlertsCron } = require('./cron/complianceAlerts');
 startOperationsAutomationMonitor();
+startComplianceAlertsCron();
 
 process.on('unhandledRejection',(err)=>{console.error('[unhandledRejection]',err.message||err);});
 process.on('uncaughtException',(err)=>{console.error('[uncaughtException]',err.message||err);});

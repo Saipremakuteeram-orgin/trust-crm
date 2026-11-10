@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useAuth } from "../lib/AuthContext";
 import { getIsMobile } from "./hooks";
@@ -37,7 +37,7 @@ function Protected({ children }) {
   return children;
 }
 
-function DesktopRedirect() {
+function DesktopRedirect({ children }) {
   const navigate = useNavigate();
   const [ready, setReady] = useState(false);
   useEffect(() => {
@@ -49,15 +49,19 @@ function DesktopRedirect() {
     }
   }, [navigate]);
   if (!ready) return <PageLoader />;
-  return null;
+  return children;
 }
 
 export default function MobileApp() {
   const location = useLocation();
+  const mobileLocation = {
+    ...location,
+    pathname: location.pathname.replace(/^\/mobile/, "") || "/",
+  };
   return (
     <DesktopRedirect>
       <Suspense fallback={<PageLoader />}>
-        <Routes location={location} key={location.pathname}>
+        <Routes location={mobileLocation} key={location.pathname}>
           <Route path="/login" element={<MobileLogin />} />
           <Route path="/" element={<Navigate to="/mobile/home" replace />} />
           <Route path="/home" element={<Protected><MobileHome /></Protected>} />

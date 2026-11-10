@@ -41,6 +41,8 @@ services:
         sync: false
       - key: GOOGLE_PRIVATE_KEY
         sync: false
+      - key: GOOGLE_CLOUD_PROJECT_ID
+        sync: false
       - key: GOOGLE_DRIVE_FOLDER_ID
         sync: false
       - key: GOOGLE_DRIVE_COMMON_FOLDER_ID
@@ -49,6 +51,8 @@ services:
         sync: false
       - key: WA_SESSION_ENCRYPTION_KEY
         sync: false
+      - key: WA_SESSION_KEY_SECRET_NAME
+        value: "trust-crm-wa-session-encryption-key"
       - key: PUPPETEER_EXECUTABLE_PATH
         sync: false
       - key: PUPPETEER_SKIP_DOWNLOAD

@@ -6,8 +6,7 @@ import { useQuickLog } from "../hooks";
 import { useAuth } from "../../lib/AuthContext";
 import { useToast } from "../../components/Toast";
 import { usePreFill } from "../hooks";
-import Card from "./Card";
-import Chip from "./Chip";
+import NumericPad from "./NumericPad";
 
 const emptyForm = {
   type: "credit",

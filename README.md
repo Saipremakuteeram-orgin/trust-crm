@@ -757,6 +757,45 @@ Set these environment variables in Render Dashboard (never in code):
 | `SMTP_PASS` | Gmail App Password |
 | `TELEGRAM_BOT_TOKEN` | @BotFather |
 
+### WhatsApp encryption secret via Google Secret Manager
+
+The backend loads `WA_SESSION_ENCRYPTION_KEY` from Google Secret Manager in production.
+This keeps the WhatsApp encryption key out of GitHub and out of Render Blueprint files.
+
+Use the same Google service account already configured for Drive, and grant it only the
+Secret Manager accessor role:
+
+```bash
+gcloud services enable secretmanager.googleapis.com --project YOUR_GOOGLE_PROJECT_ID
+gcloud secrets create trust-crm-wa-session-encryption-key \
+  --replication-policy=automatic \
+  --project YOUR_GOOGLE_PROJECT_ID
+
+gcloud projects add-iam-policy-binding YOUR_GOOGLE_PROJECT_ID \
+  --member="serviceAccount:YOUR_SERVICE_ACCOUNT_EMAIL" \
+  --role="roles/secretmanager.secretAccessor"
+
+KEY="$(node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")"
+printf '%s' "$KEY" | gcloud secrets versions add trust-crm-wa-session-encryption-key \
+  --data-file=- \
+  --project YOUR_GOOGLE_PROJECT_ID
+unset KEY
+```
+
+In Render, keep these non-secret configuration variables available:
+
+```text
+GOOGLE_CLOUD_PROJECT_ID=YOUR_GOOGLE_PROJECT_ID
+WA_SESSION_KEY_SECRET_NAME=trust-crm-wa-session-encryption-key
+```
+
+The existing `GOOGLE_SERVICE_ACCOUNT_EMAIL` and `GOOGLE_PRIVATE_KEY` values are used to
+authenticate the Secret Manager request. Do not commit either credential. After adding the
+IAM role and secret, redeploy the backend and check `/health`; the service should start even
+when `WA_SESSION_ENCRYPTION_KEY` is not directly present in Render. If Google Secret Manager
+is unavailable, WhatsApp connection is rejected with a configuration error while the main
+CRM and OCR routes remain available.
+
 ---
 
 ## How Trust CRM Compares

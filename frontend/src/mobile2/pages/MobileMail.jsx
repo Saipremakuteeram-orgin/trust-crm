@@ -14,6 +14,7 @@ export default function MobileMail() {
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
   const [file, setFile] = useState(null);
+  const [contacts, setContacts] = useState([]);
   const [sending, setSending] = useState(false);
   const fileRef = useRef(null);
 

@@ -1,5 +1,4 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
 import { Folder, File as FileIcon, Upload } from "lucide-react";
 import api from "../../lib/api";
 import MobileShell from "../MobileShell";

@@ -1,7 +1,8 @@
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
-import { LogOut, ChevronDown } from "lucide-react";
+import { LogOut, ChevronDown, Bell } from "lucide-react";
 import GlobalSearch from "./GlobalSearch";
+import api from "../lib/api";
 import { useAuth } from "../lib/AuthContext";
 import { useState, useRef, useEffect } from "react";
 
@@ -9,7 +10,22 @@ export default function Header() {
   const navigate = useNavigate();
   const { profile } = useAuth();
   const [open, setOpen] = useState(false);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [notifs, setNotifs] = useState([]);
   const ref = useRef(null);
+  const notifRef = useRef(null);
+
+  useEffect(() => {
+    api.get('/notifications').then((r) => setNotifs(r.data.result || [])).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    function handleClick(e) {
+      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
+    }
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
   const role = profile?.role || "viewer";
 
   async function handleLogout() {
@@ -38,6 +54,30 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-30 flex items-center justify-between px-8 py-3 bg-white/80 backdrop-blur-md border-b border-stone-200/60">
       <GlobalSearch />
+      <div className="relative" ref={notifRef}>
+        <button onClick={() => setNotifOpen(!notifOpen)} className="relative p-2 rounded-xl hover:bg-stone-100">
+          <Bell size={18} className="text-stone-600" />
+          {notifs.filter((n) => !n.read_at).length > 0 && (
+            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500" />
+          )}
+        </button>
+        {notifOpen && (
+          <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-stone-100 py-2 z-50 max-h-96 overflow-y-auto">
+            <div className="px-4 py-2 border-b border-stone-100 flex justify-between items-center">
+              <span className="text-sm font-semibold">Notifications</span>
+              <button onClick={() => { api.post('/notifications/read-all'); setNotifs(notifs.map((n) => ({ ...n, read_at: new Date().toISOString() }))); }} className="text-xs text-saffron-600">Mark all read</button>
+            </div>
+            {notifs.length === 0 && <div className="px-4 py-3 text-sm text-stone-400">No notifications</div>}
+            {notifs.map((n) => (
+              <div key={n.id} className={`px-4 py-2.5 border-b border-stone-50 ${n.read_at ? 'opacity-60' : ''}`}>
+                <div className="text-sm font-medium text-stone-800">{n.title}</div>
+                {n.body && <div className="text-xs text-stone-500">{n.body}</div>}
+                <div className="text-[10px] text-stone-400 mt-1">{new Date(n.created_at).toLocaleString()}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
       <div className="relative" ref={ref}>
         <button
           onClick={() => setOpen(!open)}

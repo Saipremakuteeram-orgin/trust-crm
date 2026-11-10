@@ -1,41 +1,86 @@
-﻿import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
-import { LayoutDashboard, ArrowDownCircle, Users, Shield, History, Table2, UsersRound, FolderCog, Database, FileBarChart, Send, Mail, Repeat, PartyPopper, MessageCircle, GripVertical, BookOpen, TrendingUp, ScrollText, Heart, CalendarDays, Receipt, Scale, ChevronDown, Landmark, FileText, WalletCards, CheckSquare, Bot, Building2, BarChart3 } from "lucide-react";
+import {
+  LayoutDashboard, ArrowDownCircle, Users, Shield, History, Table2, UsersRound,
+  FolderCog, Database, FileBarChart, Send, Mail, Repeat, PartyPopper,
+  MessageCircle, BookOpen, TrendingUp, ScrollText, Heart, CalendarDays,
+  Receipt, Scale, ChevronDown, Landmark, FileText, WalletCards, CheckSquare,
+  Bot, Building2, BarChart3, ChevronRight,
+} from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useOperations } from "../lib/OperationsContext";
 import { isOperationsEnabled } from "../lib/operationsFlags";
-import api from "../lib/api";
 
-const allItems = [
-  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/transactions", label: "Transactions", icon: ArrowDownCircle },
-  { to: "/recurring", label: "Recurring", icon: Repeat },
-  { to: "/contacts", label: "Contacts", icon: Users },
-  { to: "/groups", label: "Groups", icon: UsersRound },
-  { to: "/activity", label: "Activity Log", icon: History },
-  { to: "/file-send", label: "Send File", icon: Send },
-  { to: "/mail", label: "Mail", icon: Mail },
-  { to: "/reports", label: "Reports", icon: FileBarChart, roles: ["admin", "accountant"] },
-  { to: "/functions", label: "Functions & Budget", icon: PartyPopper, roles: ["admin", "accountant"] },
-  { to: "/spreadsheet", label: "Spreadsheet", icon: Table2, roles: ["admin", "accountant"] },
-  { to: "/whatsapp", label: "WhatsApp", icon: MessageCircle, roles: ["admin", "accountant"] },
-  { to: "/drive", label: "Common Drive", icon: FolderCog, roles: ["admin", "accountant"] },
-  { to: "/users", label: "User Management", icon: Shield, roles: ["admin"] },
-  { to: "/backup", label: "Backup & Restore", icon: Database, roles: ["admin"] },
-  { to: "/accounts", label: "Chart of Accounts", icon: BookOpen, roles: ["admin", "accountant"] },
-  { to: "/journal", label: "Journal Entries", icon: BookOpen, roles: ["admin", "accountant"] },
-  { to: "/trial-balance", label: "Trial Balance", icon: TrendingUp, roles: ["admin", "accountant"] },
-  { to: "/ledger", label: "General Ledger", icon: ScrollText, roles: ["admin", "accountant"] },
-  { to: "/trustees", label: "Trustees", icon: Shield, roles: ["admin", "accountant"] },
-  { to: "/beneficiaries", label: "Beneficiaries", icon: Heart, roles: ["admin", "accountant"] },
-  { to: "/compliance", label: "Compliance", icon: CalendarDays, roles: ["admin", "accountant"] },
-  { to: "/receipts", label: "Receipts", icon: Receipt, roles: ["admin", "accountant"] },
-  { to: "/bank-reconciliation", label: "Bank Reconciliation", icon: Scale, roles: ["admin", "accountant"] },
+const item = (to, label, icon, roles) => ({ to, label, icon, roles });
+
+const groups = [
+  {
+    label: "Overview",
+    items: [item("/dashboard", "Dashboard", LayoutDashboard)],
+  },
+  {
+    label: "Transactions",
+    items: [
+      item("/transactions", "Transactions", ArrowDownCircle),
+      item("/recurring", "Recurring", Repeat),
+    ],
+  },
+  {
+    label: "People",
+    items: [
+      item("/contacts", "Contacts", Users),
+      item("/groups", "Groups", UsersRound),
+      item("/trustees", "Trustees", Shield, ["admin", "accountant"]),
+      item("/beneficiaries", "Beneficiaries", Heart, ["admin", "accountant"]),
+    ],
+  },
+  {
+    label: "Accounting",
+    items: [
+      item("/accounts", "Chart of Accounts", BookOpen, ["admin", "accountant"]),
+      item("/journal", "Journal Entries", BookOpen, ["admin", "accountant"]),
+      item("/trial-balance", "Trial Balance", TrendingUp, ["admin", "accountant"]),
+      item("/ledger", "General Ledger", ScrollText, ["admin", "accountant"]),
+      item("/functions", "Functions & Budget", PartyPopper, ["admin", "accountant"]),
+      item("/spreadsheet", "Spreadsheet", Table2, ["admin", "accountant"]),
+    ],
+  },
+  {
+    label: "Compliance & Records",
+    items: [
+      item("/compliance", "Compliance", CalendarDays, ["admin", "accountant"]),
+      item("/receipts", "Receipts", Receipt, ["admin", "accountant"]),
+      item("/bank-reconciliation", "Bank Reconciliation", Scale, ["admin", "accountant"]),
+      item("/activity", "Activity Log", History),
+    ],
+  },
+  {
+    label: "Communication",
+    items: [
+      item("/file-send", "Send File", Send),
+      item("/mail", "Mail", Mail),
+      item("/whatsapp", "WhatsApp", MessageCircle, ["admin", "accountant"]),
+      item("/drive", "Common Drive", FolderCog, ["admin", "accountant"]),
+    ],
+  },
+  {
+    label: "Reports",
+    items: [item("/reports", "Reports", FileBarChart, ["admin", "accountant"])],
+  },
+  {
+    label: "Administration",
+    items: [
+      item("/users", "User Management", Shield, ["admin"]),
+      item("/backup", "Backup & Restore", Database, ["admin"]),
+    ],
+  },
 ];
 
 function isVisible(item, role) {
   return !item.roles || item.roles.includes(role);
 }
+
+const STORAGE_KEY = "trustcrm.nav.collapsedGroups";
 
 export default function Nav() {
   const { profile } = useAuth();
@@ -46,87 +91,30 @@ export default function Nav() {
   const approvalsEnabled = isOperationsEnabled("approvals");
   const automationEnabled = isOperationsEnabled("automationMonitor");
   const role = profile?.role || "viewer";
-  const canReorder = role === "admin" || role === "accountant";
 
-  const [editing, setEditing] = useState(false);
-  const [order, setOrder] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [dragIndex, setDragIndex] = useState(null);
-  const [operationsExpanded, setOperationsExpanded] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    api.get('/profile/nav-order')
-      .then(({ data }) => {
-        if (!cancelled) {
-          setOrder(data?.order || []);
-          setLoading(false);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => { cancelled = true; };
-  }, []);
-
-  const visibleDefault = allItems.filter((item) => isVisible(item, role));
-  const visiblePaths = new Set(visibleDefault.map((i) => i.to));
-  const savedVisible = (order || []).filter((to) => visiblePaths.has(to));
-  const missingVisible = visibleDefault
-    .map((i) => i.to)
-    .filter((to) => !savedVisible.includes(to));
-  const renderedOrder = savedVisible.length > 0
-    ? [...savedVisible, ...missingVisible]
-    : visibleDefault.map((i) => i.to);
-
-  const itemByPath = Object.fromEntries(allItems.map((i) => [i.to, i]));
-
-  const saveOrder = useCallback(async (newOrder) => {
-    setOrder(newOrder);
+  const [collapsed, setCollapsed] = useState(() => {
     try {
-      await api.put('/profile/nav-order', { order: newOrder });
-    } catch (err) {
-      console.error('Failed to save nav order:', err);
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    } catch {
+      return {};
     }
-  }, []);
+  });
 
-  const handleDragStart = (index) => (e) => {
-    e.dataTransfer.effectAllowed = 'move';
-    setDragIndex(index);
+  const toggleGroup = (label) => {
+    setCollapsed((prev) => {
+      const next = { ...prev, [label]: !prev[label] };
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      } catch {}
+      return next;
+    });
   };
-
-  const handleDragOver = (e, _index) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleDrop = (index) => (e) => {
-    e.preventDefault();
-    if (dragIndex === null || dragIndex === index) {
-      setDragIndex(null);
-      return;
-    }
-    const newOrder = [...renderedOrder];
-    const [moved] = newOrder.splice(dragIndex, 1);
-    newOrder.splice(index, 0, moved);
-    setDragIndex(null);
-    saveOrder(newOrder);
-  };
-
-  const handleReset = async () => {
-    await saveOrder([]);
-  };
-
-  const handleToggleEdit = () => {
-    setEditing((prev) => !prev);
-  };
-
-  const navItems = renderedOrder.map((to) => itemByPath[to]).filter(Boolean);
 
   return (
-    <nav className="w-60 shrink-0 min-h-screen flex flex-col relative overflow-hidden animate-slide-in-left"
-      style={{ background: "linear-gradient(180deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%)" }}>
+    <nav
+      className="w-60 shrink-0 min-h-screen flex flex-col relative overflow-hidden animate-slide-in-left"
+      style={{ background: "linear-gradient(180deg, #1e1b4b 0%, #312e81 40%, #4338ca 100%)" }}
+    >
       <div className="absolute inset-0 bg-mesh-pattern opacity-30" />
       <div className="absolute top-0 left-0 w-32 h-32 rounded-full opacity-10"
         style={{ background: "radial-gradient(circle, #fbbf24 0%, transparent 70%)", filter: "blur(40px)" }} />
@@ -141,202 +129,100 @@ export default function Nav() {
             <div className="text-[10px] font-medium text-royal-300 tracking-wider uppercase">Management Portal</div>
           </div>
         </div>
-        {canReorder && (
-          <div className="flex gap-2">
-            <button
-              onClick={handleToggleEdit}
-              className="flex-1 text-xs font-medium px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
-            >
-              {editing ? 'Done' : 'Reorder'}
-            </button>
-            {editing && (
-              <button
-                onClick={handleReset}
-                className="text-xs font-medium px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
-              >
-                Reset to default
-              </button>
-            )}
-          </div>
-        )}
       </div>
 
       <div className="relative z-10 w-full h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" />
 
-      <div className="relative z-10 flex-1 px-3 py-4 space-y-1 stagger-children">
-        {loading ? (
-          <div className="text-sm text-royal-300 px-4">Loading...</div>
-        ) : navItems.length === 0 ? (
-          <div className="text-sm text-royal-300 px-4">No items</div>
-        ) : (
-          navItems.map(({ to, label, icon: Icon }, index) => (
-            <div
-              key={to}
-              onDragOver={editing ? (e) => handleDragOver(e, index) : undefined}
-              onDrop={editing ? handleDrop(index) : undefined}
-              className={`flex items-center ${editing ? '' : ''}`}
-            >
-              {editing && (
-                <span
-                  className="text-royal-300 hover:text-white transition-colors mr-1"
-                  onDragStart={handleDragStart(index)}
-                  draggable
-                >
-                  <GripVertical size={16} />
-                </span>
-              )}
-              <NavLink
-                to={to}
-                className={({ isActive }) =>
-                  `group flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
-                    isActive
-                      ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
-                      : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                  } animate-fade-in-up`
-                }
+      <div className="relative z-10 flex-1 px-3 py-4 space-y-3 overflow-y-auto">
+        {groups.map((group) => {
+          const visibleItems = group.items.filter((i) => isVisible(i, role));
+          if (visibleItems.length === 0) return null;
+          const isCollapsed = !!collapsed[group.label];
+          return (
+            <div key={group.label} className="space-y-1">
+              <button
+                type="button"
+                onClick={() => toggleGroup(group.label)}
+                className="flex w-full items-center justify-between px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-royal-300 hover:text-white transition-colors"
               >
-                <Icon size={18} className="transition-transform group-hover:scale-110" /> {label}
-              </NavLink>
+                <span>{group.label}</span>
+                <ChevronRight size={12} className={`transition-transform ${isCollapsed ? "" : "rotate-90"}`} />
+              </button>
+              {!isCollapsed && visibleItems.map(({ to, label, icon: Icon }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  className={({ isActive }) =>
+                    `group flex items-center gap-3 px-4 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                      isActive
+                        ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
+                        : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
+                    }`
+                  }
+                >
+                  <Icon size={16} className="transition-transform group-hover:scale-110" /> {label}
+                </NavLink>
+              ))}
             </div>
-          ))
-        )}
+          );
+        })}
+
         {(operationsEnabled || fundsEnabled || invoicesEnabled || payrollEnabled) && (
-          <div className="mt-4 border-t border-white/10 pt-3">
+          <div className="mt-2 border-t border-white/10 pt-3 space-y-1">
             <button
               type="button"
-              aria-expanded={operationsExpanded}
-              onClick={() => setOperationsExpanded((expanded) => !expanded)}
-              className="flex w-full items-center justify-between rounded-xl px-4 py-2.5 text-sm font-semibold text-royal-200 transition-colors hover:bg-white/10 hover:text-white"
+              aria-expanded={!collapsed["Operations"]}
+              onClick={() => toggleGroup("Operations")}
+              className="flex w-full items-center justify-between rounded-xl px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-royal-300 hover:text-white transition-colors"
             >
-              <span className="flex items-center gap-3"><Landmark size={18} /> Operations</span>
-              <ChevronDown size={16} className={`transition-transform ${operationsExpanded ? "rotate-180" : ""}`} />
+              <span className="flex items-center gap-2"><Landmark size={12} /> Operations</span>
+              <ChevronRight size={12} className={`transition-transform ${collapsed["Operations"] ? "" : "rotate-90"}`} />
             </button>
-            {operationsExpanded && (
+            {!collapsed["Operations"] && (
               <div className="space-y-1">
                 {operationsEnabled && (
-                  <NavLink
-                    to="/operations"
-                    className={({ isActive }) =>
-                      `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-                        isActive
-                          ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
-                          : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                      }`
-                    }
-                  >
-                    <Landmark size={18} className="transition-transform group-hover:scale-110" /> Trust operations
+                  <NavLink to="/operations" className={({ isActive }) => `group ml-2 flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${isActive ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25" : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"}`}>
+                    <Landmark size={16} /> Trust operations
                   </NavLink>
                 )}
                 {approvalsEnabled && (
-                  <NavLink
-                    to="/operations/approvals"
-                    className={({ isActive }) =>
-                      `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-                        isActive
-                          ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
-                          : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                      }`
-                    }
-                  >
-                    <CheckSquare size={18} className="transition-transform group-hover:scale-110" /> Approvals
+                  <NavLink to="/operations/approvals" className={({ isActive }) => `group ml-2 flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${isActive ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25" : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"}`}>
+                    <CheckSquare size={16} /> Approvals
                   </NavLink>
                 )}
                 {automationEnabled && (
-                  <NavLink
-                    to="/operations/automation"
-                    className={({ isActive }) =>
-                      `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-                        isActive
-                          ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
-                          : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                      }`
-                    }
-                  >
-                    <Bot size={18} className="transition-transform group-hover:scale-110" /> Automation
+                  <NavLink to="/operations/automation" className={({ isActive }) => `group ml-2 flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${isActive ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25" : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"}`}>
+                    <Bot size={16} /> Automation
                   </NavLink>
                 )}
                 {operationsEnabled && (
                   <>
-                    <NavLink
-                      to="/operations/reports"
-                      className={({ isActive }) =>
-                        `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-                          isActive
-                            ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
-                            : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                        }`
-                      }
-                    >
-                      <BarChart3 size={18} className="transition-transform group-hover:scale-110" /> Reports
+                    <NavLink to="/operations/reports" className={({ isActive }) => `group ml-2 flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${isActive ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25" : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"}`}>
+                      <BarChart3 size={16} /> Reports
                     </NavLink>
-                    <NavLink
-                      to="/operations/audit"
-                      className={({ isActive }) =>
-                        `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-                          isActive
-                            ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
-                            : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                        }`
-                      }
-                    >
-                      <History size={18} className="transition-transform group-hover:scale-110" /> Audit & health
+                    <NavLink to="/operations/audit" className={({ isActive }) => `group ml-2 flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${isActive ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25" : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"}`}>
+                      <History size={16} /> Audit & health
                     </NavLink>
                   </>
                 )}
                 {operationsEnabled && (
-                  <NavLink
-                    to="/operations/trusts"
-                    className={({ isActive }) =>
-                      `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-                        isActive
-                          ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
-                          : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                      }`
-                    }
-                  >
-                    <Building2 size={18} className="transition-transform group-hover:scale-110" /> Trusts
+                  <NavLink to="/operations/trusts" className={({ isActive }) => `group ml-2 flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${isActive ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25" : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"}`}>
+                    <Building2 size={16} /> Trusts
                   </NavLink>
                 )}
                 {fundsEnabled && (
-                  <NavLink
-                    to="/operations/funds"
-                    className={({ isActive }) =>
-                      `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-                        isActive
-                          ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
-                          : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                      }`
-                    }
-                  >
-                    <Landmark size={18} className="transition-transform group-hover:scale-110" /> Funds
+                  <NavLink to="/operations/funds" className={({ isActive }) => `group ml-2 flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${isActive ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25" : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"}`}>
+                    <Landmark size={16} /> Funds
                   </NavLink>
                 )}
                 {invoicesEnabled && (
-                  <NavLink
-                    to="/operations/invoices"
-                    className={({ isActive }) =>
-                      `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-                        isActive
-                          ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
-                          : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                      }`
-                    }
-                  >
-                    <FileText size={18} className="transition-transform group-hover:scale-110" /> Invoices
+                  <NavLink to="/operations/invoices" className={({ isActive }) => `group ml-2 flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${isActive ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25" : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"}`}>
+                    <FileText size={16} /> Invoices
                   </NavLink>
                 )}
                 {payrollEnabled && (
-                  <NavLink
-                    to="/operations/payroll"
-                    className={({ isActive }) =>
-                      `group ml-3 mt-1 flex items-center gap-3 rounded-xl px-4 py-2.5 text-sm font-medium transition-all duration-200 ${
-                        isActive
-                          ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25"
-                          : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"
-                      }`
-                    }
-                  >
-                    <WalletCards size={18} className="transition-transform group-hover:scale-110" /> Payroll
+                  <NavLink to="/operations/payroll" className={({ isActive }) => `group ml-2 flex items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-200 ${isActive ? "bg-gradient-to-r from-saffron-500 to-saffron-600 text-white shadow-lg shadow-saffron-500/25" : "text-royal-200 hover:bg-white/10 hover:text-white hover:translate-x-1"}`}>
+                    <WalletCards size={16} /> Payroll
                   </NavLink>
                 )}
               </div>

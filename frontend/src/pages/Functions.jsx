@@ -127,6 +127,8 @@ export default function Functions() {
     function_id: '', function_category_id: '', voucher_filed: null, digital_method: 'upi'
   });
   const [txnSaving, setTxnSaving] = useState(false);
+  const [showVariance, setShowVariance] = useState(false);
+  const [variance, setVariance] = useState([]);
   useEscToClose(() => setTxnModalOpen(false), txnModalOpen);
 
   async function load() {
@@ -143,6 +145,11 @@ export default function Functions() {
   }
 
   useEffect(() => { load(); }, [id]);
+  useEffect(() => {
+    if (showVariance) {
+      api.get("/functions/budget-variance").then((r) => setVariance(r.data.result || [])).catch(() => setVariance([]));
+    }
+  }, [showVariance]);
 
   function handleRefresh() { setRefreshing(true); load(); setTimeout(() => setRefreshing(false), 600); }
 
@@ -908,6 +915,36 @@ export default function Functions() {
           </button>
         ))}
       </div>
+
+      <div className="mb-5">
+        <button onClick={() => setShowVariance((v) => !v)} className="px-4 py-2 text-sm font-medium rounded-xl bg-white border border-stone-200 text-stone-600 hover:bg-stone-50 transition-all">
+          {showVariance ? "Hide" : "Show"} Budget Variance
+        </button>
+      </div>
+      {showVariance && (
+        <div className="bg-white rounded-2xl border border-stone-200/80 shadow-sm overflow-hidden mb-6">
+          <table className="w-full text-sm">
+            <thead className="bg-stone-50 text-stone-600 text-xs uppercase">
+              <tr>
+                <th className="px-4 py-2 text-left">Function</th>
+                <th className="px-4 py-2 text-right">Budget</th>
+                <th className="px-4 py-2 text-right">Actual</th>
+                <th className="px-4 py-2 text-right">Variance</th>
+              </tr>
+            </thead>
+            <tbody>
+              {variance.map((v) => (
+                <tr key={v.id} className="border-t border-stone-100">
+                  <td className="px-4 py-2">{v.name}</td>
+                  <td className="px-4 py-2 text-right">{fmt(v.budget_total)}</td>
+                  <td className="px-4 py-2 text-right">{fmt(v.actual_spend)}</td>
+                  <td className={`px-4 py-2 text-right font-semibold ${v.over_budget ? "text-rose-600" : "text-emerald-600"}`}>{fmt(v.variance)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Function cards grid */}
       {filtered.length === 0 ? (

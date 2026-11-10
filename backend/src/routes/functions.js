@@ -8,6 +8,28 @@ router.use(requireAuth);
 
 const VALID_STATUSES = ['active', 'completed', 'archived'];
 
+// BUDGET VARIANCE across functions
+router.get('/budget-variance', requireRole('admin', 'accountant'), async (req, res) => {
+  try {
+    const { data: fns, error } = await supabaseAdmin.from('v_function_budget_summary').select('*');
+    if (error) throw error;
+    const { data: txns } = await supabaseAdmin.from('transactions').select('function_id, type, amount').not('function_id', 'is', null);
+    const actualByFn = {};
+    (txns || []).forEach((t) => {
+      if (t.type !== 'debit') return;
+      actualByFn[t.function_id] = (actualByFn[t.function_id] || 0) + Number(t.amount || 0);
+    });
+    const result = (fns || []).map((f) => {
+      const actual = actualByFn[f.id] || 0;
+      const budget = Number(f.budget_total || 0);
+      return { ...f, actual_spend: actual, variance: budget - actual, over_budget: actual > budget };
+    });
+    res.json({ success: true, result });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+});
+
 // LIST functions with budget summary
 router.get('/', async (req, res) => {
   try {

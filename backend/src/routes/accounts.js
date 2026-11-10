@@ -8,7 +8,7 @@ const { getCached, invalidate } = require('@/lib/cache');
 router.use(requireAuth);
 
 // CHART OF ACCOUNTS CRUD
-router.get('/accounts', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { type, parent_id } = req.query;
     let query = supabaseAdmin.from('chart_of_accounts').select('*').order('account_code', { ascending: true });
@@ -25,7 +25,7 @@ router.get('/accounts', async (req, res) => {
   }
 });
 
-router.post('/accounts', requireRole('admin'), async (req, res) => {
+router.post('/', requireRole('admin'), async (req, res) => {
   try {
     const { account_code, name, type, parent_id, is_active } = req.body;
 

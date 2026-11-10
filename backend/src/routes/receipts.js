@@ -8,7 +8,7 @@ const { getCached, invalidate } = require('@/lib/cache');
 router.use(requireAuth);
 
 // LIST donation receipts
-router.get('/receipts', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('donation_receipts')
@@ -22,7 +22,7 @@ router.get('/receipts', async (req, res) => {
 });
 
 // CREATE donation receipt
-router.post('/receipts', requireRole('admin', 'accountant'), async (req, res) => {
+router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
   try {
     const { transaction_id, donor_id, amount, receipt_date, payment_mode, section_80g, section_12a, acknowledgement_number, pan_number, address, notes } = req.body;
 

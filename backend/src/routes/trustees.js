@@ -8,7 +8,7 @@ const { getCached, invalidate } = require('@/lib/cache');
 router.use(requireAuth);
 
 // TRUSTEES CRUD
-router.get('/trustees', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('trustees')
@@ -21,7 +21,7 @@ router.get('/trustees', async (req, res) => {
   }
 });
 
-router.post('/trustees', requireRole('admin', 'accountant'), async (req, res) => {
+router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
   try {
     const { contact_id, appointment_date, term_end, role, designation, is_active, notes } = req.body;
     if (!contact_id) return res.status(400).json({ success: false, message: 'Contact is required' });
@@ -59,7 +59,7 @@ router.post('/trustees', requireRole('admin', 'accountant'), async (req, res) =>
   }
 });
 
-router.patch('/trustees/:id', requireRole('admin', 'accountant'), async (req, res) => {
+router.patch('/:id', requireRole('admin', 'accountant'), async (req, res) => {
   try {
     const updates = {};
     const { appointment_date, term_end, role, designation, is_active, notes } = req.body;
@@ -97,7 +97,7 @@ router.patch('/trustees/:id', requireRole('admin', 'accountant'), async (req, re
   }
 });
 
-router.delete('/trustees/:id', requireRole('admin'), async (req, res) => {
+router.delete('/:id', requireRole('admin'), async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('trustees')

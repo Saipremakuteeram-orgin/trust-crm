@@ -8,7 +8,7 @@ const { requireAuth, requireRole } = require('@/middlewares/auth');
 const { logActivity } = require('@/lib/logger');
 const storage = require('@/services/storage');
 const { sendEmail, sendTelegram } = require('@/services/notify');
-const { safeErrorMessage } = require('@/lib/security');
+const { sanitizeFileName, safeErrorMessage } = require('@/lib/security');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const STORAGE_CHAT_ID = process.env.TELEGRAM_STORAGE_CHAT_ID;
@@ -47,7 +47,7 @@ router.post('/send', requireAuth, requireRole('admin', 'accountant'), upload.sin
 
   if (!validRecipients.length) return res.status(400).json({ success: false, message: 'No valid recipient emails' });
 
-  const docName = file.originalname;
+  const docName = sanitizeFileName(file.originalname);
   let telegramFileId = null;
   let channelMessageId = null;
 

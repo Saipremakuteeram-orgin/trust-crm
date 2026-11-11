@@ -26,6 +26,9 @@ router.get('/logs', requireRole('admin'), async (req, res) => {
 router.post('/run-now', requireRole('admin'), async (req, res) => {
   try {
     const result = await runDailyBackup('manual');
+    if (result?.error) {
+      return res.status(500).json({ success: false, message: result.error, result });
+    }
     res.json({ success: true, result });
   } catch (err) {
     console.error('Backup run-now error:', safeErrorMessage(err));

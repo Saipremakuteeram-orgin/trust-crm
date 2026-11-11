@@ -3498,4 +3498,210 @@ INSERT INTO public.schema_migrations (version)
 VALUES ('019')
 ON CONFLICT (version) DO NOTHING;
 
+-- -----------------------------------------------------------------------------
+-- Migration 020_contact_tags.sql
+-- -----------------------------------------------------------------------------
+-- 20. Contact tags
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}';
+CREATE INDEX IF NOT EXISTS idx_contacts_tags ON contacts USING GIN (tags);
+
+INSERT INTO public.schema_migrations (version)
+VALUES ('020')
+ON CONFLICT (version) DO NOTHING;
+
+-- -----------------------------------------------------------------------------
+-- Migration 021_events.sql
+-- -----------------------------------------------------------------------------
+-- 21. Events & registrations
+CREATE TABLE IF NOT EXISTS events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title TEXT NOT NULL,
+  description TEXT,
+  start_at TIMESTAMPTZ NOT NULL,
+  end_at TIMESTAMPTZ,
+  location TEXT,
+  capacity INTEGER,
+  created_by UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS event_registrations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID REFERENCES events(id) ON DELETE CASCADE,
+  contact_id UUID REFERENCES contacts(id) ON DELETE CASCADE,
+  status TEXT DEFAULT 'registered' CHECK (status IN ('registered','attended','cancelled','no_show')),
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (event_id, contact_id)
+);
+CREATE INDEX IF NOT EXISTS idx_event_registrations_event ON event_registrations(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_registrations_contact ON event_registrations(contact_id);
+
+INSERT INTO public.schema_migrations (version)
+VALUES ('021')
+ON CONFLICT (version) DO NOTHING;
+
+-- -----------------------------------------------------------------------------
+-- Migration 022_notifications.sql
+-- -----------------------------------------------------------------------------
+-- 22. Notifications
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES profiles(id) ON DELETE CASCADE,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  body TEXT,
+  link TEXT,
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);
+
+INSERT INTO public.schema_migrations (version)
+VALUES ('022')
+ON CONFLICT (version) DO NOTHING;
+
+-- -----------------------------------------------------------------------------
+-- Migration 023_campaigns.sql
+-- -----------------------------------------------------------------------------
+-- 23. Donation campaigns
+CREATE TABLE IF NOT EXISTS campaigns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  description TEXT,
+  goal_amount NUMERIC(15,2) DEFAULT 0,
+  start_date DATE,
+  end_date DATE,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active','completed','archived')),
+  created_by UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+ALTER TABLE donation_receipts ADD COLUMN IF NOT EXISTS campaign_id UUID REFERENCES campaigns(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_campaigns_status ON campaigns(status);
+
+INSERT INTO public.schema_migrations (version)
+VALUES ('023')
+ON CONFLICT (version) DO NOTHING;
+
+-- -----------------------------------------------------------------------------
+-- Migration 024_volunteers.sql
+-- -----------------------------------------------------------------------------
+-- 24. Volunteers
+CREATE TABLE IF NOT EXISTS volunteers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  contact_id UUID REFERENCES contacts(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  skills TEXT,
+  availability TEXT,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active','inactive')),
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS volunteer_shifts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  volunteer_id UUID REFERENCES volunteers(id) ON DELETE CASCADE,
+  shift_date DATE NOT NULL,
+  hours NUMERIC(6,2) DEFAULT 0,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_volunteer_shifts_volunteer ON volunteer_shifts(volunteer_id);
+
+INSERT INTO public.schema_migrations (version)
+VALUES ('024')
+ON CONFLICT (version) DO NOTHING;
+
+-- -----------------------------------------------------------------------------
+-- Migration 025_assets.sql
+-- -----------------------------------------------------------------------------
+-- 25. Assets / inventory
+CREATE TABLE IF NOT EXISTS assets (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  category TEXT,
+  value NUMERIC(15,2) DEFAULT 0,
+  location TEXT,
+  purchase_date DATE,
+  status TEXT DEFAULT 'active' CHECK (status IN ('active','disposed','maintenance')),
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+INSERT INTO public.schema_migrations (version)
+VALUES ('025')
+ON CONFLICT (version) DO NOTHING;
+
+-- -----------------------------------------------------------------------------
+-- Migration 026_rls_lockdown.sql
+-- -----------------------------------------------------------------------------
+-- 26. Lock down direct PostgREST access
+--
+-- The browser ships the public anon key, so any table left without row level
+-- security is readable and writable straight from Supabase's REST API, bypassing
+-- every backend role check. The frontend only queries public.profiles (its own
+-- row) directly; everything else goes through the backend, which uses the
+-- service-role client and therefore bypasses RLS.
+--
+-- Idempotent: safe to run more than once.
+
+BEGIN;
+
+-- 1) Drop every permissive policy, including the legacy
+--    "viewable by authenticated" SELECT policies that let any logged-in user
+--    read ledgers, donations and payroll outside the API.
+DO $$
+DECLARE
+  policy_row RECORD;
+BEGIN
+  FOR policy_row IN
+    SELECT policyname, tablename
+    FROM pg_policies
+    WHERE schemaname = 'public'
+  LOOP
+    EXECUTE format('DROP POLICY IF EXISTS %I ON public.%I', policy_row.policyname, policy_row.tablename);
+  END LOOP;
+END $$;
+
+-- 2) Enable RLS on every existing public table (default deny with no policy).
+DO $$
+DECLARE
+  table_row RECORD;
+BEGIN
+  FOR table_row IN
+    SELECT tablename
+    FROM pg_tables
+    WHERE schemaname = 'public'
+  LOOP
+    EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY', table_row.tablename);
+  END LOOP;
+END $$;
+
+-- 3) The anon/authenticated roles no longer need direct table access.
+REVOKE ALL ON ALL TABLES IN SCHEMA public FROM anon, authenticated;
+REVOKE ALL ON ALL SEQUENCES IN SCHEMA public FROM anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON TABLES FROM anon, authenticated;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public REVOKE ALL ON SEQUENCES FROM anon, authenticated;
+
+-- 4) The single direct read the app still needs: a signed-in user's own profile
+--    row (AuthContext resolves name/role). No writes, no other rows.
+--    profiles is provisioned with the Supabase project (not by these
+--    migrations), so guard the policy in case it is absent.
+DO $$
+BEGIN
+  IF to_regclass('public.profiles') IS NOT NULL THEN
+    EXECUTE 'GRANT SELECT ON TABLE public.profiles TO authenticated';
+    EXECUTE 'DROP POLICY IF EXISTS profiles_select_own ON public.profiles';
+    EXECUTE 'CREATE POLICY profiles_select_own ON public.profiles FOR SELECT TO authenticated USING (auth.uid() = id)';
+  END IF;
+END $$;
+
+COMMIT;
+
+INSERT INTO public.schema_migrations (version)
+VALUES ('026')
+ON CONFLICT (version) DO NOTHING;
+
 COMMIT;

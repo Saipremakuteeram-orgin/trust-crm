@@ -40,9 +40,15 @@ const TABLES = [
   { name: 'file_send_logs', label: 'File Send Logs' },
   { name: 'activity_logs', label: 'Activity Logs' },
   { name: 'backup_logs', label: 'Backup Logs' },
+  { name: 'events', label: 'Events' },
+  { name: 'event_registrations', label: 'Event Registrations' },
+  { name: 'campaigns', label: 'Campaigns' },
+  { name: 'volunteers', label: 'Volunteers' },
+  { name: 'volunteer_shifts', label: 'Volunteer Shifts' },
+  { name: 'assets', label: 'Assets' },
 ];
 
-const DATA_TABLES = ['transactions', 'contacts', 'categories', 'contact_groups', 'profiles', 'settings', 'accounts', 'journal_entries', 'journal_entry_lines', 'functions', 'function_categories', 'function_category_items', 'trustees', 'beneficiaries', 'beneficiary_disbursements', 'compliance_items', 'compliance_returns', 'donation_receipts', 'bank_statements', 'bank_reconciliation_items', 'recurring_transactions', 'scheduled_reports', 'mail_logs', 'inbox_messages', 'file_send_logs', 'activity_logs', 'backup_logs'];
+const DATA_TABLES = ['transactions', 'contacts', 'categories', 'contact_groups', 'profiles', 'settings', 'accounts', 'journal_entries', 'journal_entry_lines', 'functions', 'function_categories', 'function_category_items', 'trustees', 'beneficiaries', 'beneficiary_disbursements', 'compliance_items', 'compliance_returns', 'donation_receipts', 'bank_statements', 'bank_reconciliation_items', 'recurring_transactions', 'scheduled_reports', 'mail_logs', 'inbox_messages', 'file_send_logs', 'activity_logs', 'backup_logs', 'events', 'event_registrations', 'campaigns', 'volunteers', 'volunteer_shifts', 'assets'];
 
 async function createLog(log) {
   const { data, error } = await supabaseAdmin.from('backup_logs').insert(log).select().single();
@@ -58,37 +64,47 @@ async function updateLog(id, updates) {
 
 async function fetchAllTables() {
   const results = {};
+  const failures = [];
+
   for (const t of TABLES) {
     let allRows = [];
     let offset = 0;
     let pageCount = 0;
-    
+
     while (true) {
       const { data, error } = await supabaseAdmin
         .from(t.name)
         .select('*')
         .range(offset, offset + PAGE_SIZE - 1);
-      
+
       if (error) {
         console.error(`Backup: failed to fetch ${t.name} (page ${pageCount + 1}):`, error.message);
+        failures.push(`${t.name}: ${error.message}`);
         break;
       }
-      
+
       if (!data || data.length === 0) break;
-      
+
       allRows.push(...data);
       pageCount++;
-      
+
       if (data.length < PAGE_SIZE) break;
       offset += PAGE_SIZE;
     }
-    
+
     if (allRows.length > 0) {
       console.log(`Backup: ${t.name} → ${allRows.length} rows (${pageCount} page${pageCount !== 1 ? 's' : ''})`);
     }
-    
+
     results[t.name] = allRows;
   }
+
+  // A partial backup is not a backup: surface unreadable tables so the run is
+  // logged as failed and the health-check cron retries it.
+  if (failures.length > 0) {
+    throw new Error(`Could not read ${failures.length} table(s): ${failures.join('; ')}`);
+  }
+
   return results;
 }
 
@@ -195,9 +211,53 @@ async function getTelegramFileUrl(fileId) {
   }
 }
 
+async function markStaleRunsFailed() {
+  const cutoff = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const { error } = await supabaseAdmin
+    .from('backup_logs')
+    .update({ status: 'failed', error_message: 'Backup run did not finish (stale running log)' })
+    .eq('status', 'running')
+    .lt('created_at', cutoff);
+  if (error) console.error('Backup: failed to clear stale runs:', error.message);
+}
+
+// A backup only counts as complete when every fetched row is in the workbook
+// AND the workbook was actually stored somewhere durable. Keep this pure so it
+// can be regression-tested without Supabase or Telegram.
+function assertBackupComplete({ workbook, expectedRows, delivered, tables = TABLES }) {
+  const writtenRows = tables.reduce((sum, t) => {
+    const sheet = workbook.getWorksheet(t.label);
+    if (!sheet) return sum;
+    return sum + Math.max(0, sheet.rowCount - 1);
+  }, 0);
+
+  if (writtenRows !== expectedRows) {
+    throw new Error(`Backup verification failed: expected ${expectedRows} rows, workbook has ${writtenRows}`);
+  }
+  if (!delivered) {
+    throw new Error('Backup file was not delivered: check TELEGRAM_BOT_TOKEN and TELEGRAM_STORAGE_CHAT_ID');
+  }
+  return writtenRows;
+}
+
 async function runDailyBackup(triggerType = 'scheduled') {
   const startTime = Date.now();
   console.log(`📦 Starting backup (trigger: ${triggerType})...`);
+
+  await markStaleRunsFailed();
+
+  // Cron jobs run per instance; never let two instances upload the same backup
+  // and never stack runs on top of a job that is still working.
+  const { data: activeRuns } = await supabaseAdmin
+    .from('backup_logs')
+    .select('id')
+    .eq('status', 'running')
+    .gte('created_at', new Date(Date.now() - 30 * 60 * 1000).toISOString())
+    .limit(1);
+  if (activeRuns && activeRuns.length > 0) {
+    console.warn('Backup skipped: another backup run is already in progress');
+    return { skipped: true, reason: 'A backup is already running' };
+  }
 
   const log = await createLog({
     backup_date: getIstDate(),
@@ -223,25 +283,22 @@ async function runDailyBackup(triggerType = 'scheduled') {
     const workbook = buildBackupWorkbook(tables);
     const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
 
-    const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10);
+    const dateStr = getIstDate();
     const fileName = `Trust-CRM-Backup-${dateStr}.xlsx`;
 
     const sent = await sendBufferToTelegram(buffer, fileName,
       `📦 Backup — ${dateStr}\nTables: ${TABLES.map((t) => t.label).join(', ')}\nTotal Rows: ${totalRows}`);
-    
-    // Verify row counts in backup match source
-    const expectedRows = totalRows;
-    const actualRows = expectedRows; // ExcelJS doesn't easily expose row count per sheet without re-reading
-    
-    if (sent) {
-      await sendMessageToTelegram(
-        `✅ <b>Backup Complete</b>\n` +
-        `📅 ${dateStr}\n` +
-        `📊 ${totalRows} rows across ${TABLES.length} tables\n` +
-        `⏱️ Took ${((Date.now() - startTime) / 1000).toFixed(1)}s`
-      );
-    }
+
+    // Verify every fetched row reached the workbook and that the file was
+    // actually delivered; without Telegram it only lived in memory and was lost.
+    assertBackupComplete({ workbook, expectedRows: totalRows, delivered: !!sent });
+
+    await sendMessageToTelegram(
+      `✅ <b>Backup Complete</b>\n` +
+      `📅 ${dateStr}\n` +
+      `📊 ${totalRows} rows across ${TABLES.length} tables\n` +
+      `⏱️ Took ${((Date.now() - startTime) / 1000).toFixed(1)}s`
+    );
 
     const durationMs = Date.now() - startTime;
 
@@ -296,4 +353,4 @@ async function getBackupLogs(limit = 30, offset = 0) {
   return data || [];
 }
 
-module.exports = { runDailyBackup, getBackupStatusToday, getBackupLogs, getIstDate, TABLES, uploadFileToTelegram, getTelegramFileUrl };
+module.exports = { runDailyBackup, assertBackupComplete, getBackupStatusToday, getBackupLogs, getIstDate, TABLES, uploadFileToTelegram, getTelegramFileUrl };

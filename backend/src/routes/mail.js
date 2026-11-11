@@ -9,7 +9,7 @@ const { requireAuth, requireRole } = require('@/middlewares/auth');
 const { logActivity } = require('@/lib/logger');
 const storage = require('@/services/storage');
 const { sendEmail, sendTelegram } = require('@/services/notify');
-const { sanitizeHtml, safeErrorMessage } = require('@/lib/security');
+const { sanitizeHtml, sanitizeFileName, safeErrorMessage } = require('@/lib/security');
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const STORAGE_CHAT_ID = process.env.TELEGRAM_STORAGE_CHAT_ID;
@@ -45,13 +45,14 @@ router.post('/send', requireAuth, requireRole('admin', 'accountant'), upload.arr
   if (!validRecipients.length) return res.status(400).json({ success: false, message: 'No valid recipient emails' });
 
   const files = req.files || [];
-  const attachmentNames = files.map((f) => f.originalname);
+  const attachmentNames = files.map((f) => sanitizeFileName(f.originalname));
 
   try {
     // Persist attachments to Supabase storage + Telegram (for backup/records)
     for (const f of files) {
       try {
-        const storagePath = `mail/${Date.now()}-${f.originalname}`;
+        const safeName = sanitizeFileName(f.originalname);
+        const storagePath = `mail/${Date.now()}-${safeName}`;
         await storage.uploadFile(storagePath, f.buffer, f.mimetype);
         await storage.sendFileToTelegram(storagePath, f.originalname, `📎 ${subject || 'Mail attachment'}`);
       } catch (err) {
@@ -63,7 +64,7 @@ router.post('/send', requireAuth, requireRole('admin', 'accountant'), upload.arr
     // (Streams from Telegram are not used here: Resend requires base64 content
     // and nodemailer accepts Buffers, so the original upload buffer is simplest
     // and avoids a fragile re-download round-trip.)
-    const attachments = files.map((f) => ({ filename: f.originalname, content: f.buffer }));
+    const attachments = files.map((f) => ({ filename: sanitizeFileName(f.originalname), content: f.buffer }));
 
     const mailRes = await sendEmail({
       to: validRecipients.join(','),
@@ -209,7 +210,11 @@ router.get('/inbox', requireAuth, async (req, res) => {
       query = query.eq('status', status);
     }
     if (search) {
-      query = query.or(`subject.ilike.%${search}%,from_email.ilike.%${search}%,from_name.ilike.%${search}%,body_text.ilike.%${search}%`);
+      // Strip PostgREST filter syntax so user input cannot inject extra filters.
+      const term = String(search).replace(/[,()%*\\"]/g, ' ').trim().slice(0, 100);
+      if (term) {
+        query = query.or(`subject.ilike.%${term}%,from_email.ilike.%${term}%,from_name.ilike.%${term}%,body_text.ilike.%${term}%`);
+      }
     }
 
     const { data, error, count } = await query;
@@ -263,18 +268,49 @@ router.patch('/inbox/:id', requireAuth, async (req, res) => {
 // Events: email.received
 router.post('/webhook', async (req, res) => {
   try {
-    // Verify Resend webhook signature (optional but recommended)
-    const signature = req.headers['resend-signature'];
+    // Resend delivers webhooks through Svix. Fail closed when the secret is not
+    // configured or the signature headers are missing — an unsigned request must
+    // never be able to inject inbox rows.
     const webhookSecret = process.env.RESEND_WEBHOOK_SECRET;
-    if (webhookSecret && signature) {
-      const expectedSig = crypto
-        .createHmac('sha256', webhookSecret)
-        .update(JSON.stringify(req.body))
-        .digest('hex');
-      if (signature !== expectedSig) {
-        console.warn('[mail] Invalid webhook signature');
-        return res.status(401).json({ success: false, message: 'Invalid signature' });
-      }
+    if (!webhookSecret) {
+      console.error('[mail] RESEND_WEBHOOK_SECRET is not configured; rejecting webhook');
+      return res.status(503).json({ success: false, message: 'Webhook not configured' });
+    }
+
+    const svixId = req.headers['svix-id'];
+    const svixTimestamp = req.headers['svix-timestamp'];
+    const svixSignature = req.headers['svix-signature'];
+    if (!svixId || !svixTimestamp || !svixSignature || !req.rawBody) {
+      return res.status(401).json({ success: false, message: 'Missing webhook signature' });
+    }
+
+    const timestampSeconds = Number(svixTimestamp);
+    if (!Number.isFinite(timestampSeconds) || Math.abs(Date.now() / 1000 - timestampSeconds) > 300) {
+      return res.status(401).json({ success: false, message: 'Stale webhook timestamp' });
+    }
+
+    const secretBytes = Buffer.from(webhookSecret.replace(/^whsec_/, ''), 'base64');
+    const expected = crypto
+      .createHmac('sha256', secretBytes)
+      .update(`${svixId}.${svixTimestamp}.`)
+      .update(req.rawBody)
+      .digest('base64');
+
+    const expectedBuffer = Buffer.from(expected, 'utf8');
+    const valid = String(svixSignature)
+      .split(' ')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .some((entry) => {
+        const [version, value] = entry.split(',');
+        if (version !== 'v1' || !value) return false;
+        const provided = Buffer.from(value, 'utf8');
+        return provided.length === expectedBuffer.length && crypto.timingSafeEqual(provided, expectedBuffer);
+      });
+
+    if (!valid) {
+      console.warn('[mail] Invalid webhook signature');
+      return res.status(401).json({ success: false, message: 'Invalid signature' });
     }
 
     const event = req.body;

@@ -37,7 +37,15 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Operations-Trust-Id', 'X-Trust-Id'],
 }));
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({
+  limit: '1mb',
+  // Preserve the exact request bytes for webhook signature verification.
+  verify: (req, _res, buf) => {
+    if (req.originalUrl && req.originalUrl.startsWith('/api/mail/webhook')) {
+      req.rawBody = buf;
+    }
+  },
+}));
 
 const globalLimiter = rateLimit({ windowMs: 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false, message: { success: false, message: 'Too many requests, please try again later' } });
 app.use('/api', globalLimiter);
@@ -175,19 +183,33 @@ setInterval(() => {
 }, KEEP_ALIVE_INTERVAL);
 console.log(`Keep-alive self-ping enabled (every ${KEEP_ALIVE_INTERVAL / 1000}s)`);
 
-// --- Startup backup verification: warn if no successful backup today ---
+// --- Startup backup verification: recover a missed daily backup ---
 (async () => {
   try {
-    const { getBackupStatusToday } = require('./services/backup');
+    const { getBackupStatusToday, runDailyBackup } = require('./services/backup');
     const logs = await getBackupStatusToday();
     const todaySuccess = logs?.some((l) => l.status === 'success');
-    const istNow = new Date().toLocaleString('en-US', { timeZone: 'Asia/Kolkata' });
-    const istHour = new Date(istNow).getHours();
+    const istHour = Number(
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: 'Asia/Kolkata',
+        hour: '2-digit',
+        hourCycle: 'h23',
+      }).format(new Date())
+    );
 
-    if (!todaySuccess && istHour >= 7) {
-      console.warn(`⚠️  STARTUP WARNING: No successful backup found for today. Last known backup may be stale.`);
-    } else if (todaySuccess) {
+    if (todaySuccess) {
       console.log(`✅ Startup check: Today's backup confirmed.`);
+    } else if (istHour >= 7) {
+      // Render free instances sleep through the 06:00 cron; a wake-up after the
+      // scheduled slot should still produce today's backup.
+      console.warn('⚠️  STARTUP WARNING: No successful backup found for today — running recovery backup in 2 minutes.');
+      setTimeout(() => {
+        runDailyBackup('startup_recovery').catch((err) =>
+          console.error('[startup] Recovery backup failed:', err.message)
+        );
+      }, 2 * 60 * 1000);
+    } else {
+      console.log(`Startup check: no backup yet today (before 07:00 IST); the 06:00/18:00 cron will handle it.`);
     }
   } catch (err) {
     console.error('[startup] Backup verification failed:', err.message);

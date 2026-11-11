@@ -5,6 +5,7 @@ import { useAuth } from "./lib/AuthContext";
 import { ALL_TRUSTS_ID, OperationsProvider, useOperations } from "./lib/OperationsContext";
 import { isOperationsEnabled } from "./lib/operationsFlags";
 import AppLayout from "./components/AppLayout";
+import MfaGate from "./components/MfaGate";
 import MobileApp from "./mobile2/MobileApp";
 
 const Login = lazy(() => import("./pages/Login"));
@@ -75,7 +76,7 @@ function Protected({ children }) {
   const { session } = useAuth();
   if (session === undefined) return <PageLoader />;
   if (!session) return <Navigate to="/login" replace />;
-  return children;
+  return <MfaGate>{children}</MfaGate>;
 }
 
 function AdminProtected({ children }) {
@@ -173,6 +174,7 @@ export default function App() {
         <Route path="/accounts" element={<Protected><Accounts /></Protected>} />
       <Route path="/journal" element={<Protected><JournalEntries /></Protected>} />
       <Route path="/trial-balance" element={<Protected><TrialBalance /></Protected>} />
+      <Route path="/ledger" element={<Protected><GeneralLedger /></Protected>} />
       <Route path="/ledger/:accountId" element={<Protected><GeneralLedger /></Protected>} />
       <Route path="/trustees" element={<Protected><Trustees /></Protected>} />
       <Route path="/beneficiaries" element={<Protected><Beneficiaries /></Protected>} />

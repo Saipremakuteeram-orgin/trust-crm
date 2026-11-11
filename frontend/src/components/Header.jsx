@@ -35,6 +35,19 @@ export default function Header() {
     navigate("/login");
   }
 
+  async function openNotification(n) {
+    if (!n.read_at) {
+      setNotifs((prev) => prev.map((x) => (x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x)));
+      try {
+        await api.patch(`/notifications/${n.id}/read`);
+      } catch {}
+    }
+    if (n.link) {
+      setNotifOpen(false);
+      navigate(n.link);
+    }
+  }
+
   useEffect(() => {
     function handleClick(e) {
       if (ref.current && !ref.current.contains(e.target)) setOpen(false);
@@ -74,7 +87,11 @@ export default function Header() {
             </div>
             {notifs.length === 0 && <div className="px-4 py-3 text-sm text-stone-400">No notifications</div>}
             {notifs.map((n) => (
-              <div key={n.id} className={`px-4 py-2.5 border-b border-stone-50 ${n.read_at ? 'opacity-60' : ''}`}>
+              <div
+                key={n.id}
+                onClick={() => openNotification(n)}
+                className={`px-4 py-2.5 border-b border-stone-50 ${n.link ? 'cursor-pointer hover:bg-stone-50' : ''} ${n.read_at ? 'opacity-60' : ''}`}
+              >
                 <div className="text-sm font-medium text-stone-800">{n.title}</div>
                 {n.body && <div className="text-xs text-stone-500">{n.body}</div>}
                 <div className="text-[10px] text-stone-400 mt-1">{new Date(n.created_at).toLocaleString()}</div>

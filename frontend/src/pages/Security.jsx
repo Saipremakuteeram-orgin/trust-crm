@@ -24,16 +24,35 @@ export default function Security() {
   async function enroll() {
     setEnrolling(true);
     setMessage("");
+    // A previously abandoned enrollment leaves an unverified factor behind and
+    // makes every new enroll call fail, so clear those first.
+    const stale = factors.filter((f) => f.status !== "verified");
+    for (const factor of stale) {
+      await supabase.auth.mfa.unenroll({ factorId: factor.id });
+    }
     const { data, error } = await supabase.auth.mfa.enroll({ factorType: "totp", friendlyName: "Trust CRM" });
     if (error) { setMessage(error.message); setEnrolling(false); return; }
     setFactorId(data.id);
     setQr(data.totp.qr_code);
+    await load();
+    setEnrolling(false);
+  }
+
+  async function cancelEnroll() {
+    if (factorId) await supabase.auth.mfa.unenroll({ factorId });
+    setQr(null);
+    setFactorId(null);
+    setCode("");
+    setMessage("");
+    await load();
   }
 
   async function verify() {
     if (!factorId) return;
     setVerifying(true);
-    const { data: challenge } = await supabase.auth.mfa.challenge({ factorId });
+    setMessage("");
+    const { data: challenge, error: challengeError } = await supabase.auth.mfa.challenge({ factorId });
+    if (challengeError) { setMessage(challengeError.message); setVerifying(false); return; }
     const { error } = await supabase.auth.mfa.verify({ factorId, challengeId: challenge.id, code });
     if (error) { setMessage(error.message); setVerifying(false); return; }
     setMessage("MFA enabled successfully");
@@ -74,7 +93,7 @@ export default function Security() {
           </div>
         )}
 
-        {!qr && factors.length === 0 && (
+        {!qr && !factors.some((f) => f.status === "verified") && (
           <button onClick={enroll} disabled={enrolling} className="bg-saffron-500 text-white rounded-xl px-4 py-2 text-sm font-semibold">
             {enrolling ? "Enrolling..." : "Enable MFA"}
           </button>
@@ -86,9 +105,10 @@ export default function Security() {
             <img src={qr} alt="MFA QR" className="w-48 h-48 border rounded-xl" />
             <div className="mt-3">
               <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Enter 6-digit code" className="border rounded-xl px-3 py-2 text-sm w-full mb-2" />
-              <button onClick={verify} disabled={verifying} className="bg-saffron-500 text-white rounded-xl px-4 py-2 text-sm font-semibold w-full">
+              <button onClick={verify} disabled={verifying || code.trim().length !== 6} className="bg-saffron-500 text-white rounded-xl px-4 py-2 text-sm font-semibold w-full disabled:opacity-50">
                 {verifying ? "Verifying..." : "Verify & Enable"}
               </button>
+              <button onClick={cancelEnroll} className="mt-2 text-xs text-stone-500 hover:text-stone-700 w-full">Cancel</button>
             </div>
           </div>
         )}

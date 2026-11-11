@@ -24,7 +24,7 @@ router.get('/', async (req, res) => {
 // CREATE donation receipt
 router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
   try {
-    const { transaction_id, donor_id, amount, receipt_date, payment_mode, section_80g, section_12a, acknowledgement_number, pan_number, address, notes } = req.body;
+    const { transaction_id, donor_id, campaign_id, amount, receipt_date, payment_mode, section_80g, section_12a, acknowledgement_number, pan_number, address, notes } = req.body;
 
     if (!donor_id || !amount || Number(amount) <= 0) {
       return res.status(400).json({ success: false, message: 'Donor and valid amount are required' });
@@ -38,6 +38,7 @@ router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
         receipt_number,
         transaction_id: transaction_id || null,
         donor_id,
+        campaign_id: campaign_id || null,
         amount: Number(amount),
         receipt_date: receipt_date || new Date().toISOString().slice(0, 10),
         payment_mode: payment_mode || 'cash',
@@ -75,10 +76,11 @@ router.post('/', requireRole('admin', 'accountant'), async (req, res) => {
 router.patch('/receipts/:id', requireRole('admin', 'accountant'), async (req, res) => {
   try {
     const updates = {};
-    const { transaction_id, donor_id, amount, receipt_date, payment_mode, section_80g, section_12a, acknowledgement_number, pan_number, address, notes } = req.body;
+    const { transaction_id, donor_id, campaign_id, amount, receipt_date, payment_mode, section_80g, section_12a, acknowledgement_number, pan_number, address, notes } = req.body;
 
     if (transaction_id !== undefined) updates.transaction_id = transaction_id || null;
     if (donor_id !== undefined) updates.donor_id = donor_id;
+    if (campaign_id !== undefined) updates.campaign_id = campaign_id || null;
     if (amount !== undefined) updates.amount = Number(amount);
     if (receipt_date !== undefined) updates.receipt_date = receipt_date;
     if (payment_mode !== undefined) updates.payment_mode = payment_mode;

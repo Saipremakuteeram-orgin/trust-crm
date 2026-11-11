@@ -169,8 +169,36 @@ function proxyHandler(req, res) {
 // WebSocket fallback (HTTP/1.1 upgrade) — used if WhatsApp requests a
 // relative ws path. Absolute wss:// URLs from the browser connect directly.
 function attachWebSocket(server) {
-  server.on('upgrade', (req, clientSocket, head) => {
+  server.on('upgrade', async (req, clientSocket, head) => {
     if (!req.url || !req.url.startsWith(PREFIX)) return;
+
+    // Express auth middleware does not run for HTTP upgrades, so the proxy must
+    // authenticate the upgrade itself; otherwise /wa is an open relay.
+    let token = null;
+    try {
+      token = new URL(req.url, 'http://localhost').searchParams.get('token');
+    } catch (_) {
+      token = null;
+    }
+    if (!token) {
+      clientSocket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+      clientSocket.destroy();
+      return;
+    }
+    try {
+      const supabaseAdmin = require('@/config/supabaseAdmin');
+      const { data, error } = await supabaseAdmin.auth.getUser(token);
+      if (error || !data?.user) {
+        clientSocket.write('HTTP/1.1 401 Unauthorized\r\nConnection: close\r\n\r\n');
+        clientSocket.destroy();
+        return;
+      }
+    } catch (err) {
+      console.error('[wa-proxy] ws auth failed:', err.message);
+      clientSocket.destroy();
+      return;
+    }
+
     const path = targetPathFrom(req.url);
     const headers = { ...req.headers, host: TARGET_HOST };
     if (cookieJar) headers['cookie'] = cookieJar;

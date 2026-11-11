@@ -15,6 +15,7 @@ const PAYMENT_MODES = ["cash", "digital", "cheque", "bank_transfer"];
 const emptyForm = {
   transaction_id: "",
   donor_id: "",
+  campaign_id: "",
   amount: "",
   receipt_date: new Date().toISOString().slice(0, 10),
   payment_mode: "cash",
@@ -34,6 +35,7 @@ export default function Receipts() {
 
   const [receipts, setReceipts] = useState([]);
   const [contacts, setContacts] = useState([]);
+  const [campaigns, setCampaigns] = useState([]);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
@@ -45,14 +47,16 @@ export default function Receipts() {
   async function load() {
     setLoading(true);
     try {
-      const [receiptsRes, contactsRes, txnsRes] = await Promise.all([
+      const [receiptsRes, contactsRes, txnsRes, campaignsRes] = await Promise.all([
         api.get("/receipts"),
         api.get("/contacts"),
         api.get("/transactions"),
+        api.get("/campaigns"),
       ]);
       setReceipts(receiptsRes.data.result || []);
       setContacts(contactsRes.data.result || []);
       setTransactions(txnsRes.data.result || []);
+      setCampaigns(campaignsRes.data.result || []);
     } catch {
       addToast("Failed to load receipts", "error");
     }
@@ -72,6 +76,7 @@ export default function Receipts() {
     setForm({
       transaction_id: receipt.transaction_id || "",
       donor_id: receipt.donor_id || "",
+      campaign_id: receipt.campaign_id || "",
       amount: String(receipt.amount || ""),
       receipt_date: receipt.receipt_date || "",
       payment_mode: receipt.payment_mode || "cash",
@@ -97,6 +102,7 @@ export default function Receipts() {
       const payload = {
         transaction_id: form.transaction_id || null,
         donor_id: form.donor_id,
+        campaign_id: form.campaign_id || null,
         amount: Number(form.amount),
         receipt_date: form.receipt_date,
         payment_mode: form.payment_mode,
@@ -203,6 +209,7 @@ Issued at: ${new Date(receipt.issued_at || Date.now()).toLocaleString()}
                     <th className="py-3 px-4 font-semibold">Receipt #</th>
                     <th className="py-3 px-4 font-semibold">Date</th>
                     <th className="py-3 px-4 font-semibold">Donor</th>
+                    <th className="py-3 px-4 font-semibold">Campaign</th>
                     <th className="py-3 px-4 font-semibold">Amount</th>
                     <th className="py-3 px-4 font-semibold">Mode</th>
                     <th className="py-3 px-4 font-semibold">Tax Benefits</th>
@@ -230,6 +237,7 @@ Issued at: ${new Date(receipt.issued_at || Date.now()).toLocaleString()}
                           </div>
                         </div>
                       </td>
+                      <td className="py-3 px-4 text-stone-600">{campaigns.find((c) => c.id === receipt.campaign_id)?.name || "-"}</td>
                       <td className="py-3 px-4 text-stone-900 font-semibold">{fmt(receipt.amount)}</td>
                       <td className="py-3 px-4 text-stone-600 capitalize">{receipt.payment_mode}</td>
                       <td className="py-3 px-4">
@@ -310,6 +318,16 @@ Issued at: ${new Date(receipt.issued_at || Date.now()).toLocaleString()}
                         onChange={(e) => setForm({ ...form, receipt_date: e.target.value })}
                         className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors" />
                     </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-stone-500 mb-1">Campaign (optional)</label>
+                    <select value={form.campaign_id} onChange={(e) => setForm({ ...form, campaign_id: e.target.value })}
+                      className="w-full border-2 border-stone-200 rounded-xl px-4 py-2.5 text-sm focus:border-saffron-400 transition-colors">
+                      <option value="">Not linked to a campaign</option>
+                      {campaigns.map(c => (
+                        <option key={c.id} value={c.id}>{c.name}</option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-stone-500 mb-1">Payment Mode</label>

@@ -40,8 +40,20 @@ api.interceptors.request.use(async (config) => {
 });
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    sessionStorage.removeItem('trustcrm.mfaRedirect');
+    return response;
+  },
   (error) => {
+    if (error.response?.status === 403 && error.response?.data?.code === 'mfa_required') {
+      // The API rejected a password-only token. Refresh the session and reload
+      // once so MfaGate can present the verification step (guard against loops).
+      const key = 'trustcrm.mfaRedirect';
+      if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, '1');
+        supabase.auth.refreshSession().finally(() => window.location.reload());
+      }
+    }
     if (error.response?.status === 401) {
       const path = window.location.pathname;
       const isAuthRoute = path === '/login' || path === '/mobile/login' || path.startsWith('/mobile/login');

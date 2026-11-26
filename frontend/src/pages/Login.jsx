@@ -61,7 +61,7 @@ export default function Login() {
             className="flex flex-col items-center mb-8">
             <motion.div animate={{ y: [0, -6, 0] }} transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
               className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-white/20 shadow-xl mb-4">
-              <img src="/logo.jpg" alt="Trust CRM" className="w-full h-full object-cover" />
+              <img src="/logo.jpg?v=2" alt="Trust CRM" className="w-full h-full object-cover" />
             </motion.div>
             <h1 className="text-2xl font-bold text-white tracking-tight">Trust CRM</h1>
             <p className="text-sm text-royal-200/80 mt-1">Sign in to manage donations & expenses</p>

@@ -57,7 +57,7 @@ function PageLoader() {
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center gap-4">
         <motion.div animate={{ y: [0, -8, 0] }} transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
           className="w-16 h-16 rounded-2xl overflow-hidden shadow-lg">
-          <img src="/logo.jpg" alt="Trust CRM" className="w-full h-full object-cover" />
+          <img src="/logo.jpg?v=2" alt="Trust CRM" className="w-full h-full object-cover" />
         </motion.div>
         <div className="flex gap-1.5">
           <motion.div className="w-2 h-2 rounded-full bg-saffron-500"

@@ -58,7 +58,7 @@ export default function MobileLogin() {
     <div className="min-h-[100dvh] flex flex-col bg-gradient-to-b from-royal-900 via-royal-800 to-royal-700 px-5 pt-12 pb-8">
       <div className="flex flex-col items-center mb-8">
         <div className="w-16 h-16 rounded-2xl overflow-hidden border-2 border-white/20 shadow-xl mb-3">
-          <img src="/logo.jpg" alt="Trust CRM" className="w-full h-full object-cover" />
+          <img src="/logo.jpg?v=2" alt="Trust CRM" className="w-full h-full object-cover" />
         </div>
         <h1 className="text-xl font-bold text-white tracking-tight">Trust CRM</h1>
         <p className="text-xs text-royal-200 mt-1">Manage donations & expenses</p>

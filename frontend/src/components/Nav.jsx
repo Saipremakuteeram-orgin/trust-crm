@@ -133,7 +133,7 @@ export default function Nav() {
       <div className="relative z-10 p-5">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-10 h-10 rounded-xl overflow-hidden border-2 border-white/20 shadow-lg animate-float">
-            <img src="/logo.jpg" alt="Trust" className="w-full h-full object-cover" />
+            <img src="/logo.jpg?v=2" alt="Trust" className="w-full h-full object-cover" />
           </div>
           <div>
             <div className="text-base font-bold text-white tracking-tight">Trust CRM</div>

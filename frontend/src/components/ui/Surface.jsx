@@ -27,7 +27,7 @@ export default function Surface({
     >
       {(title || action) && (
         <header className="flex items-start justify-between gap-3 border-b border-stone-200/70 px-5 py-3.5 dark:border-stone-800">
-          <h2 className="flex items-center gap-2 text-[13px] font-semibold tracking-tight text-stone-800 dark:text-stone-100">
+          <h2 className="flex items-center gap-2 text-[13px] font-bold tracking-tight text-stone-950 dark:text-white">
             {Icon && <Icon size={15} className="text-saffron-600 dark:text-saffron-400" strokeWidth={1.75} />}
             {title}
           </h2>

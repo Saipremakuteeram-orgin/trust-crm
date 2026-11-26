@@ -130,8 +130,8 @@ export default function Login() {
             </div>
           </div>
 
-          <h1 className="text-2xl font-semibold tracking-tight text-stone-900 dark:text-stone-50">Sign in</h1>
-          <p className="mt-1.5 text-sm text-stone-500 dark:text-stone-400">
+          <h1 className="text-2xl font-bold tracking-tight text-stone-950 dark:text-white">Sign in</h1>
+          <p className="mt-1.5 text-sm text-stone-600 dark:text-stone-300">
             Use the email address your trust administrator created for you.
           </p>
 

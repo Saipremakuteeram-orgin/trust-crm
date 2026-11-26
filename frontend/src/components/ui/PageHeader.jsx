@@ -23,11 +23,11 @@ export default function PageHeader({ eyebrow, title, subtitle, actions, children
             {eyebrow}
           </span>
         )}
-        <h1 className="t-h1 text-balance text-stone-900 dark:text-stone-50">
+        <h1 className="t-h1 text-balance text-stone-950 dark:text-white">
           {title}
         </h1>
         {subtitle && (
-          <p className="t-body mt-2 max-w-[65ch] text-stone-500 dark:text-stone-400">
+          <p className="t-body mt-2 max-w-[65ch] text-stone-600 dark:text-stone-300">
             {subtitle}
           </p>
         )}

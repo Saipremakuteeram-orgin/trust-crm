@@ -45,10 +45,10 @@ export default function StatCard({
       />
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="t-overline truncate text-stone-500 dark:text-stone-400">
+          <p className="t-overline truncate text-stone-600 dark:text-stone-300">
             {label}
           </p>
-          <p className="t-money mt-2.5 text-[26px] font-semibold leading-none text-stone-900 dark:text-stone-50">
+          <p className="t-money mt-2.5 text-[26px] font-bold leading-none text-stone-950 dark:text-white">
             {animateValue && format ? (
               <AnimatedNumber value={value} format={format} />
             ) : (

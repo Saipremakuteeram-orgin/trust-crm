@@ -282,7 +282,7 @@ export default function Dashboard() {
         <Surface title="Cash flow" icon={Wallet}>
           <dl className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
-              <dt className="text-stone-500 dark:text-stone-400">Opening balance</dt>
+              <dt className="text-stone-600 dark:text-stone-300">Opening balance</dt>
               {editing === "cash" ? (
                 <div className="flex items-center gap-1.5">
                   <input type="number" value={editVal} onChange={(e) => setEditVal(e.target.value)} autoFocus
@@ -295,7 +295,7 @@ export default function Dashboard() {
                   </button>
                 </div>
               ) : (
-                <dd className="flex items-center gap-1.5 tabular-nums text-stone-800 dark:text-stone-100">
+                <dd className="flex items-center gap-1.5 tabular-nums text-stone-950 dark:text-white">
                   {fmt(cash?.opening_balance)}
                   {isAdmin && (
                     <button onClick={() => { setEditing("cash"); setEditVal(cash?.opening_balance || 0); }} aria-label="Edit cash opening balance"
@@ -307,16 +307,16 @@ export default function Dashboard() {
               )}
             </div>
             <div className="flex items-center justify-between">
-              <dt className="text-stone-500 dark:text-stone-400">Cash in</dt>
+              <dt className="text-stone-600 dark:text-stone-300">Cash in</dt>
               <dd className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">+{fmt(cash?.cash_in)}</dd>
             </div>
             <div className="flex items-center justify-between">
-              <dt className="text-stone-500 dark:text-stone-400">Cash out</dt>
+              <dt className="text-stone-600 dark:text-stone-300">Cash out</dt>
               <dd className="font-medium tabular-nums text-rose-600 dark:text-rose-400">-{fmt(cash?.cash_out)}</dd>
             </div>
             <div className="flex items-center justify-between border-t border-stone-100 pt-3 text-base font-semibold dark:border-stone-800">
-              <dt className="text-stone-600 dark:text-stone-300">Cash in hand</dt>
-              <dd className="tabular-nums text-stone-900 dark:text-white">{fmt(cash?.cash_in_hand)}</dd>
+              <dt className="font-semibold text-stone-700 dark:text-stone-200">Cash in hand</dt>
+              <dd className="tabular-nums text-stone-950 dark:text-white">{fmt(cash?.cash_in_hand)}</dd>
             </div>
           </dl>
         </Surface>
@@ -324,15 +324,15 @@ export default function Dashboard() {
         <Surface title="Digital flow" icon={Landmark}>
           <dl className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
-              <dt className="text-stone-500 dark:text-stone-400">Digital in</dt>
+              <dt className="text-stone-600 dark:text-stone-300">Digital in</dt>
               <dd className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">+{fmt(digital?.digital_in)}</dd>
             </div>
             <div className="flex items-center justify-between">
-              <dt className="text-stone-500 dark:text-stone-400">Digital out</dt>
+              <dt className="text-stone-600 dark:text-stone-300">Digital out</dt>
               <dd className="font-medium tabular-nums text-rose-600 dark:text-rose-400">-{fmt(digital?.digital_out)}</dd>
             </div>
             <div className="flex items-center justify-between border-t border-stone-100 pt-3 text-base font-semibold dark:border-stone-800">
-              <dt className="text-stone-600 dark:text-stone-300">Balance</dt>
+              <dt className="font-semibold text-stone-700 dark:text-stone-200">Balance</dt>
               {editing === "digital" ? (
                 <div className="flex items-center gap-1.5">
                   <input type="number" value={editVal} onChange={(e) => setEditVal(e.target.value)} autoFocus
@@ -345,7 +345,7 @@ export default function Dashboard() {
                   </button>
                 </div>
               ) : (
-                <dd className="flex items-center gap-1.5 tabular-nums text-stone-900 dark:text-white">
+                <dd className="flex items-center gap-1.5 tabular-nums text-stone-950 dark:text-white">
                   {fmt(digital?.digital_balance)}
                   {isAdmin && (
                     <button onClick={() => { setEditing("digital"); setEditVal(digital?.digital_balance || 0); }} aria-label="Edit digital balance"

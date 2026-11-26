@@ -409,3 +409,198 @@ input:focus, select:focus, textarea:focus {
   box-shadow: 0 8px 24px -8px rgba(67, 56, 202, 0.10);
   border: 1px solid rgba(214, 211, 209, 0.6);
 }
+
+/* =====================================================================
+   DESIGN SYSTEM
+   ---------------------------------------------------------------------
+   COLOR CODES
+   Brand saffron   #fffbeb ... #78350f  (primary accent, 500 = #f59e0b)
+   Structure indigo #eef2ff ... #312e81 (navigation, ink panels)
+   Neutrals        stone               (warm grey, never cool slate)
+   Positive        emerald #059669     Negative rose #e11d48
+   Warning         amber  #d97706      Info    royal #4f46e5
+   Ink text        #1c1917 light / #f5f5f4 dark
+   Surface         #ffffff light / #1c1917 dark
+   Canvas          #fafaf9 light / #0c0a09 dark
+
+   TYPE SCALE (Inter)
+   display 44/1.05 -0.03em   h1 30/1.15 -0.02em
+   h2 18/1.3 -0.01em          body 14/1.6 0
+   caption 12/1.45            overline 11/1.2 0.14em uppercase
+
+   RADIUS    controls 12px, panels 16px, hero 20px
+   ELEVATION tinted, never pure black
+   ===================================================================== */
+
+@theme {
+  --shadow-e1: 0 1px 2px rgba(41, 37, 36, 0.05);
+  --shadow-e2: 0 10px 24px -16px rgba(41, 37, 36, 0.30);
+  --shadow-e3: 0 24px 60px -32px rgba(41, 37, 36, 0.45);
+  --shadow-brand: 0 16px 40px -20px rgba(245, 158, 11, 0.55);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ---- Typography ------------------------------------------------------ */
+
+.t-display {
+  font-size: clamp(2rem, 1.4rem + 1.6vw, 2.75rem);
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  font-weight: 600;
+}
+
+.t-h1 {
+  font-size: 1.875rem;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+  font-weight: 600;
+}
+
+.t-h2 {
+  font-size: 1.125rem;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  font-weight: 600;
+}
+
+.t-body {
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.t-caption {
+  font-size: 0.75rem;
+  line-height: 1.45;
+  color: #78716c;
+}
+
+html.dark .t-caption { color: #a8a29e; }
+
+.t-overline {
+  font-size: 0.6875rem;
+  line-height: 1.2;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-weight: 600;
+}
+
+/* Money and figures: tabular so columns of numbers never jitter. */
+.t-money {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.015em;
+  font-feature-settings: "tnum" 1, "cv11" 1;
+}
+
+/* ---- Texture --------------------------------------------------------- */
+
+/* Single fixed grain sheet. One paint layer for the whole app, never on a
+   scrolling container. */
+.grain-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: multiply;
+}
+
+html.dark .grain-overlay {
+  opacity: 0.05;
+  mix-blend-mode: screen;
+}
+
+/* Fibrous paper for panels: two offset radial washes, no images to download. */
+.texture-paper {
+  background-image:
+    radial-gradient(120% 80% at 10% 0%, rgba(245, 158, 11, 0.045), transparent 60%),
+    radial-gradient(90% 70% at 100% 100%, rgba(99, 102, 241, 0.04), transparent 60%);
+}
+
+/* Hairline sheen along the top edge, so cards read as physical objects. */
+.edge-highlight {
+  position: relative;
+}
+
+.edge-highlight::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent);
+  pointer-events: none;
+}
+
+html.dark .edge-highlight::before {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+}
+
+/* ---- Surfaces & elevation ------------------------------------------- */
+
+.surface-raised {
+  background-color: #ffffff;
+  border: 1px solid rgba(214, 211, 209, 0.75);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 1px 2px rgba(41, 37, 36, 0.05);
+}
+
+html.dark .surface-raised {
+  background-color: #1c1917;
+  border-color: rgba(68, 64, 60, 0.8);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* ---- Interaction states --------------------------------------------- */
+
+.focus-ring:focus-visible {
+  outline: 2px solid #f59e0b;
+  outline-offset: 2px;
+}
+
+.press {
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.press:active {
+  transform: translateY(1px) scale(0.985);
+  filter: brightness(0.97);
+}
+
+/* Underline that grows from the left, used on inline links. */
+.link-underline {
+  position: relative;
+  text-decoration: none;
+}
+
+.link-underline::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -2px;
+  height: 1px;
+  width: 100%;
+  transform: scaleX(0);
+  transform-origin: left;
+  background: currentColor;
+  transition: transform 0.25s var(--ease-out-expo);
+}
+
+.link-underline:hover::after,
+.link-underline:focus-visible::after {
+  transform: scaleX(1);
+}
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+::selection {
+  background: rgba(245, 158, 11, 0.25);
+}
+
+html.dark ::selection {
+  background: rgba(245, 158, 11, 0.35);
+}

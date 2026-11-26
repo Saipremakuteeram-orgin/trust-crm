@@ -6,11 +6,13 @@ import TransactionListModal from "../components/TransactionListModal";
 import PageHeader from "../components/ui/PageHeader";
 import StatCard from "../components/ui/StatCard";
 import Surface from "../components/ui/Surface";
+import Button from "../components/ui/Button";
+import Badge from "../components/ui/Badge";
+import Skeleton from "../components/ui/Skeleton";
 import { Reveal, AnimatedNumber } from "../components/ui/motion";
-import { pressable } from "../components/ui/tokens";
 import {
   Wallet, Landmark, TrendingUp, TrendingDown, Users, Pencil, Check, X,
-  RefreshCw, Download, Repeat, Activity,
+  RefreshCw, Download, Repeat, Activity, ArrowDownCircle, Receipt, FileBarChart,
 } from "lucide-react";
 import { useAuth } from "../lib/AuthContext";
 import { useToast } from "../components/Toast";
@@ -63,9 +65,13 @@ export default function Dashboard() {
   const [backingUp, setBackingUp] = useState(false);
   const [modal, setModal] = useState({ open: false, title: "", subtitle: "", transactions: null, loading: false });
   const [recurring, setRecurring] = useState(null);
+  const [updatedAt, setUpdatedAt] = useState(null);
 
   function loadSummary() {
-    api.get("/dashboard/summary").then((res) => setSummary(res.data.result));
+    api.get("/dashboard/summary").then((res) => {
+      setSummary(res.data.result);
+      setUpdatedAt(new Date());
+    });
   }
 
   useEffect(() => {
@@ -135,16 +141,17 @@ export default function Dashboard() {
       <AppLayout>
         <div className="space-y-6">
           <div className="space-y-3">
-            <div className="skeleton h-3 w-24" />
-            <div className="skeleton h-9 w-56" />
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-9 w-56" rounded="rounded-lg" />
+            <Skeleton className="h-3 w-80" />
           </div>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            {[1, 2, 3, 4, 5].map((i) => <div key={i} className="skeleton h-32 rounded-2xl" />)}
+            {[1, 2, 3, 4, 5].map((i) => <Skeleton key={i} className="h-32" rounded="rounded-2xl" />)}
           </div>
-          <div className="skeleton h-40 rounded-2xl" />
+          <Skeleton className="h-40" rounded="rounded-2xl" />
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <div className="skeleton h-72 rounded-2xl" />
-            <div className="skeleton h-72 rounded-2xl" />
+            <Skeleton className="h-72" rounded="rounded-2xl" />
+            <Skeleton className="h-72" rounded="rounded-2xl" />
           </div>
         </div>
       </AppLayout>
@@ -163,30 +170,53 @@ export default function Dashboard() {
         eyebrow="Overview"
         title="Dashboard"
         subtitle={`${profile?.full_name ? `${profile.full_name.split(" ")[0]}, ` : ""}here is the trust's position across cash and digital accounts.`}
-        actions={canAdd && (
+        actions={
           <>
-            {isAdmin && (
-              <motion.button
-                {...pressable}
-                onClick={handleBackupNow}
-                disabled={backingUp}
-                className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-saffron-500 to-saffron-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg shadow-saffron-500/25 transition-shadow hover:shadow-xl disabled:opacity-50"
-              >
-                <Download size={15} className={backingUp ? "animate-bounce" : ""} />
-                {backingUp ? "Backing up" : "Backup now"}
-              </motion.button>
+            {updatedAt && (
+              <span className="t-caption hidden sm:inline">
+                Updated {updatedAt.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}
+              </span>
             )}
-            <motion.button
-              {...pressable}
-              onClick={handleRefresh}
-              aria-label="Refresh dashboard"
-              className="grid h-[42px] w-[42px] place-items-center rounded-xl border border-stone-200 bg-white text-stone-600 transition-colors hover:text-saffron-600 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
-            >
-              <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
-            </motion.button>
+            {canAdd && isAdmin && (
+              <Button icon={Download} loading={backingUp} loadingLabel="Backing up" onClick={handleBackupNow}>
+                Backup now
+              </Button>
+            )}
+            {canAdd && (
+              <Button
+                variant="secondary"
+                size="icon"
+                onClick={handleRefresh}
+                aria-label="Refresh dashboard"
+                title="Refresh"
+              >
+                <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
+              </Button>
+            )}
           </>
-        )}
+        }
       />
+
+      <Reveal className="mb-6" delay={0.05}>
+        <div className="no-scrollbar -mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
+          {[
+            { to: "/transactions", label: "Add transaction", icon: ArrowDownCircle },
+            { to: "/receipts", label: "Issue receipt", icon: Receipt },
+            { to: "/reports", label: "Generate report", icon: FileBarChart },
+            { to: "/recurring", label: "Recurring entries", icon: Repeat },
+          ].map(({ to, label, icon: Icon }) => (
+            <button
+              key={to}
+              type="button"
+              onClick={() => navigate(to)}
+              className="group inline-flex shrink-0 items-center gap-2 rounded-full border border-stone-200 bg-white px-3.5 py-2 text-[13px] font-medium text-stone-600 transition-all duration-200 hover:-translate-y-0.5 hover:border-saffron-300 hover:text-stone-900 hover:shadow-e2 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300 dark:hover:border-saffron-500/40"
+            >
+              <Icon size={15} strokeWidth={1.75} className="text-stone-400 transition-colors group-hover:text-saffron-600" />
+              {label}
+            </button>
+          ))}
+        </div>
+      </Reveal>
 
       {/* Position summary */}
       <Reveal className="mb-6">
@@ -196,13 +226,16 @@ export default function Dashboard() {
           <div className="relative flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <div>
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-indigo-200/80">Total position</p>
-              <p className="mt-2 text-4xl font-semibold tracking-tight tabular-nums">
+              <p className="t-money mt-2 text-4xl font-semibold">
                 <AnimatedNumber value={totalPosition} format={fmt} />
               </p>
               <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-indigo-200/80">
-                <span>Cash {fmt(cash?.cash_in_hand)}</span>
+                <span className="t-money">Cash {fmt(cash?.cash_in_hand)}</span>
                 <span className="h-3 w-px bg-white/20" />
-                <span>Digital {fmt(digital?.digital_balance)}</span>
+                <span className="t-money">Digital {fmt(digital?.digital_balance)}</span>
+                <Badge tone={Number(ov.net_balance) >= 0 ? "positive" : "negative"}>
+                  <span className="t-money">Net {fmtShort(ov.net_balance)}</span>
+                </Badge>
               </div>
             </div>
             <div className="w-full max-w-xs rounded-xl border border-white/10 bg-white/5 p-4 backdrop-blur">

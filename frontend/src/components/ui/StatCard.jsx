@@ -33,11 +33,10 @@ export default function StatCard({
       initial={reduce ? false : { opacity: 0, y: 18 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5, delay: reduce ? 0 : index * 0.06, ease: EASE }}
-      className={`group relative w-full overflow-hidden rounded-2xl border border-stone-200/80 bg-white p-5 text-left
-        shadow-[0_1px_2px_rgba(41,37,36,0.04)] transition-[transform,box-shadow,border-color] duration-300
-        hover:-translate-y-0.5 hover:border-stone-300 hover:shadow-[0_18px_40px_-24px_rgba(41,37,36,0.35)]
-        focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-saffron-400 focus-visible:ring-offset-2
-        dark:border-stone-800 dark:bg-stone-900 dark:hover:border-stone-700`}
+      className={`surface-raised texture-paper edge-highlight group relative w-full overflow-hidden rounded-2xl p-5 text-left
+        transition-[transform,box-shadow,border-color] duration-300
+        hover:-translate-y-0.5 hover:shadow-e2 focus-visible:outline-none focus-visible:ring-2
+        focus-visible:ring-saffron-400 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-stone-950`}
     >
       <span
         aria-hidden="true"
@@ -46,17 +45,17 @@ export default function StatCard({
       />
       <div className="relative flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="truncate text-[12px] font-medium uppercase tracking-wide text-stone-500 dark:text-stone-400">
+          <p className="t-overline truncate text-stone-500 dark:text-stone-400">
             {label}
           </p>
-          <p className="mt-2 text-[26px] font-semibold leading-none tracking-tight text-stone-900 tabular-nums dark:text-stone-50">
+          <p className="t-money mt-2.5 text-[26px] font-semibold leading-none text-stone-900 dark:text-stone-50">
             {animateValue && format ? (
               <AnimatedNumber value={value} format={format} />
             ) : (
               value
             )}
           </p>
-          {sub && <p className="mt-2 truncate text-xs text-stone-400 dark:text-stone-500">{sub}</p>}
+          {sub && <p className="t-caption mt-2 truncate">{sub}</p>}
         </div>
         <span
           className="grid h-10 w-10 shrink-0 place-items-center rounded-xl transition-transform duration-300 group-hover:scale-105"

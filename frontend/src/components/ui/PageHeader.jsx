@@ -18,16 +18,16 @@ export default function PageHeader({ eyebrow, title, subtitle, actions, children
     >
       <div className="min-w-0">
         {eyebrow && (
-          <span className="mb-2 inline-flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-saffron-700 dark:text-saffron-400">
+          <span className="t-overline mb-2.5 inline-flex items-center gap-2 text-saffron-700 dark:text-saffron-400">
             <span className="h-1 w-6 rounded-full bg-gradient-to-r from-saffron-500 to-saffron-300" />
             {eyebrow}
           </span>
         )}
-        <h1 className="text-3xl font-semibold tracking-tight text-stone-900 dark:text-stone-50 text-balance">
+        <h1 className="t-h1 text-balance text-stone-900 dark:text-stone-50">
           {title}
         </h1>
         {subtitle && (
-          <p className="mt-2 max-w-[65ch] text-sm leading-relaxed text-stone-500 dark:text-stone-400">
+          <p className="t-body mt-2 max-w-[65ch] text-stone-500 dark:text-stone-400">
             {subtitle}
           </p>
         )}

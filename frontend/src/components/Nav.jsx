@@ -107,7 +107,7 @@ function NavItem({ to, label, icon: Icon, rail, scope = "desktop", onNavigate })
         ${rail ? "justify-center px-0" : ""}
         ${
           isActive
-            ? "text-white"
+            ? "text-stone-950"
             : "text-indigo-200/75 hover:bg-white/5 hover:text-white"
         }`
       }
@@ -125,7 +125,7 @@ function NavItem({ to, label, icon: Icon, rail, scope = "desktop", onNavigate })
             size={17}
             strokeWidth={1.75}
             className={`relative z-10 shrink-0 transition-transform duration-200 group-hover:scale-105 ${
-              isActive ? "text-white" : "text-indigo-300/80"
+              isActive ? "text-stone-950" : "text-indigo-300/80"
             }`}
           />
           {!rail && <span className="relative z-10 truncate">{label}</span>}

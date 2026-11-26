@@ -5,6 +5,7 @@ import { supabase } from "../lib/supabase";
 import { LogOut, ChevronDown, Bell, Moon, Sun, Menu, X, Check } from "lucide-react";
 import GlobalSearch from "./GlobalSearch";
 import Nav from "./Nav";
+import Button from "./ui/Button";
 import api from "../lib/api";
 import { useTheme } from "../lib/ThemeContext";
 import { useAuth } from "../lib/AuthContext";
@@ -115,14 +116,14 @@ export default function Header() {
     <>
       <header className="sticky top-0 z-30 border-b border-stone-200/70 bg-stone-50/85 backdrop-blur-xl dark:border-stone-800 dark:bg-stone-950/80">
         <div className="mx-auto flex h-16 w-full max-w-[1400px] items-center gap-3 px-4 sm:px-6 lg:px-8">
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="iconSm"
+            icon={Menu}
             onClick={() => setMenuOpen(true)}
             aria-label="Open navigation"
-            className="grid h-9 w-9 place-items-center rounded-xl border border-stone-200 bg-white text-stone-600 transition-colors hover:bg-stone-100 md:hidden dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
-          >
-            <Menu size={17} />
-          </button>
+            className="md:hidden"
+          />
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 text-[11px] font-medium text-stone-400 dark:text-stone-500">
@@ -134,12 +135,12 @@ export default function Header() {
 
           <GlobalSearch />
 
-          <button
-            type="button"
+          <Button
+            variant="secondary"
+            size="iconSm"
             onClick={toggleTheme}
             title="Toggle theme"
             aria-label="Toggle theme"
-            className="grid h-9 w-9 place-items-center rounded-xl border border-stone-200 bg-white text-stone-600 transition-all hover:-translate-y-px hover:text-saffron-600 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
           >
             <AnimatePresence mode="wait" initial={false}>
               <motion.span
@@ -152,7 +153,7 @@ export default function Header() {
                 {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
               </motion.span>
             </AnimatePresence>
-          </button>
+          </Button>
 
           <div className="relative" ref={notifRef}>
             <button

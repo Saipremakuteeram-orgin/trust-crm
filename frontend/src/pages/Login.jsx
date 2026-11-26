@@ -5,6 +5,7 @@ import { Mail, Lock, ArrowRight, ShieldCheck, Wallet, Users } from "lucide-react
 import { checkSupabaseConnection, supabase } from "../lib/supabase";
 import { formatAuthError, isNetworkAuthError } from "../lib/authMessages";
 import PasswordInput from "../components/PasswordInput";
+import Button from "../components/ui/Button";
 import { EASE } from "../components/ui/tokens";
 
 const highlights = [
@@ -46,7 +47,8 @@ export default function Login() {
   }
 
   return (
-    <div className="grid min-h-[100dvh] bg-stone-50 lg:grid-cols-[1.05fr_1fr] dark:bg-stone-950">
+    <div className="relative grid min-h-[100dvh] bg-stone-50 lg:grid-cols-[1.05fr_1fr] dark:bg-stone-950">
+      <div className="grain-overlay" aria-hidden="true" />
       {/* Brand panel */}
       <aside className="relative flex flex-col justify-between overflow-hidden bg-gradient-to-br from-indigo-950 via-indigo-900 to-indigo-800 px-6 py-10 sm:px-10 lg:px-14 lg:py-12">
         <div aria-hidden="true" className="absolute inset-0 bg-mesh-pattern opacity-40" />
@@ -73,14 +75,19 @@ export default function Login() {
             </div>
           </div>
 
-          <motion.h2
-            initial={reduce ? false : { opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, ease: EASE }}
-            className="mt-10 max-w-md text-3xl font-semibold leading-tight tracking-tight text-white text-balance sm:text-4xl"
-          >
-            The trust's books, kept in order.
-          </motion.h2>
+          <h2 className="t-display mt-10 max-w-md text-balance text-white">
+            {["The", "trust\u2019s", "books,", "kept", "in", "order."].map((word, index) => (
+              <motion.span
+                key={word}
+                initial={reduce ? false : { opacity: 0, y: "0.5em", filter: "blur(6px)" }}
+                animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+                transition={{ duration: 0.55, delay: 0.12 + index * 0.07, ease: EASE }}
+                className="mr-[0.28em] inline-block"
+              >
+                {word}
+              </motion.span>
+            ))}
+          </h2>
           <motion.p
             initial={reduce ? false : { opacity: 0, y: 18 }}
             animate={{ opacity: 1, y: 0 }}
@@ -177,30 +184,16 @@ export default function Login() {
               </motion.div>
             )}
 
-            <motion.button
+            <Button
               type="submit"
               disabled={loading}
-              whileHover={reduce ? undefined : { y: -1 }}
-              whileTap={reduce ? undefined : { scale: 0.985 }}
-              transition={{ type: "spring", stiffness: 400, damping: 26 }}
-              className="group flex w-full items-center justify-center gap-2 rounded-xl bg-stone-900 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-stone-800 disabled:opacity-60 dark:bg-saffron-500 dark:text-stone-950 dark:hover:bg-saffron-400"
+              loading={loading}
+              loadingLabel="Signing in"
+              iconRight={ArrowRight}
+              className="h-11 w-full"
             >
-              {loading ? (
-                <>
-                  <motion.span
-                    animate={{ rotate: 360 }}
-                    transition={{ duration: 0.9, repeat: Infinity, ease: "linear" }}
-                    className="h-4 w-4 rounded-full border-2 border-white/30 border-t-white dark:border-stone-900/30 dark:border-t-stone-900"
-                  />
-                  Signing in
-                </>
-              ) : (
-                <>
-                  Sign in
-                  <ArrowRight size={15} className="transition-transform duration-200 group-hover:translate-x-0.5" />
-                </>
-              )}
-            </motion.button>
+              Sign in
+            </Button>
           </form>
 
           <p className="mt-8 text-xs leading-relaxed text-stone-400 dark:text-stone-500">

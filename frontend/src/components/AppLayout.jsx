@@ -13,6 +13,7 @@ export default function AppLayout({ children }) {
 
   return (
     <div className="relative flex min-h-[100dvh] bg-stone-50 text-stone-900 dark:bg-stone-950 dark:text-stone-100">
+      <div className="grain-overlay" aria-hidden="true" />
       <div
         aria-hidden="true"
         className="pointer-events-none fixed inset-0 bg-grid opacity-70 dark:opacity-40"

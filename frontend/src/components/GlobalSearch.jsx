@@ -47,11 +47,11 @@ export default function GlobalSearch() {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-stone-100 hover:bg-stone-200 text-stone-500 text-sm transition-colors"
+        className="flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2 text-[13px] text-stone-500 transition-all hover:-translate-y-px hover:border-stone-300 hover:text-stone-700 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-400"
       >
-        <Search size={14} />
-        <span className="hidden sm:inline">Search…</span>
-        <kbd className="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded bg-white border border-stone-200">Ctrl K</kbd>
+        <Search size={15} />
+        <span className="hidden sm:inline">Search</span>
+        <kbd className="hidden rounded border border-stone-200 px-1.5 py-0.5 text-[10px] font-medium text-stone-400 sm:inline dark:border-stone-700">Ctrl K</kbd>
       </button>
     );
   }

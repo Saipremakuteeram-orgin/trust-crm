@@ -1,33 +1,87 @@
-import { useNavigate } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
 import { supabase } from "../lib/supabase";
-import { LogOut, ChevronDown, Bell, Moon, Sun } from "lucide-react";
+import { LogOut, ChevronDown, Bell, Moon, Sun, Menu, X, Check } from "lucide-react";
 import GlobalSearch from "./GlobalSearch";
+import Nav from "./Nav";
 import api from "../lib/api";
 import { useTheme } from "../lib/ThemeContext";
 import { useAuth } from "../lib/AuthContext";
-import { useState, useRef, useEffect } from "react";
+import { EASE } from "./ui/tokens";
+
+const TITLES = {
+  "/dashboard": "Dashboard",
+  "/transactions": "Transactions",
+  "/recurring": "Recurring transactions",
+  "/functions": "Functions & budget",
+  "/accounts": "Chart of accounts",
+  "/journal": "Journal entries",
+  "/trial-balance": "Trial balance",
+  "/ledger": "General ledger",
+  "/trustees": "Trustees",
+  "/beneficiaries": "Beneficiaries",
+  "/compliance": "Compliance",
+  "/receipts": "Receipts",
+  "/bank-reconciliation": "Bank reconciliation",
+  "/events": "Events",
+  "/campaigns": "Campaigns",
+  "/volunteers": "Volunteers",
+  "/assets": "Assets",
+  "/security": "Security",
+  "/whatsapp": "WhatsApp",
+  "/contacts": "Contacts",
+  "/groups": "Groups",
+  "/users": "User management",
+  "/activity": "Activity log",
+  "/spreadsheet": "Spreadsheet",
+  "/drive": "Common drive",
+  "/backup": "Backup & restore",
+  "/file-send": "Send file",
+  "/mail": "Mail",
+  "/reports": "Reports",
+  "/operations": "Trust operations",
+};
+
+function titleFor(pathname) {
+  if (TITLES[pathname]) return TITLES[pathname];
+  const match = Object.keys(TITLES)
+    .filter((key) => key !== "/" && pathname.startsWith(key + "/"))
+    .sort((a, b) => b.length - a.length)[0];
+  return match ? TITLES[match] : "Trust CRM";
+}
 
 export default function Header() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { profile } = useAuth();
   const { theme, toggle: toggleTheme } = useTheme();
   const [open, setOpen] = useState(false);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [notifs, setNotifs] = useState([]);
   const ref = useRef(null);
   const notifRef = useRef(null);
 
   useEffect(() => {
-    api.get('/notifications').then((r) => setNotifs(r.data.result || [])).catch(() => {});
+    api.get("/notifications").then((r) => setNotifs(r.data.result || [])).catch(() => {});
   }, []);
 
   useEffect(() => {
-    function handleClick(e) {
-      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
-    }
-    document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    const close = (event) => {
+      if (notifRef.current && !notifRef.current.contains(event.target)) setNotifOpen(false);
+      if (ref.current && !ref.current.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
   }, []);
+
+  useEffect(() => {
+    setMenuOpen(false);
+    setOpen(false);
+    setNotifOpen(false);
+  }, [location.pathname]);
+
   const role = profile?.role || "viewer";
 
   async function handleLogout() {
@@ -38,9 +92,7 @@ export default function Header() {
   async function openNotification(n) {
     if (!n.read_at) {
       setNotifs((prev) => prev.map((x) => (x.id === n.id ? { ...x, read_at: new Date().toISOString() } : x)));
-      try {
-        await api.patch(`/notifications/${n.id}/read`);
-      } catch {}
+      try { await api.patch(`/notifications/${n.id}/read`); } catch {}
     }
     if (n.link) {
       setNotifOpen(false);
@@ -48,91 +100,193 @@ export default function Header() {
     }
   }
 
-  useEffect(() => {
-    function handleClick(e) {
-      if (ref.current && !ref.current.contains(e.target)) setOpen(false);
-    }
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, []);
-
   const initials = profile?.full_name
     ? profile.full_name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()
     : "?";
+  const unread = notifs.filter((n) => !n.read_at).length;
 
   const roleColors = {
-    admin: "bg-saffron-500/20 text-saffron-600",
-    accountant: "bg-emerald-500/20 text-emerald-600",
-    viewer: "bg-royal-400/20 text-royal-500",
+    admin: "bg-saffron-500/15 text-saffron-700 dark:text-saffron-300",
+    accountant: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300",
+    viewer: "bg-indigo-500/10 text-indigo-600 dark:text-indigo-300",
   };
 
   return (
-    <header className="sticky top-0 z-30 flex items-center justify-between px-8 py-3 bg-white/80 backdrop-blur-md border-b border-stone-200/60">
-      <GlobalSearch />
-      <button onClick={toggleTheme} className="p-2 rounded-xl hover:bg-stone-100" title="Toggle theme">
-        {theme === "dark" ? <Sun size={18} className="text-stone-600" /> : <Moon size={18} className="text-stone-600" />}
-      </button>
-      <div className="relative" ref={notifRef}>
-        <button onClick={() => setNotifOpen(!notifOpen)} className="relative p-2 rounded-xl hover:bg-stone-100">
-          <Bell size={18} className="text-stone-600" />
-          {notifs.filter((n) => !n.read_at).length > 0 && (
-            <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-rose-500" />
-          )}
-        </button>
-        {notifOpen && (
-          <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-xl border border-stone-100 py-2 z-50 max-h-96 overflow-y-auto">
-            <div className="px-4 py-2 border-b border-stone-100 flex justify-between items-center">
-              <span className="text-sm font-semibold">Notifications</span>
-              <button onClick={() => { api.post('/notifications/read-all'); setNotifs(notifs.map((n) => ({ ...n, read_at: new Date().toISOString() }))); }} className="text-xs text-saffron-600">Mark all read</button>
-            </div>
-            {notifs.length === 0 && <div className="px-4 py-3 text-sm text-stone-400">No notifications</div>}
-            {notifs.map((n) => (
-              <div
-                key={n.id}
-                onClick={() => openNotification(n)}
-                className={`px-4 py-2.5 border-b border-stone-50 ${n.link ? 'cursor-pointer hover:bg-stone-50' : ''} ${n.read_at ? 'opacity-60' : ''}`}
-              >
-                <div className="text-sm font-medium text-stone-800">{n.title}</div>
-                {n.body && <div className="text-xs text-stone-500">{n.body}</div>}
-                <div className="text-[10px] text-stone-400 mt-1">{new Date(n.created_at).toLocaleString()}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="relative" ref={ref}>
-        <button
-          onClick={() => setOpen(!open)}
-          className="flex items-center gap-3 px-3 py-1.5 rounded-xl hover:bg-stone-100 transition-colors duration-200 group"
-        >
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-saffron-400 to-saffron-600 flex items-center justify-center text-white text-xs font-bold shadow-md shadow-saffron-500/20">
-            {initials}
-          </div>
-          <div className="text-left hidden sm:block">
-            <div className="text-sm font-semibold text-stone-800 leading-tight">{profile?.full_name || "Loading..."}</div>
-            <span className={`inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-full ${roleColors[role] || roleColors.viewer}`}>
-              {role?.charAt(0).toUpperCase() + role?.slice(1)}
-            </span>
-          </div>
-          <ChevronDown size={16} className={`text-stone-400 transition-transform duration-200 ${open ? "rotate-180" : ""}`} />
-        </button>
+    <>
+      <header className="sticky top-0 z-30 border-b border-stone-200/70 bg-stone-50/85 backdrop-blur-xl dark:border-stone-800 dark:bg-stone-950/80">
+        <div className="mx-auto flex h-16 w-full max-w-[1400px] items-center gap-3 px-4 sm:px-6 lg:px-8">
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Open navigation"
+            className="grid h-9 w-9 place-items-center rounded-xl border border-stone-200 bg-white text-stone-600 transition-colors hover:bg-stone-100 md:hidden dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
+          >
+            <Menu size={17} />
+          </button>
 
-        {open && (
-          <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl shadow-stone-200/50 border border-stone-100 py-2 animate-fade-in-up z-50">
-            <div className="px-4 py-2 border-b border-stone-100">
-              <div className="text-sm font-semibold text-stone-800">{profile?.full_name}</div>
-              <div className="text-xs text-stone-500">{profile?.email || ""}</div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 text-[11px] font-medium text-stone-400 dark:text-stone-500">
+              <span className="hidden sm:inline">Trust CRM</span>
+              <ChevronDown size={11} className="hidden -rotate-90 sm:inline" />
+              <span className="truncate text-stone-500 dark:text-stone-400">{titleFor(location.pathname)}</span>
             </div>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors duration-200 group"
-            >
-              <LogOut size={16} className="group-hover:-translate-x-0.5 transition-transform" />
-              Logout
-            </button>
           </div>
+
+          <GlobalSearch />
+
+          <button
+            type="button"
+            onClick={toggleTheme}
+            title="Toggle theme"
+            aria-label="Toggle theme"
+            className="grid h-9 w-9 place-items-center rounded-xl border border-stone-200 bg-white text-stone-600 transition-all hover:-translate-y-px hover:text-saffron-600 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
+          >
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.span
+                key={theme}
+                initial={{ rotate: -40, opacity: 0, scale: 0.7 }}
+                animate={{ rotate: 0, opacity: 1, scale: 1 }}
+                exit={{ rotate: 40, opacity: 0, scale: 0.7 }}
+                transition={{ duration: 0.2 }}
+              >
+                {theme === "dark" ? <Sun size={16} /> : <Moon size={16} />}
+              </motion.span>
+            </AnimatePresence>
+          </button>
+
+          <div className="relative" ref={notifRef}>
+            <button
+              type="button"
+              onClick={() => setNotifOpen((value) => !value)}
+              aria-label="Notifications"
+              className="relative grid h-9 w-9 place-items-center rounded-xl border border-stone-200 bg-white text-stone-600 transition-all hover:-translate-y-px hover:text-saffron-600 dark:border-stone-800 dark:bg-stone-900 dark:text-stone-300"
+            >
+              <Bell size={16} />
+              {unread > 0 && (
+                <span className="absolute right-2 top-2 flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-400 opacity-70" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-rose-500" />
+                </span>
+              )}
+            </button>
+
+            <AnimatePresence>
+              {notifOpen && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                  transition={{ duration: 0.18, ease: EASE }}
+                  className="absolute right-0 z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-xl shadow-stone-900/10 dark:border-stone-800 dark:bg-stone-900"
+                >
+                  <div className="flex items-center justify-between border-b border-stone-100 px-4 py-3 dark:border-stone-800">
+                    <span className="text-sm font-semibold text-stone-800 dark:text-stone-100">Notifications</span>
+                    <button
+                      type="button"
+                      onClick={() => { api.post("/notifications/read-all"); setNotifs(notifs.map((n) => ({ ...n, read_at: new Date().toISOString() }))); }}
+                      className="inline-flex items-center gap-1 text-xs font-medium text-saffron-700 hover:text-saffron-600 dark:text-saffron-400"
+                    >
+                      <Check size={12} /> Mark all read
+                    </button>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {notifs.length === 0 && (
+                      <p className="px-4 py-6 text-center text-sm text-stone-400 dark:text-stone-500">No notifications yet</p>
+                    )}
+                    {notifs.map((n) => (
+                      <button
+                        type="button"
+                        key={n.id}
+                        onClick={() => openNotification(n)}
+                        className={`block w-full border-b border-stone-50 px-4 py-3 text-left transition-colors last:border-0 dark:border-stone-800/60 ${n.link ? "cursor-pointer hover:bg-stone-50 dark:hover:bg-stone-800/50" : ""} ${n.read_at ? "opacity-60" : ""}`}
+                      >
+                        <div className="text-sm font-medium text-stone-800 dark:text-stone-100">{n.title}</div>
+                        {n.body && <div className="mt-0.5 line-clamp-2 text-xs text-stone-500 dark:text-stone-400">{n.body}</div>}
+                        <div className="mt-1 text-[10px] text-stone-400">{new Date(n.created_at).toLocaleString()}</div>
+                      </button>
+                    ))}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          <div className="relative" ref={ref}>
+            <button
+              type="button"
+              onClick={() => setOpen((value) => !value)}
+              className="flex items-center gap-2.5 rounded-xl border border-transparent px-1.5 py-1 transition-colors hover:border-stone-200 hover:bg-white dark:hover:border-stone-800 dark:hover:bg-stone-900"
+            >
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-gradient-to-br from-saffron-400 to-saffron-600 text-xs font-bold text-white shadow-md shadow-saffron-500/25">
+                {initials}
+              </span>
+              <span className="hidden text-left sm:block">
+                <span className="block max-w-[140px] truncate text-[13px] font-semibold leading-tight text-stone-800 dark:text-stone-100">
+                  {profile?.full_name || "Loading"}
+                </span>
+                <span className={`inline-flex rounded-full px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide ${roleColors[role] || roleColors.viewer}`}>
+                  {role}
+                </span>
+              </span>
+              <ChevronDown size={14} className={`hidden text-stone-400 transition-transform duration-200 sm:block ${open ? "rotate-180" : ""}`} />
+            </button>
+
+            <AnimatePresence>
+              {open && (
+                <motion.div
+                  initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                  transition={{ duration: 0.18, ease: EASE }}
+                  className="absolute right-0 z-50 mt-2 w-60 overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-xl shadow-stone-900/10 dark:border-stone-800 dark:bg-stone-900"
+                >
+                  <div className="border-b border-stone-100 px-4 py-3 dark:border-stone-800">
+                    <div className="truncate text-sm font-semibold text-stone-800 dark:text-stone-100">{profile?.full_name}</div>
+                    <div className="truncate text-xs text-stone-500 dark:text-stone-400">{profile?.email || ""}</div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="flex w-full items-center gap-2.5 px-4 py-3 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50 dark:text-rose-400 dark:hover:bg-rose-500/10"
+                  >
+                    <LogOut size={15} /> Sign out
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+        </div>
+      </header>
+
+      <AnimatePresence>
+        {menuOpen && (
+          <motion.div
+            className="fixed inset-0 z-50 md:hidden"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <div className="absolute inset-0 bg-stone-950/50 backdrop-blur-sm" onClick={() => setMenuOpen(false)} />
+            <motion.div
+              initial={{ x: -280 }}
+              animate={{ x: 0 }}
+              exit={{ x: -280 }}
+              transition={{ type: "spring", stiffness: 320, damping: 34 }}
+              className="relative h-full w-[264px] overflow-hidden"
+            >
+              <Nav variant="drawer" onNavigate={() => setMenuOpen(false)} />
+              <button
+                type="button"
+                onClick={() => setMenuOpen(false)}
+                aria-label="Close navigation"
+                className="absolute right-3 top-4 grid h-8 w-8 place-items-center rounded-lg bg-white/10 text-white transition-colors hover:bg-white/20"
+              >
+                <X size={16} />
+              </button>
+            </motion.div>
+          </motion.div>
         )}
-      </div>
-    </header>
+      </AnimatePresence>
+    </>
   );
 }
